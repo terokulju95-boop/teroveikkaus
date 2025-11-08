@@ -131,7 +131,31 @@
     .pts-badge { display:inline-block; background:#111827; color:#fff; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px; }
     .card-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
   
-    </style>
+    
+/* === Highlight fixes (force over dark mode) === */
+.kv-row.correct { background-color:#dcfce7 !important; }
+.kv-row.incorrect { background-color:#fee2e2 !important; }
+.kv-row.correct input, .kv-row.correct select { background-color:#dcfce7 !important; color:#000 !important; }
+.kv-row.incorrect input, .kv-row.incorrect select { background-color:#fee2e2 !important; color:#000 !important; }
+table td.correct { background-color:#dcfce7 !important; }
+table td.incorrect { background-color:#fee2e2 !important; }
+input.correct, select.correct { background-color:#dcfce7 !important; color:#000 !important; }
+input.incorrect, select.incorrect { background-color:#fee2e2 !important; color:#000 !important; }
+
+/* === Tabs: readable text === */
+.tabs .tab { color: var(--text) !important; }
+.tabs .tab.active { background:#1e293b !important; color:#fff !important; }
+
+
+/* Fix kv-label readability on highlighted rows */
+.kv-row.correct .kv-label {
+  color: #000 !important;
+}
+.kv-row.incorrect .kv-label {
+  color: #000 !important;
+}
+
+</style>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
@@ -439,7 +463,9 @@ function renderPredictions(){
     let tbody=FIELDS.map(f=>{
       let row=`<tr><th class="sticky-left">${f.label}</th>`;
       row+=PLAYERS.map(p=>{
-        const predVal=(t.predictions[selectedMatchId][p]||{})[f.key]||''; const isCorrect=actual[f.key]?ciEq(predVal,actual[f.key]):false;
+        const predVal=(t.predictions[selectedMatchId][p]||{})[f.key]||''; const isCorrect = actual[f.key] ? ciEq(predVal, actual[f.key]) : false;
+        const hasPred = (predVal || "") !== "";
+        const isIncorrect = actual[f.key] && hasPred && !isCorrect;
         let w=widgetHTML('pred',f.key,predVal,`${p}:${f.key}`); if(f.key==='lopputulos') w=`<div data-cell="${p}:${f.key}">${w}</div>`;
         return `<td class="${isCorrect?'correct':''}">${w}</td>`;
       }).join('');
