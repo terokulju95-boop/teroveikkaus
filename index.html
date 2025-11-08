@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta name="theme-color" content="#0f172a">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>🏒 Turnausveikkaus – Mobiili v4.4c</title>
+  <style>
+    :root { --bg:#f7f7fb; --card:#ffffff; --text:#111827; --muted:#6b7280; --primary:#f97316; --primary-hover:#ea580c; --border:#e5e7eb; --ok:#22c55e; --dark:#111827; }
+    *{ box-sizing:border-box } html,body{ margin:0; padding:0 }
+    body{ background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol",sans-serif; line-height:1.5; padding:12px }
+    h1{ text-align:center; margin:0 0 12px; font-size:22px } h2{ margin:0 0 10px; font-size:16px }
+    .layout{ max-width:960px; margin:0 auto; display:grid; gap:12px; grid-template-columns:1fr }
+    @media(min-width:980px){ .layout{ grid-template-columns:360px 1fr } }
+    .card{ background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; box-shadow:0 1px 2px rgba(0,0,0,.04) }
+    .row{ display:grid; grid-template-columns:1fr 1fr; gap:8px }
+    @media(max-width:480px){ .row{ grid-template-columns:1fr } }
+    .field{ margin-bottom:8px }
+    label{ font-weight:600; font-size:14px; display:block; margin-bottom:6px }
+    input[type="text"], input[type="number"], select{ width:100%; padding:12px 12px; border:1px solid var(--border); border-radius:10px; font-size:16px; background:#fff }
+    input[type="number"]{ -moz-appearance:textfield }
+    input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
+    .btn{ display:inline-flex; justify-content:center; align-items:center; gap:8px; border:none; border-radius:12px; padding:12px 14px; font-weight:700; cursor:pointer; background:var(--primary); color:#fff }
+    .btn.small{ padding:10px } .btn:disabled{ opacity:.6; cursor:not-allowed } .btn:hover{ background:var(--primary-hover) }
+    .muted{ color:var(--muted); font-size:13px } .grid{ display:grid; gap:10px } .separator{ height:1px; background:var(--border); margin:12px 0 }
+    .score-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px }
+    .score-card{ background:#fff; border:1px solid var(--border); border-radius:10px; padding:8px; text-align:center }
+    .score-card .name{ font-weight:700; font-size:14px } .score-card .pts{ font-size:13px; color:#111 }
+    table{ width:100%; border-collapse:separate; border-spacing:0; font-size:14px }
+    th,td{ border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px; text-align:left; vertical-align:top; background:#fff }
+    th:first-child,td:first-child{ border-left:1px solid var(--border) } tr:first-child th{ border-top:1px solid var(--border) }
+    .table-wrap{ overflow:auto; -webkit-overflow-scrolling:touch; border-radius:10px }
+    .sticky-top{ position:sticky; top:0; z-index:5; background:#fafafa } .sticky-left{ position:sticky; left:0; z-index:4; background:#fafafa } .sticky-corner{ z-index:6 }
+    .correct{ background-color:#dcfce7 }
+    input.correct{ background-color:#dcfce7 !important; }
+    input.incorrect{ background-color:#fee2e2 !important; }
+    .incorrect{ background-color:#fee2e2 }
+    input.correct{ background-color:#dcfce7 !important; }
+    input.incorrect{ background-color:#fee2e2 !important; } .stack{ display:flex; flex-wrap:wrap; gap:8px; align-items:center }
+    .tabs{ display:flex; border:1px solid var(--border); border-radius:10px; overflow:hidden } .tab{ flex:1; text-align:center; padding:10px; background:#fff; cursor:pointer; font-weight:700 } .tab.active{ background:var(--dark); color:#fff }
+    .person-card{ border:1px solid var(--border); border-radius:12px; padding:10px; background:#fff } .person-title{ font-weight:800; margin-bottom:8px }
+    .kv{ display:grid; grid-template-columns:1fr; gap:6px }
+    .kv-row{ display:grid; grid-template-columns:140px 1fr; gap:8px; align-items:center }
+    .kv-row.correct input, .kv-row.correct select{ background:#dcfce7 }
+    @media(max-width:420px){ .kv-row{ grid-template-columns:120px 1fr } }
+    .score-combo{ display:flex; align-items:center; gap:6px } .score-combo input{ width:64px; text-align:center } .dash{ font-weight:800 }
+    .cell-input{ width:140px; max-width:140px; padding:10px 12px; font-size:16px }
+    @media(max-width:600px){ .cell-input{ width:120px; max-width:120px } }
+    @media(max-width:420px){ .cell-input{ width:100px; max-width:100px } }
+    .pill{ display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#fafafa; font-size:12px }
+
+    /* Top-3 layout */
+    .t3-grid { display:grid; gap:10px; grid-template-columns: 1fr; }
+    @media (min-width:640px){ .t3-grid { grid-template-columns: 1fr 1fr; } }
+    .t3-card { border:1px solid var(--border); border-radius:12px; padding:10px; background:#fff; }
+    .t3-title { font-weight:800; margin-bottom:8px; font-size:15px; }
+    .t3-row { display:grid; grid-template-columns: 40px 1fr; gap:8px; align-items:center; margin-bottom:6px; }
+    .t3-dot { display:inline-block; width:32px; height:32px; border:1px solid var(--border); border-radius:999px; text-align:center; line-height:30px; font-weight:700; background:#fafafa; }
+
+    /* time MM:SS */
+    .time-combo { display:flex; align-items:center; gap:6px; }
+    .time-combo input { width:64px; text-align:center; }
+    .colon { font-weight:800; }
+
+    /* cards badge */
+    .pts-badge { display:inline-block; background:#111827; color:#fff; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px; }
+    .card-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  
+    </style>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+</head>
+<body>
+  <h1>🏒 Turnausveikkaus</h1>
+  <div class="layout">
+    <div class="card">
+      <h2>Turnaus</h2>
+      <div class="field">
+        <label>Valitse turnaus</label>
+        <select id="tournamentSelect"></select>
+      </div>
+      
+
+      <div class="field">
+          <label>Luo uusi turnaus</label>
+          <input id="newTournamentName" type="text" placeholder="Esim. MM 2025" />
+      </div>
+      <div class="field">
+          <button id="createTournament" class="btn small" style="width:100%">Luo turnaus</button>
+      </div>
+
+      <div class="separator"></div>
+
+      <h2>Ottelut</h2>
+      <div class="field">
+        <label>Valitse ottelu</label>
+        <select id="matchSelect"></select>
+      </div>
+      <div class="field">
+        <label>Luo uusi ottelu</label>
+        <input id="newMatchName" type="text" placeholder="Suomi vs " />
+        <span class="muted">Vinkki: nimi alkaa valmiiksi “Suomi vs ” – lisää vastustaja.</span>
+      </div>
+      <div class="field">
+        <button id="createMatch" class="btn small" style="width:100%">Luo ottelu</button>
+      </div>
+
+      <div class="separator"></div>
+
+      <div class="stack" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Kolmen kärki – veikkaukset</h2><button id="toggleTop3" class="btn small" style="background:#fff;color:#111;border:1px solid var(--border)">Piilota</button></div>
+      <div id="topThreeArea"></div>
+      <div class="stack" style="margin-top:8px">
+        <button id="saveTopThree" class="btn small">Tallenna veikkaukset</button>
+      </div>
+
+      <div class="separator"></div>
+
+      <h2>Data</h2>
+      <div class="stack">
+        <button id="exportBtn" class="btn small" style="background:#fff;color:#111;border:1px solid var(--border)">Vie JSON</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
+        <button id="importBtn" class="btn small" style="background:#fff;color:#111;border:1px solid var(--border)">Tuo JSON</button>
+        <button id="resetBtn" class="btn small" style="background:#111827">Tyhjennä kaikki</button>
+      
+        <button id="screenshotTableBtn" class="btn small" style="background:#22c55e">Ota kuva (taulukko)</button>
+      </div>
+      <p class="muted" style="margin-top:6px">Tiedot tallentuvat tähän laitteeseen (localStorage).</p>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Yhteispisteet</h2>
+        <div id="scoreboard"></div>
+      </div>
+
+      <div class="card">
+        <div class="stack" style="justify-content:space-between">
+          <h2>Ottelun veikkaukset</h2>
+          <div class="tabs">
+            <div id="tabTable" class="tab">Taulukko</div>
+            <div id="tabCards" class="tab">Kortit</div>
+          </div>
+        </div>
+        <p class="muted">Taulukko: pelaajat ylhäällä. Kortit: yksi pelaaja / kortti.</p>
+        <div id="predictionsArea"></div>
+      </div>
+
+      <div class="card">
+        <h2>Ottelun tulos (faktat)</h2>
+        <div id="actualsArea"></div>
+        <div style="margin-top:10px;display:flex;justify-content:flex-end">
+          <button id="refreshCheck" class="btn small">Päivitä & tarkasta</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const PLAYERS = ["Roosa","Timo","Tero","Tiina","Tepa","Äiti","Iskä"];
+const FIELDS = [
+  {key:'lopputulos',label:'Lopputulos'},
+  {key:'ekan_maalintekija',label:'Ekan maalintekijä'},
+  {key:'ekan_maali_aika',label:'Ekan maalin tekoaika'},
+  {key:'ekan_jahyn_saaja',label:'Ekan jäähyn saaja'},
+  {key:'ekan_jahyn_syy',label:'Ekan jäähyn syy'},
+  {key:'montako_jahyja',label:'Montako jäähyä'},
+  {key:'parempi_laukasu',label:'Kummalla parempi laukaus%'},
+  {key:'parempi_alotus',label:'Kummalla parempi aloitus%'},
+  {key:'parempi_torjunta',label:'Kummalla parempi torjunta%'},
+  {key:'parempi_alivoima',label:'Kummalla parempi alivoima%'},
+  {key:'parempi_ylivoima',label:'Kummalla parempi ylivoima%'},
+  {key:'era1',label:'1. erä tulos'},
+  {key:'era2',label:'2. erä tulos'},
+  {key:'valmentaja_haasto',label:'Valmentaja haasto'},
+  {key:'maali_tyhjiin',label:'Maali tyhjiin'}
+];
+
+const ONE_X_TWO_KEYS = new Set(['parempi_laukasu','parempi_alotus','parempi_torjunta','parempi_alivoima','parempi_ylivoima','era1','era2']);
+const KYLLA_EI_KEYS = new Set(['valmentaja_haasto','maali_tyhjiin']);
+const TEXT_KEYS = new Set(['ekan_maalintekija','ekan_jahyn_saaja','ekan_jahyn_syy']);
+const NUMBER_KEYS = new Set(['montako_jahyja']);
+
+let data = JSON.parse(localStorage.getItem('turnausveikkaus_data') || '{}');
+if (!data.tournaments) data.tournaments = [];
+let selectedTournamentId = data.selectedTournamentId || null;
+let selectedMatchId = null;
+let viewMode = localStorage.getItem('tv_view') || 'cards'; // default to cards so it's visible
+
+function save(){ data.selectedTournamentId = selectedTournamentId; localStorage.setItem('turnausveikkaus_data', JSON.stringify(data)); }
+function getTournament(){ return data.tournaments.find(t => String(t.id) === String(selectedTournamentId)); }
+const $ = (id)=>document.getElementById(id);
+function ciEq(a,b){ return (a||'').trim().toLowerCase() === (b||'').trim().toLowerCase(); }
+
+function normalizeScore(a,b){ const A=(a||'').toString().trim(), B=(b||'').toString().trim(); if(A===''&&B==='') return ''; return `${A||'0'}-${B||'0'}`; }
+function parseScore(str){ const m=(str||'').match(/^(\\d+)\\s*[-–]\\s*(\\d+)$/); return m?[m[1],m[2]]:['','']; }
+function parseTimeParts(str){ const m=(str||'').match(/^(\\d{1,2}):(\\d{2})$/); return m ? [m[1].padStart(2,'0'), m[2]] : ['','']; }
+
+function calcMatchPoints(t, matchId, player){
+  const preds = (t.predictions[matchId]||{})[player] || {};
+  const actual = t.actuals[matchId] || {};
+  let s = 0;
+  FIELDS.forEach(f=>{ const pv = preds[f.key]||''; const av = actual[f.key]||''; if(av!=='' && ciEq(pv,av)) s++; });
+  return s;
+}
+function calcTotalScores(t){
+  const totals={}; PLAYERS.forEach(p=> totals[p]=0);
+  (t.matches||[]).forEach(m=>{
+    const preds=t.predictions[m.id]||{}; const actual=t.actuals[m.id]||{};
+    PLAYERS.forEach(p=>{
+      let s=0; FIELDS.forEach(f=>{ const pred=preds[p]?.[f.key]||''; const act=actual[f.key]||''; if(act!=='' && ciEq(pred,act)) s++; });
+      totals[p]+=s;
+    });
+  });
+  if (t.topThreePrediction){
+    const actualTopThree = t.actualTopThree || [];
+    PLAYERS.forEach(p=>{
+      const pred = t.topThreePrediction[p] || [];
+      if (pred.length===3){ let pts=0; pred.forEach((team,i)=>{ if(team && actualTopThree[i] && ciEq(team,actualTopThree[i])) pts+=2; }); totals[p]+=pts; }
+    });
+  }
+  return totals;
+}
+
+function renderTournamentSelect(){
+  const sel=$('tournamentSelect');
+  const opts=['<option value="">Valitse turnaus…</option>'].concat(
+    (data.tournaments||[]).map(t=>`<option value="${t.id}" ${String(t.id)===String(selectedTournamentId)?'selected':''}>${t.name}</option>`)
+  );
+  sel.innerHTML=opts.join('');
+  sel.onchange=e=>{ selectedTournamentId=e.target.value||null; selectedMatchId=null; viewMode='cards'; localStorage.setItem('tv_view','cards'); save(); renderAll(); };
+}
+function renderMatchSelect(){
+  const sel=$('matchSelect'), t=getTournament();
+  if(!t){ sel.innerHTML='<option value="">—</option>'; sel.disabled=true; return; }
+  sel.disabled=false;
+  const opts=['<option value="">Valitse…</option>'].concat(
+    (t.matches||[]).map(m=>`<option value="${m.id}" ${String(m.id)===String(selectedMatchId)?'selected':''}>${m.name}</option>`)
+  );
+  sel.innerHTML=opts.join('');
+  sel.onchange=e=>{ selectedMatchId=e.target.value||null; viewMode='cards'; localStorage.setItem('tv_view','cards'); renderPredictions(); renderActuals(); renderScoreboard(); };
+}
+
+// --- Top-3 cards ---
+function renderTopThree(){
+  const wrap = $('topThreeArea');
+  const t = getTournament();
+  if (!t){ wrap.innerHTML='<p class="muted">Luo ensin turnaus.</p>'; return; }
+  t.topThreePrediction = t.topThreePrediction || {};
+  t.actualTopThree = t.actualTopThree || ['','',''];
+
+  let html = '<div class="t3-grid">';
+  html += `<div class="t3-card">
+    <div class="t3-title">Todellinen järjestys</div>
+    ${[0,1,2].map(i=>`
+      <div class="t3-row">
+        <div class="t3-dot">${i+1}.</div>
+        <input type="text" data-top3-actual-card="${i}" value="${t.actualTopThree[i]||''}" placeholder="${i+1}. sija (todellinen)" />
+      </div>`).join('')}
+  </div>`;
+
+  html += PLAYERS.map(p=>{
+    const arr = t.topThreePrediction[p] || ['','',''];
+    return `<div class="t3-card">
+      <div class="t3-title">${p}</div>
+      ${[0,1,2].map(i=>`
+        <div class="t3-row">
+          <div class="t3-dot">${i+1}.</div>
+          <input type="text" data-top3-card="${p}:${i}" value="${arr[i]||''}" placeholder="${i+1}. sija" />
+        </div>`).join('')}
+    </div>`;
+  }).join('');
+
+  html += '</div>';
+  wrap.innerHTML = html;
+  function markTopThreeClasses(){
+    const actual = (t.actualTopThree || []).map(x => (x||'').trim().toLowerCase());
+    // clear all classes first
+    wrap.querySelectorAll('[data-top3-card]').forEach(inp=>{
+      inp.classList.remove('correct','incorrect');
+      const val = (inp.value||'').trim().toLowerCase();
+      const parts = inp.dataset.top3Card.split(':');
+      const idx = Number(parts[1]);
+      const act = actual[idx] || '';
+      if(act){
+        if(val && val === act){
+          inp.classList.add('correct');
+        }else if(val){
+          inp.classList.add('incorrect');
+        }
+      }
+    });
+  }
+
+  markTopThreeClasses();
+
+  wrap.querySelectorAll('input[data-top3-card]').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const [player, idx] = e.target.dataset.top3Card.split(':');
+      t.topThreePrediction[player] = t.topThreePrediction[player] || ['','',''];
+      t.topThreePrediction[player][Number(idx)] = e.target.value;
+      markTopThreeClasses();
+      renderScoreboard();
+    });
+    inp.addEventListener('blur', ()=>{ save(); renderScoreboard(); markTopThreeClasses(); });
+  });
+  wrap.querySelectorAll('input[data-top3-actual-card]').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const idx = Number(e.target.dataset.top3ActualCard);
+      t.actualTopThree[idx] = e.target.value;
+      markTopThreeClasses();
+      renderScoreboard();
+    });
+    inp.addEventListener('blur', ()=>{ save(); renderScoreboard(); markTopThreeClasses(); });
+  });
+}
+
+function renderScoreboard(){
+  const el=$('scoreboard'); if(!selectedTournamentId){ el.innerHTML='<p class="muted">Valitse turnaus.</p>'; return; }
+  const t=getTournament(); const totals=calcTotalScores(t); const sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+  el.innerHTML='<div class="score-grid">'+sorted.map(([n,pts])=>`<div class="score-card"><div class="name">${n}</div><div class="pts">${pts} p</div></div>`).join('')+'</div>';
+}
+
+function widgetHTML(kind,key,value,dataset){
+  const ds = kind==='pred' ? `data-pred="${dataset}"` : `data-act="${key}"`;
+  if(key==='lopputulos'){ const [a,b]=parseScore(value); return `<div class="score-combo"><input type="number" inputmode="numeric" min="0" class="goalA" ${ds} value="${a}" placeholder="0" /><span class="dash">-</span><input type="number" inputmode="numeric" min="0" class="goalB" ${ds} value="${b}" placeholder="0" /></div>`; }
+  if(key==='ekan_maali_aika'){
+    const [mm,ss] = parseTimeParts(value);
+    return `<div class="time-combo">
+      <input type="number" inputmode="numeric" min="0" max="59" class="timeM" ${ds} value="${mm}" placeholder="MM" />
+      <span class="colon">:</span>
+      <input type="number" inputmode="numeric" min="0" max="59" class="timeS" ${ds} value="${ss}" placeholder="SS" />
+    </div>`;
+  }
+  if(ONE_X_TWO_KEYS.has(key)){ const opts=['','1','X','2']; return `<select ${ds}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o===''?'—':o}</option>`).join('')}</select>`; }
+  if(KYLLA_EI_KEYS.has(key)){ const opts=['','Kyllä','Ei']; return `<select ${ds}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o===''?'—':o}</option>`).join('')}</select>`; }
+  if(NUMBER_KEYS.has(key)){ return `<input type="number" inputmode="numeric" ${ds} value="${value||''}" placeholder="0" />`; }
+  if(TEXT_KEYS.has(key)){ return `<input type="text" inputmode="text" ${ds} value="${value||''}" placeholder="Kirjoita" />`; }
+  return `<input type="text" ${ds} value="${value||''}" placeholder="…" />`;
+}
+
+function setCellHighlightFor(player,key){
+  const t=getTournament(); if(!t||!selectedMatchId) return;
+  const preds=t.predictions[selectedMatchId]||{}; const actual=(t.actuals[selectedMatchId]||{})[key]||''; const val=(preds[player]||{})[key]||'';
+  const hasAct = actual!==''; const hasPred = (val||'')!==''; const eq = hasAct && ciEq(val,actual); const neq = hasAct && hasPred && !eq;
+  const cell=document.querySelector(`[data-pred="${player}:${key}"]`)?.closest('td'); if(cell){ cell.classList.toggle('correct',eq); cell.classList.toggle('incorrect',neq); }
+  const row=document.querySelector(`[data-card-pred="${player}:${key}"]`)?.closest('.kv-row'); if(row){ row.classList.toggle('correct',eq); row.classList.toggle('incorrect',neq); }
+}
+function refreshHighlightsForField(key){ PLAYERS.forEach(p=> setCellHighlightFor(p,key)); }
+function refreshAllHighlights(){ FIELDS.forEach(f=> refreshHighlightsForField(f.key)); }
+
+function renderPredictions(){
+  const el=$('predictionsArea'), t=getTournament();
+  if(!t){ el.innerHTML='<p class="muted">Luo ensin turnaus.</p>'; return; }
+  if(!selectedMatchId){ el.innerHTML='<p class="muted">Valitse tai luo ottelu.</p>'; return; }
+  t.predictions[selectedMatchId]=t.predictions[selectedMatchId]||{}; t.actuals[selectedMatchId]=t.actuals[selectedMatchId]||{};
+  $('tabTable').classList.toggle('active', viewMode==='table'); $('tabCards').classList.toggle('active', viewMode==='cards');
+
+  if(viewMode==='cards'){
+    const cards=PLAYERS.map(p=>{
+      const pred=t.predictions[selectedMatchId][p]||{};
+      const matchPts = calcMatchPoints(t, selectedMatchId, p);
+      const rows=FIELDS.map(f=>{
+        const v=pred[f.key]||''; const act=(t.actuals[selectedMatchId][f.key]||''); const isCorrect=(act!=='') && ciEq(v,act); const isIncorrect=(act!=='') && (v!=='') && !isCorrect;
+        const w=(f.key==='lopputulos')?`<div data-card-pred="${p}:${f.key}">${widgetHTML('pred',f.key,v,`${p}:${f.key}`)}</div>`:widgetHTML('pred',f.key,v,`${p}:${f.key}`);
+        return `<div class="kv-row ${isCorrect?'correct':''} ${isIncorrect?'incorrect':''}"><div class="kv-label">${f.label}</div>${w}</div>`;
+      }).join('');
+      return `<div class="person-card"><div class="card-head"><div class="person-title">${p}</div><div class="pts-badge" title="Pisteet tästä pelistä">${matchPts} p</div></div><div class="kv">${rows}</div></div>`;
+    }).join('');
+    el.innerHTML=cards;
+  } else {
+    const actual=t.actuals[selectedMatchId];
+    let thead=`<tr><th class="sticky-top sticky-left sticky-corner">Kohde</th>${PLAYERS.map(p=>`<th class="sticky-top">${p}</th>`).join('')}</tr>`;
+    let tbody=FIELDS.map(f=>{
+      let row=`<tr><th class="sticky-left">${f.label}</th>`;
+      row+=PLAYERS.map(p=>{
+        const predVal=(t.predictions[selectedMatchId][p]||{})[f.key]||''; const isCorrect=actual[f.key]?ciEq(predVal,actual[f.key]):false;
+        let w=widgetHTML('pred',f.key,predVal,`${p}:${f.key}`); if(f.key==='lopputulos') w=`<div data-cell="${p}:${f.key}">${w}</div>`;
+        return `<td class="${isCorrect?'correct':''}">${w}</td>`;
+      }).join('');
+      row+='</tr>'; return row;
+    }).join('');
+    el.innerHTML=`<div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+  }
+
+  // score combo listeners
+  el.querySelectorAll('.score-combo').forEach(combo=>{
+    const a=combo.querySelector('.goalA'), b=combo.querySelector('.goalB'); const attr=(a.getAttribute('data-pred')||b.getAttribute('data-pred')); if(!attr) return;
+    const [player,key]=attr.split(':');
+    function onInput(){ const val=normalizeScore(a.value,b.value); t.predictions[selectedMatchId][player]=t.predictions[selectedMatchId][player]||{}; t.predictions[selectedMatchId][player][key]=val; setCellHighlightFor(player,key); }
+    a.addEventListener('input',onInput); b.addEventListener('input',onInput);
+    a.addEventListener('blur',()=>{ save(); renderScoreboard(); }); b.addEventListener('blur',()=>{ save(); renderScoreboard(); });
+  });
+  // time combo listeners
+  el.querySelectorAll('.time-combo').forEach(box=>{
+    const m = box.querySelector('.timeM');
+    const s = box.querySelector('.timeS');
+    const attr = (m.getAttribute('data-pred') || s.getAttribute('data-pred'));
+    if (!attr) return;
+    const [player,key] = attr.split(':');
+    function onInput(){
+      const mm = (m.value||'').toString().padStart(2,'0');
+      const ss = (s.value||'').toString().padStart(2,'0');
+      const val = (mm==='' && ss==='') ? '' : `${mm}:${ss}`;
+      t.predictions[selectedMatchId][player] = t.predictions[selectedMatchId][player] || {};
+      t.predictions[selectedMatchId][player][key] = val;
+      setCellHighlightFor(player, key);
+    }
+    m.addEventListener('input', onInput);
+    s.addEventListener('input', onInput);
+    m.addEventListener('blur', ()=>{ save(); renderScoreboard(); });
+    s.addEventListener('blur', ()=>{ save(); renderScoreboard(); });
+  });
+
+  // single inputs/selects
+  el.querySelectorAll('input[data-pred], select[data-pred]').forEach(inp=>{
+    inp.addEventListener('input',e=>{ const [player,key]=e.target.dataset.pred.split(':'); let value=e.target.value;
+      t.predictions[selectedMatchId][player]=t.predictions[selectedMatchId][player]||{}; t.predictions[selectedMatchId][player][key]=value; setCellHighlightFor(player,key);
+    });
+    inp.addEventListener('blur',()=>{ save(); renderScoreboard(); });
+  });
+}
+
+function renderActuals(){
+  const el=$('actualsArea'), t=getTournament();
+  if(!t){ el.innerHTML='<p class="muted">Luo ensin turnaus.</p>'; return; }
+  if(!selectedMatchId){ el.innerHTML='<p class="muted">Valitse tai luo ottelu.</p>'; return; }
+  t.actuals[selectedMatchId]=t.actuals[selectedMatchId]||{}; const act=t.actuals[selectedMatchId];
+  const rows=FIELDS.map(f=>{ let w=widgetHTML('act',f.key,act[f.key]||'',f.key); if(f.key==='lopputulos') w=`<div data-act-cell="${f.key}">${w}</div>`;
+    return `<tr><td style="width:240px"><strong>${f.label}</strong></td><td>${w}</td></tr>`;
+  }).join('');
+  el.innerHTML=`<table><tbody>${rows}</tbody></table>`;
+
+  // score combo actuals
+  el.querySelectorAll('[data-act-cell] .goalA, [data-act-cell] .goalB').forEach(inp=>{
+    const key=inp.closest('[data-act-cell]').getAttribute('data-act-cell'); const combo=inp.closest('.score-combo'); const A=combo.querySelector('.goalA'), B=combo.querySelector('.goalB');
+    function onInput(){ t.actuals[selectedMatchId][key]=normalizeScore(A.value,B.value); refreshHighlightsForField(key); renderScoreboard(); }
+    inp.addEventListener('input',onInput); inp.addEventListener('blur',()=>{ save(); renderScoreboard(); });
+  });
+  // time combo actuals
+  el.querySelectorAll('.time-combo .timeM, .time-combo .timeS').forEach(inp=>{
+    const box = inp.closest('.time-combo');
+    const m = box.querySelector('.timeM');
+    const s = box.querySelector('.timeS');
+    const key = (m.getAttribute('data-act') || s.getAttribute('data-act'));
+    function onInput(){
+      const mm = (m.value||'').toString().padStart(2,'0');
+      const ss = (s.value||'').toString().padStart(2,'0');
+      t.actuals[selectedMatchId][key] = (mm==='' && ss==='') ? '' : `${mm}:${ss}`;
+      refreshHighlightsForField(key);
+      renderScoreboard();
+    }
+    m.addEventListener('input', onInput);
+    s.addEventListener('input', onInput);
+    m.addEventListener('blur', ()=>{ save(); renderScoreboard(); });
+    s.addEventListener('blur', ()=>{ save(); renderScoreboard(); });
+  });
+
+  el.querySelectorAll('input[data-act], select[data-act]').forEach(inp=>{
+    inp.addEventListener('input',e=>{ const key=e.target.dataset.act; let val=e.target.value; t.actuals[selectedMatchId][key]=val; refreshHighlightsForField(key); renderScoreboard(); });
+    inp.addEventListener('blur',()=>{ save(); renderScoreboard(); });
+  });
+}
+
+// Create actions
+document.getElementById('createTournament').onclick=()=>{
+  const name=$('newTournamentName').value.trim();
+  if(!name){ alert('Anna turnauksen nimi'); return; }
+  const id=Date.now().toString();
+  data.tournaments.push({ id, name, matches:[], predictions:{}, actuals:{}, topThreePrediction:{}, actualTopThree:[] });
+  selectedTournamentId=id; save(); renderAll(); $('newTournamentName').value='';
+};
+document.getElementById('createMatch').onclick=()=>{
+  const t=getTournament(); if(!t){ alert('Luo ensin turnaus'); return; }
+  let name=$('newMatchName').value.trim(); if(name==='') name='Suomi vs ';
+  const id=Date.now().toString();
+  t.matches.push({ id, name }); selectedMatchId=id; viewMode='cards'; localStorage.setItem('tv_view','cards'); save(); renderAll(); $('newMatchName').value='Suomi vs ';
+};
+
+// Export / Import / Reset
+$('exportBtn').onclick=()=>{ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='turnausveikkaus_data.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); };
+$('importBtn').onclick=()=>{ $('importFile').click(); };
+$('importFile').addEventListener('change',e=>{ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=()=>{ try{ const obj=JSON.parse(reader.result); if(!obj||typeof obj!=='object') throw new Error('Virheellinen JSON'); data=obj; selectedTournamentId=data.selectedTournamentId||null; selectedMatchId=null; save(); renderAll(); alert('Data tuotu.'); }catch(err){ alert('Tuonti epäonnistui: '+err.message); } }; reader.readAsText(file,'utf-8'); });
+$('resetBtn').onclick=()=>{ if(!confirm('Tyhjennetäänkö kaikki data tältä laitteelta?')) return; data={ tournaments:[], selectedTournamentId:null }; selectedTournamentId=null; selectedMatchId=null; save(); renderAll(); };
+
+
+// --- Top-3 visibility toggle (v5.3) ---
+let top3Visible = localStorage.getItem('tv_top3_visible');
+if (top3Visible === null) top3Visible = '1'; // default visible
+
+function applyTop3Visibility(){
+  const area = document.getElementById('topThreeArea');
+  const saveBtn = document.getElementById('saveTopThree');
+  const saveRow = saveBtn ? saveBtn.closest('.stack') : null;
+  const btn = document.getElementById('toggleTop3');
+  const show = top3Visible === '1';
+  if(area) area.style.display = show ? '' : 'none';
+  if(saveRow) saveRow.style.display = show ? '' : 'none';
+  if(btn) btn.textContent = show ? 'Piilota' : 'Näytä';
+}
+
+// Attach handler once DOM is ready
+document.addEventListener('DOMContentLoaded', ()=>{
+  const btn = document.getElementById('toggleTop3');
+  if(btn){
+    btn.addEventListener('click', ()=>{
+      top3Visible = (top3Visible === '1') ? '0' : '1';
+      localStorage.setItem('tv_top3_visible', top3Visible);
+      applyTop3Visibility();
+    });
+  }
+  applyTop3Visibility();
+});
+
+// Tabs
+$('tabTable').onclick=()=>{ viewMode='table'; localStorage.setItem('tv_view','table'); renderPredictions(); };
+$('tabCards').onclick=()=>{ viewMode='cards'; localStorage.setItem('tv_view','cards'); renderPredictions(); };
+
+// Manual refresh for results
+document.getElementById('refreshCheck').addEventListener('click', ()=>{
+  save(); renderScoreboard(); refreshAllHighlights();
+});
+
+function renderAll(){ renderTournamentSelect(); renderMatchSelect(); renderTopThree(); renderScoreboard(); renderPredictions(); renderActuals(); }
+(data.tournaments||[]).forEach(t=>{ t.matches=(t.matches||[]).map(m=>({...m, id:String(m.id)})); });
+$('newMatchName').value='Suomi vs ';
+renderAll();
+</script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js");
+    });
+  }
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+<script>
+(function(){
+  const btn = document.getElementById('screenshotTableBtn');
+  if(!btn) return;
+  btn.addEventListener('click', async ()=>{
+    try{
+      const prev = window.viewMode || 'cards';
+      // switch to table view to ensure all predictions in one table
+      window.viewMode = 'table';
+      localStorage.setItem('tv_view','table');
+      if (typeof window.renderPredictions === 'function') window.renderPredictions();
+      await new Promise(r=>setTimeout(r, 100)); // allow layout
+
+      const area = document.getElementById('predictionsArea');
+      const target = area.querySelector('.table-wrap') || area;
+      // Expand if horizontally scrollable
+      const opts = {
+        scale: 3,
+        backgroundColor: null,
+        useCORS: true,
+        windowWidth: target.scrollWidth,
+        windowHeight: target.scrollHeight
+      };
+      const canvas = await html2canvas(target, opts);
+      const link = document.createElement('a');
+      link.download = 'veikkaus-taulukko.png';
+      link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      // restore previous view
+      window.viewMode = prev;
+      localStorage.setItem('tv_view', prev);
+      if (typeof window.renderPredictions === 'function') window.renderPredictions();
+    }catch(e){
+      alert('Kuvan luonti epäonnistui: ' + (e && e.message ? e.message : e));
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
