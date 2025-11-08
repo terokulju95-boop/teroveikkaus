@@ -94,7 +94,7 @@
     table{ width:100%; border-collapse:separate; border-spacing:0; font-size:14px }
     th,td{ border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px; text-align:left; vertical-align:top; background:#fff }
     th:first-child,td:first-child{ border-left:1px solid var(--border) } tr:first-child th{ border-top:1px solid var(--border) }
-    .table-wrap{ overflow:auto; -webkit-overflow-scrolling:touch; border-radius:10px }
+    .table-wrap { width:100%; overflow-x:auto; overflow-y:hidden; border-radius:10px; }
     .sticky-top{ position:sticky; top:0; z-index:5; background:#fafafa } .sticky-left{ position:sticky; left:0; z-index:4; background:#fafafa } .sticky-corner{ z-index:6 }
     .correct{ background-color:#dcfce7 }
     input.correct{ background-color:#dcfce7 !important; }
@@ -155,6 +155,7 @@ input.incorrect, select.incorrect { background-color:#fee2e2 !important; color:#
   color: #000 !important;
 }
 
+.table-wrap table { min-width:1000px; width:max-content; }
 </style>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
@@ -412,14 +413,12 @@ function renderScoreboard(){
 
 function widgetHTML(kind,key,value,dataset){
   const ds = kind==='pred' ? `data-pred="${dataset}"` : `data-act="${key}"`;
-  if(key==='lopputulos'){ const [a,b]=parseScore(value); return `<div class="score-combo"><input type="number" inputmode="numeric" min="0" class="goalA" ${ds} value="${a}" placeholder="0" /><span class="dash">-</span><input type="number" inputmode="numeric" min="0" class="goalB" ${ds} value="${b}" placeholder="0" /></div>`; }
+  if(key==='lopputulos'){
+    return `<input type="text" ${ds} value="${value||''}" placeholder="3-2" class="single-field" />`;
+   }
   if(key==='ekan_maali_aika'){
-    const [mm,ss] = parseTimeParts(value);
-    return `<div class="time-combo">
-      <input type="number" inputmode="numeric" min="0" max="59" class="timeM" ${ds} value="${mm}" placeholder="MM" />
-      <span class="colon">:</span>
-      <input type="number" inputmode="numeric" min="0" max="59" class="timeS" ${ds} value="${ss}" placeholder="SS" />
-    </div>`;
+    return `<input type="text" ${ds} value="${value||''}" placeholder="MM:SS" class="single-field" />`;
+  
   }
   if(ONE_X_TWO_KEYS.has(key)){ const opts=['','1','X','2']; return `<select ${ds}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o===''?'—':o}</option>`).join('')}</select>`; }
   if(KYLLA_EI_KEYS.has(key)){ const opts=['','Kyllä','Ei']; return `<select ${ds}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o===''?'—':o}</option>`).join('')}</select>`; }
