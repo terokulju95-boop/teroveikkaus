@@ -8,7 +8,72 @@
   <style>
     :root { --bg:#f7f7fb; --card:#ffffff; --text:#111827; --muted:#6b7280; --primary:#f97316; --primary-hover:#ea580c; --border:#e5e7eb; --ok:#22c55e; --dark:#111827; }
     *{ box-sizing:border-box } html,body{ margin:0; padding:0 }
-    body{ background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol",sans-serif; line-height:1.5; padding:12px }
+    body{ background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol",sans-serif; line-height:1.5; padding:12px }@media (prefers-color-scheme: dark) {
+
+  .score-card {
+    background:#ffffff !important;
+    color:#000000 !important;
+  }
+  .score-card .name {
+    color:#000000 !important;
+    font-weight:700;
+  }
+
+
+      :root {
+          --bg:#0f172a;
+              --card:#1e293b;
+                  --text:#f1f5f9;
+                      --muted:#94a3b8;
+                          --border:#334155;
+                              --primary:#f97316;
+                                  --primary-hover:#ea580c;
+                                      --dark:#f8fafc;
+                                        
+  input,
+  select {
+    background:#1e293b !important; 
+    color:#ffffff !important;
+    border-color:#475569 !important;
+  }
+  input::placeholder,
+  select::placeholder {
+    color:#cbd5e1 !important;
+    opacity:1;
+  }
+
+}
+
+                                          body {
+                                              background: var(--bg);
+                                                  color: var(--text);
+                                                    }
+
+                                                      .card,
+                                                        .person-card,
+                                                          .t3-card,
+                                                            table th,
+                                                              table td {
+                                                                  background: var(--card) !important;
+                                                                    }
+
+                                                                      input,
+                                                                        select {
+                                                                            background: #1e293b;
+                                                                                color: var(--text);
+                                                                                    border-color: var(--border);
+                                                                                      }
+
+                                                                                        .score-card {
+                                                                                            background: var(--card);
+                                                                                                border-color: var(--border);
+                                                                                                  }
+
+                                                                                                    .tabs .tab {
+                                                                                                        background: var(--card);
+                                                                                                            color: var(--text);
+                                                                                                              }
+                                                                                                              }
     h1{ text-align:center; margin:0 0 12px; font-size:22px } h2{ margin:0 0 10px; font-size:16px }
     .layout{ max-width:960px; margin:0 auto; display:grid; gap:12px; grid-template-columns:1fr }
     @media(min-width:980px){ .layout{ grid-template-columns:360px 1fr } }
@@ -54,8 +119,8 @@
     @media (min-width:640px){ .t3-grid { grid-template-columns: 1fr 1fr; } }
     .t3-card { border:1px solid var(--border); border-radius:12px; padding:10px; background:#fff; }
     .t3-title { font-weight:800; margin-bottom:8px; font-size:15px; }
-    .t3-row { display:grid; grid-template-columns: 40px 1fr; gap:8px; align-items:center; margin-bottom:6px; }
-    .t3-dot { display:inline-block; width:32px; height:32px; border:1px solid var(--border); border-radius:999px; text-align:center; line-height:30px; font-weight:700; background:#fafafa; }
+    .t3-row { display:grid; grid-template-columns: 1fr; gap:8px; align-items:center; margin-bottom:6px; }
+    .t3-dot { display:none !important; }
 
     /* time MM:SS */
     .time-combo { display:flex; align-items:center; gap:6px; }
