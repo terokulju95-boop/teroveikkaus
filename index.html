@@ -4,76 +4,23 @@
   <meta name="theme-color" content="#0f172a">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>🏒 Turnausveikkaus – Mobiili v4.4c</title>
+  <title>🏒 Turnausveikkaus – Mobiili v4.4c (korjattu faktakortti)</title>
   <style>
     :root { --bg:#f7f7fb; --card:#ffffff; --text:#111827; --muted:#6b7280; --primary:#f97316; --primary-hover:#ea580c; --border:#e5e7eb; --ok:#22c55e; --dark:#111827; }
     *{ box-sizing:border-box } html,body{ margin:0; padding:0 }
-    body{ background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol",sans-serif; line-height:1.5; padding:12px }@media (prefers-color-scheme: dark) {
-
-  .score-card {
-    background:#ffffff !important;
-    color:#000000 !important;
-  }
-  .score-card .name {
-    color:#000000 !important;
-    font-weight:700;
-  }
-
-
-      :root {
-          --bg:#0f172a;
-              --card:#1e293b;
-                  --text:#f1f5f9;
-                      --muted:#94a3b8;
-                          --border:#334155;
-                              --primary:#f97316;
-                                  --primary-hover:#ea580c;
-                                      --dark:#f8fafc;
-                                        
-  input,
-  select {
-    background:#1e293b !important; 
-    color:#ffffff !important;
-    border-color:#475569 !important;
-  }
-  input::placeholder,
-  select::placeholder {
-    color:#cbd5e1 !important;
-    opacity:1;
-  }
-
-}
-
-                                          body {
-                                              background: var(--bg);
-                                                  color: var(--text);
-                                                    }
-
-                                                      .card,
-                                                        .person-card,
-                                                          .t3-card,
-                                                            table th,
-                                                              table td {
-                                                                  background: var(--card) !important;
-                                                                    }
-
-                                                                      input,
-                                                                        select {
-                                                                            background: #1e293b;
-                                                                                color: var(--text);
-                                                                                    border-color: var(--border);
-                                                                                      }
-
-                                                                                        .score-card {
-                                                                                            background: var(--card);
-                                                                                                border-color: var(--border);
-                                                                                                  }
-
-                                                                                                    .tabs .tab {
-                                                                                                        background: var(--card);
-                                                                                                            color: var(--text);
-                                                                                                              }
-                                                                                                              }
+    body{ background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol",sans-serif; line-height:1.5; padding:12px }
+    @media (prefers-color-scheme: dark) {
+      .score-card { background:#ffffff !important; color:#000000 !important; }
+      .score-card .name { color:#000000 !important; font-weight:700; }
+      :root { --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --muted:#94a3b8; --border:#334155; --primary:#f97316; --primary-hover:#ea580c; --dark:#f8fafc; }
+      input, select { background:#1e293b !important; color:#ffffff !important; border-color:#475569 !important; }
+      input::placeholder, select::placeholder { color:#cbd5e1 !important; opacity:1; }
+      body { background: var(--bg); color: var(--text); }
+      .card, .person-card, .t3-card, table th, table td { background: var(--card) !important; }
+      input, select { background: #1e293b; color: var(--text); border-color: var(--border); }
+      .score-card { background: var(--card); border-color: var(--border); }
+      .tabs .tab { background: var(--card); color: var(--text); }
+    }
     h1{ text-align:center; margin:0 0 12px; font-size:22px } h2{ margin:0 0 10px; font-size:16px }
     .layout{ max-width:960px; margin:0 auto; display:grid; gap:12px; grid-template-columns:1fr }
     @media(min-width:980px){ .layout{ grid-template-columns:360px 1fr } }
@@ -105,15 +52,15 @@
     .tabs{ display:flex; border:1px solid var(--border); border-radius:10px; overflow:hidden } .tab{ flex:1; text-align:center; padding:10px; background:#fff; cursor:pointer; font-weight:700 } .tab.active{ background:var(--dark); color:#fff }
     .person-card{ border:1px solid var(--border); border-radius:12px; padding:10px; background:#fff } .person-title{ font-weight:800; margin-bottom:8px }
     .kv{ display:grid; grid-template-columns:1fr; gap:6px }
-    .kv-row{ display:grid; grid-template-columns:140px 1fr; gap:8px; align-items:center }
+    .kv-row{ display:grid; grid-template-columns:180px 1fr; gap:8px; align-items:center }
+    @media(max-width:420px){ .kv-row{ grid-template-columns:140px 1fr } }
+    .kv-label{ font-weight:600 }
     .kv-row.correct input, .kv-row.correct select{ background:#dcfce7 }
-    @media(max-width:420px){ .kv-row{ grid-template-columns:120px 1fr } }
     .score-combo{ display:flex; align-items:center; gap:6px } .score-combo input{ width:64px; text-align:center } .dash{ font-weight:800 }
     .cell-input{ width:140px; max-width:140px; padding:10px 12px; font-size:16px }
     @media(max-width:600px){ .cell-input{ width:120px; max-width:120px } }
     @media(max-width:420px){ .cell-input{ width:100px; max-width:100px } }
     .pill{ display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#fafafa; font-size:12px }
-
     /* Top-3 layout */
     .t3-grid { display:grid; gap:10px; grid-template-columns: 1fr; }
     @media (min-width:640px){ .t3-grid { grid-template-columns: 1fr 1fr; } }
@@ -121,45 +68,42 @@
     .t3-title { font-weight:800; margin-bottom:8px; font-size:15px; }
     .t3-row { display:grid; grid-template-columns: 1fr; gap:8px; align-items:center; margin-bottom:6px; }
     .t3-dot { display:none !important; }
-
     /* time MM:SS */
     .time-combo { display:flex; align-items:center; gap:6px; }
     .time-combo input { width:64px; text-align:center; }
     .colon { font-weight:800; }
-
     /* cards badge */
     .pts-badge { display:inline-block; background:#111827; color:#fff; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px; }
     .card-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-  
-    
-/* === Highlight fixes (force over dark mode) === */
-.kv-row.correct { background-color:#dcfce7 !important; }
-.kv-row.incorrect { background-color:#fee2e2 !important; }
-.kv-row.correct input, .kv-row.correct select { background-color:#dcfce7 !important; color:#000 !important; }
-.kv-row.incorrect input, .kv-row.incorrect select { background-color:#fee2e2 !important; color:#000 !important; }
-table td.correct { background-color:#dcfce7 !important; }
-table td.incorrect { background-color:#fee2e2 !important; }
-input.correct, select.correct { background-color:#dcfce7 !important; color:#000 !important; }
-input.incorrect, select.incorrect { background-color:#fee2e2 !important; color:#000 !important; }
-
-/* === Tabs: readable text === */
-.tabs .tab { color: var(--text) !important; }
-.tabs .tab.active { background:#1e293b !important; color:#fff !important; }
-
-
-/* Fix kv-label readability on highlighted rows */
-.kv-row.correct .kv-label {
-  color: #000 !important;
-}
-.kv-row.incorrect .kv-label {
-  color: #000 !important;
-}
-
-.table-wrap table { min-width:1000px; width:max-content; }
-</style>
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icons/icon-192.png">
-<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+    /* === Highlight fixes (force over dark mode) === */
+    .kv-row.correct { background-color:#dcfce7 !important; }
+    .kv-row.incorrect { background-color:#fee2e2 !important; }
+    .kv-row.correct input, .kv-row.correct select { background-color:#dcfce7 !important; color:#000 !important; }
+    .kv-row.incorrect input, .kv-row.incorrect select { background-color:#fee2e2 !important; color:#000 !important; }
+    table td.correct { background-color:#dcfce7 !important; }
+    table td.incorrect { background-color:#fee2e2 !important; }
+    input.correct, select.correct { background-color:#dcfce7 !important; color:#000 !important; }
+    input.incorrect, select.incorrect { background-color:#fee2e2 !important; color:#000 !important; }
+    /* === Tabs: readable text === */
+    .tabs .tab { color: var(--text) !important; }
+    .tabs .tab.active { background:#1e293b !important; color:#fff !important; }
+    /* Fix kv-label readability on highlighted rows */
+    .kv-row.correct .kv-label,
+    .kv-row.incorrect .kv-label { color: #000 !important; }
+    .table-wrap table { min-width:1000px; width:max-content; }
+    /* === UUSI: Faktat korttina kuten pelaajakortti === */
+    .actuals-card.person-card { padding:14px; }
+    .actuals-card .kv-row { grid-template-columns: 200px 1fr; }
+    @media(max-width:480px){ .actuals-card .kv-row { grid-template-columns: 150px 1fr; } }
+    .actuals-card input, .actuals-card select {
+      padding:14px 16px;
+      font-size:18px;
+      border-radius:12px;
+    }
+  </style>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 </head>
 <body>
   <h1>🏒 Turnausveikkaus</h1>
@@ -170,8 +114,6 @@ input.incorrect, select.incorrect { background-color:#fee2e2 !important; color:#
         <label>Valitse turnaus</label>
         <select id="tournamentSelect"></select>
       </div>
-      
-
       <div class="field">
           <label>Luo uusi turnaus</label>
           <input id="newTournamentName" type="text" placeholder="Esim. MM 2025" />
@@ -179,9 +121,7 @@ input.incorrect, select.incorrect { background-color:#fee2e2 !important; color:#
       <div class="field">
           <button id="createTournament" class="btn small" style="width:100%">Luo turnaus</button>
       </div>
-
       <div class="separator"></div>
-
       <h2>Ottelut</h2>
       <div class="field">
         <label>Valitse ottelu</label>
@@ -195,24 +135,19 @@ input.incorrect, select.incorrect { background-color:#fee2e2 !important; color:#
       <div class="field">
         <button id="createMatch" class="btn small" style="width:100%">Luo ottelu</button>
       </div>
-
       <div class="separator"></div>
-
       <div class="stack" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Kolmen kärki – veikkaukset</h2><button id="toggleTop3" class="btn small" style="background:#fff;color:#111;border:1px solid var(--border)">Piilota</button></div>
       <div id="topThreeArea"></div>
       <div class="stack" style="margin-top:8px">
         <button id="saveTopThree" class="btn small">Tallenna veikkaukset</button>
       </div>
-
       <div class="separator"></div>
-
       <h2>Data</h2>
       <div class="stack">
         <button id="exportBtn" class="btn small" style="background:#fff;color:#111;border:1px solid var(--border)">Vie JSON</button>
         <input id="importFile" type="file" accept="application/json" style="display:none" />
         <button id="importBtn" class="btn small" style="background:#fff;color:#111;border:1px solid var(--border)">Tuo JSON</button>
         <button id="resetBtn" class="btn small" style="background:#111827">Tyhjennä kaikki</button>
-      
         <button id="screenshotTableBtn" class="btn small" style="background:#22c55e">Ota kuva (taulukko)</button>
       </div>
       <p class="muted" style="margin-top:6px">Tiedot tallentuvat tähän laitteeseen (localStorage).</p>
@@ -344,7 +279,6 @@ function renderTopThree(){
     <div class="t3-title">Todellinen järjestys</div>
     ${[0,1,2].map(i=>`
       <div class="t3-row">
-        <div class="t3-dot">${i+1}.</div>
         <input type="text" data-top3-actual-card="${i}" value="${t.actualTopThree[i]||''}" placeholder="${i+1}. sija (todellinen)" />
       </div>`).join('')}
   </div>`;
@@ -355,7 +289,6 @@ function renderTopThree(){
       <div class="t3-title">${p}</div>
       ${[0,1,2].map(i=>`
         <div class="t3-row">
-          <div class="t3-dot">${i+1}.</div>
           <input type="text" data-top3-card="${p}:${i}" value="${arr[i]||''}" placeholder="${i+1}. sija" />
         </div>`).join('')}
     </div>`;
@@ -365,7 +298,6 @@ function renderTopThree(){
   wrap.innerHTML = html;
   function markTopThreeClasses(){
     const actual = (t.actualTopThree || []).map(x => (x||'').trim().toLowerCase());
-    // clear all classes first
     wrap.querySelectorAll('[data-top3-card]').forEach(inp=>{
       inp.classList.remove('correct','incorrect');
       const val = (inp.value||'').trim().toLowerCase();
@@ -373,17 +305,12 @@ function renderTopThree(){
       const idx = Number(parts[1]);
       const act = actual[idx] || '';
       if(act){
-        if(val && val === act){
-          inp.classList.add('correct');
-        }else if(val){
-          inp.classList.add('incorrect');
-        }
+        if(val && val === act){ inp.classList.add('correct'); }
+        else if(val){ inp.classList.add('incorrect'); }
       }
     });
   }
-
   markTopThreeClasses();
-
   wrap.querySelectorAll('input[data-top3-card]').forEach(inp=>{
     inp.addEventListener('input', e=>{
       const [player, idx] = e.target.dataset.top3Card.split(':');
@@ -418,7 +345,6 @@ function widgetHTML(kind,key,value,dataset){
    }
   if(key==='ekan_maali_aika'){
     return `<input type="text" ${ds} value="${value||''}" placeholder="MM:SS" class="single-field" />`;
-  
   }
   if(ONE_X_TWO_KEYS.has(key)){ const opts=['','1','X','2']; return `<select ${ds}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o===''?'—':o}</option>`).join('')}</select>`; }
   if(KYLLA_EI_KEYS.has(key)){ const opts=['','Kyllä','Ei']; return `<select ${ds}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o===''?'—':o}</option>`).join('')}</select>`; }
@@ -473,35 +399,6 @@ function renderPredictions(){
     el.innerHTML=`<div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
   }
 
-  // score combo listeners
-  el.querySelectorAll('.score-combo').forEach(combo=>{
-    const a=combo.querySelector('.goalA'), b=combo.querySelector('.goalB'); const attr=(a.getAttribute('data-pred')||b.getAttribute('data-pred')); if(!attr) return;
-    const [player,key]=attr.split(':');
-    function onInput(){ const val=normalizeScore(a.value,b.value); t.predictions[selectedMatchId][player]=t.predictions[selectedMatchId][player]||{}; t.predictions[selectedMatchId][player][key]=val; setCellHighlightFor(player,key); }
-    a.addEventListener('input',onInput); b.addEventListener('input',onInput);
-    a.addEventListener('blur',()=>{ save(); renderScoreboard(); }); b.addEventListener('blur',()=>{ save(); renderScoreboard(); });
-  });
-  // time combo listeners
-  el.querySelectorAll('.time-combo').forEach(box=>{
-    const m = box.querySelector('.timeM');
-    const s = box.querySelector('.timeS');
-    const attr = (m.getAttribute('data-pred') || s.getAttribute('data-pred'));
-    if (!attr) return;
-    const [player,key] = attr.split(':');
-    function onInput(){
-      const mm = (m.value||'').toString().padStart(2,'0');
-      const ss = (s.value||'').toString().padStart(2,'0');
-      const val = (mm==='' && ss==='') ? '' : `${mm}:${ss}`;
-      t.predictions[selectedMatchId][player] = t.predictions[selectedMatchId][player] || {};
-      t.predictions[selectedMatchId][player][key] = val;
-      setCellHighlightFor(player, key);
-    }
-    m.addEventListener('input', onInput);
-    s.addEventListener('input', onInput);
-    m.addEventListener('blur', ()=>{ save(); renderScoreboard(); });
-    s.addEventListener('blur', ()=>{ save(); renderScoreboard(); });
-  });
-
   // single inputs/selects
   el.querySelectorAll('input[data-pred], select[data-pred]').forEach(inp=>{
     inp.addEventListener('input',e=>{ const [player,key]=e.target.dataset.pred.split(':'); let value=e.target.value;
@@ -511,43 +408,34 @@ function renderPredictions(){
   });
 }
 
+/* === UUSI: faktat korttina ja isot kentät === */
 function renderActuals(){
   const el=$('actualsArea'), t=getTournament();
   if(!t){ el.innerHTML='<p class="muted">Luo ensin turnaus.</p>'; return; }
   if(!selectedMatchId){ el.innerHTML='<p class="muted">Valitse tai luo ottelu.</p>'; return; }
   t.actuals[selectedMatchId]=t.actuals[selectedMatchId]||{}; const act=t.actuals[selectedMatchId];
-  const rows=FIELDS.map(f=>{ let w=widgetHTML('act',f.key,act[f.key]||'',f.key); if(f.key==='lopputulos') w=`<div data-act-cell="${f.key}">${w}</div>`;
-    return `<tr><td style="width:240px"><strong>${f.label}</strong></td><td>${w}</td></tr>`;
-  }).join('');
-  el.innerHTML=`<table><tbody>${rows}</tbody></table>`;
 
-  // score combo actuals
-  el.querySelectorAll('[data-act-cell] .goalA, [data-act-cell] .goalB').forEach(inp=>{
-    const key=inp.closest('[data-act-cell]').getAttribute('data-act-cell'); const combo=inp.closest('.score-combo'); const A=combo.querySelector('.goalA'), B=combo.querySelector('.goalB');
-    function onInput(){ t.actuals[selectedMatchId][key]=normalizeScore(A.value,B.value); refreshHighlightsForField(key); renderScoreboard(); }
-    inp.addEventListener('input',onInput); inp.addEventListener('blur',()=>{ save(); renderScoreboard(); });
-  });
-  // time combo actuals
-  el.querySelectorAll('.time-combo .timeM, .time-combo .timeS').forEach(inp=>{
-    const box = inp.closest('.time-combo');
-    const m = box.querySelector('.timeM');
-    const s = box.querySelector('.timeS');
-    const key = (m.getAttribute('data-act') || s.getAttribute('data-act'));
-    function onInput(){
-      const mm = (m.value||'').toString().padStart(2,'0');
-      const ss = (s.value||'').toString().padStart(2,'0');
-      t.actuals[selectedMatchId][key] = (mm==='' && ss==='') ? '' : `${mm}:${ss}`;
+  const rows = FIELDS.map(f=>{
+    const w = widgetHTML('act', f.key, act[f.key]||'', f.key);
+    return `<div class="kv-row"><div class="kv-label">${f.label}</div>${w}</div>`;
+  }).join('');
+
+  el.innerHTML = `<div class="person-card actuals-card">
+    <div class="card-head">
+      <div class="person-title">Faktat</div>
+      <div class="pill">Ottelun tulos</div>
+    </div>
+    <div class="kv">${rows}</div>
+  </div>`;
+
+  // päivitä highlightit (veikkausten osumat) kun faktoja muokataan
+  el.querySelectorAll('input[data-act], select[data-act]').forEach(inp=>{
+    inp.addEventListener('input',e=>{
+      const key=e.target.dataset.act;
+      t.actuals[selectedMatchId][key]=e.target.value;
       refreshHighlightsForField(key);
       renderScoreboard();
-    }
-    m.addEventListener('input', onInput);
-    s.addEventListener('input', onInput);
-    m.addEventListener('blur', ()=>{ save(); renderScoreboard(); });
-    s.addEventListener('blur', ()=>{ save(); renderScoreboard(); });
-  });
-
-  el.querySelectorAll('input[data-act], select[data-act]').forEach(inp=>{
-    inp.addEventListener('input',e=>{ const key=e.target.dataset.act; let val=e.target.value; t.actuals[selectedMatchId][key]=val; refreshHighlightsForField(key); renderScoreboard(); });
+    });
     inp.addEventListener('blur',()=>{ save(); renderScoreboard(); });
   });
 }
@@ -623,9 +511,7 @@ renderAll();
     });
   }
 </script>
-
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-
 <script>
 (function(){
   const btn = document.getElementById('screenshotTableBtn');
@@ -633,22 +519,13 @@ renderAll();
   btn.addEventListener('click', async ()=>{
     try{
       const prev = window.viewMode || 'cards';
-      // switch to table view to ensure all predictions in one table
       window.viewMode = 'table';
       localStorage.setItem('tv_view','table');
       if (typeof window.renderPredictions === 'function') window.renderPredictions();
-      await new Promise(r=>setTimeout(r, 100)); // allow layout
-
+      await new Promise(r=>setTimeout(r, 100));
       const area = document.getElementById('predictionsArea');
       const target = area.querySelector('.table-wrap') || area;
-      // Expand if horizontally scrollable
-      const opts = {
-        scale: 3,
-        backgroundColor: null,
-        useCORS: true,
-        windowWidth: target.scrollWidth,
-        windowHeight: target.scrollHeight
-      };
+      const opts = { scale: 3, backgroundColor: null, useCORS: true, windowWidth: target.scrollWidth, windowHeight: target.scrollHeight };
       const canvas = await html2canvas(target, opts);
       const link = document.createElement('a');
       link.download = 'veikkaus-taulukko.png';
@@ -656,8 +533,6 @@ renderAll();
       document.body.appendChild(link);
       link.click();
       link.remove();
-
-      // restore previous view
       window.viewMode = prev;
       localStorage.setItem('tv_view', prev);
       if (typeof window.renderPredictions === 'function') window.renderPredictions();
@@ -667,6 +542,5 @@ renderAll();
   });
 })();
 </script>
-
 </body>
 </html>
