@@ -4,7 +4,7 @@
   <meta name="theme-color" content="#0f172a">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>🏒 Turnausveikkaus – Mobiili v4.4c (korjattu faktakortti)</title>
+  <title>🏒 Turnausveikkaus – Mobiili v4.5 (jäähysyy pudotusvalikko)</title>
   <style>
     :root { --bg:#f7f7fb; --card:#ffffff; --text:#111827; --muted:#6b7280; --primary:#f97316; --primary-hover:#ea580c; --border:#e5e7eb; --ok:#22c55e; --dark:#111827; }
     *{ box-sizing:border-box } html,body{ margin:0; padding:0 }
@@ -61,21 +61,17 @@
     @media(max-width:600px){ .cell-input{ width:120px; max-width:120px } }
     @media(max-width:420px){ .cell-input{ width:100px; max-width:100px } }
     .pill{ display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#fafafa; font-size:12px }
-    /* Top-3 layout */
     .t3-grid { display:grid; gap:10px; grid-template-columns: 1fr; }
     @media (min-width:640px){ .t3-grid { grid-template-columns: 1fr 1fr; } }
     .t3-card { border:1px solid var(--border); border-radius:12px; padding:10px; background:#fff; }
     .t3-title { font-weight:800; margin-bottom:8px; font-size:15px; }
     .t3-row { display:grid; grid-template-columns: 1fr; gap:8px; align-items:center; margin-bottom:6px; }
     .t3-dot { display:none !important; }
-    /* time MM:SS */
     .time-combo { display:flex; align-items:center; gap:6px; }
     .time-combo input { width:64px; text-align:center; }
     .colon { font-weight:800; }
-    /* cards badge */
     .pts-badge { display:inline-block; background:#111827; color:#fff; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px; }
     .card-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-    /* === Highlight fixes (force over dark mode) === */
     .kv-row.correct { background-color:#dcfce7 !important; }
     .kv-row.incorrect { background-color:#fee2e2 !important; }
     .kv-row.correct input, .kv-row.correct select { background-color:#dcfce7 !important; color:#000 !important; }
@@ -84,14 +80,11 @@
     table td.incorrect { background-color:#fee2e2 !important; }
     input.correct, select.correct { background-color:#dcfce7 !important; color:#000 !important; }
     input.incorrect, select.incorrect { background-color:#fee2e2 !important; color:#000 !important; }
-    /* === Tabs: readable text === */
     .tabs .tab { color: var(--text) !important; }
     .tabs .tab.active { background:#1e293b !important; color:#fff !important; }
-    /* Fix kv-label readability on highlighted rows */
     .kv-row.correct .kv-label,
     .kv-row.incorrect .kv-label { color: #000 !important; }
     .table-wrap table { min-width:1000px; width:max-content; }
-    /* === UUSI: Faktat korttina kuten pelaajakortti === */
     .actuals-card.person-card { padding:14px; }
     .actuals-card .kv-row { grid-template-columns: 200px 1fr; }
     @media(max-width:480px){ .actuals-card .kv-row { grid-template-columns: 150px 1fr; } }
@@ -130,7 +123,7 @@
       <div class="field">
         <label>Luo uusi ottelu</label>
         <input id="newMatchName" type="text" placeholder="Suomi vs " />
-        <span class="muted">Vinkki: nimi alkaa valmiiksi “Suomi vs ” – lisää vastustaja.</span>
+        <span class="muted">Vinkki: nimi alkaa valmiiksi "Suomi vs " – lisää vastustaja.</span>
       </div>
       <div class="field">
         <button id="createMatch" class="btn small" style="width:100%">Luo ottelu</button>
@@ -183,13 +176,107 @@
 
 <script>
 const PLAYERS = ["Roosa","Timo","Tero","Tiina","Tepa","Äiti","Iskä"];
+
+const PENALTY_REASONS = [
+  'Koukkaaminen',
+  'Mailasta kiinnipitäminen',
+  'Estäminen',
+  'Päähän kohdistuva taklaus',
+  'Huitominen',
+  'Väkivaltaisuus',
+  'Ryntäys',
+  'Tappelu',
+  'Liian monta pelaajaa jäällä',
+  'Poikittainen maila',
+  'Kampitus',
+  'Kiinnipitäminen',
+  'Mailan tai esineen heittäminen',
+  'Laitataklaus',
+  'Sukeltaminen',
+  'Kyynärpäätaklaus',
+  'Pelin viivyttäminen',
+  'Kiekon sulkeminen',
+  'Korkea maila',
+  'Selästä taklaaminen',
+  'Käytösrangaistus',
+  'Päällä iskeminen',
+  'Polvitaklaus',
+  'Mailan päällä lyöminen tai sen yritys',
+  'Keihästäminen',
+  'Jalkapyyhkäisy',
+  'Rikkoutuneella mailalla pelaaminen',
+  'Väärä varuste',
+  'Pelaajaa ei ole merkitty pöytäkirjaan',
+  'Potkaisee tai sylkee',
+  'Ei jäähyä'
+];
+
+const GOAL_SCORERS = [
+  'Juuse Saros',
+  'Ukko-Pekka Luukkonen',
+  'Kevin Lankinen',
+  'Miro Heiskanen',
+  'Esa Lindell',
+  'Niko Mikkola',
+  'Henri Jokiharju',
+  'Rasmus Ristolainen',
+  'Nikolas Matinpalo',
+  'Olli Määttä',
+  'Mikko Lehtonen',
+  'Mikael Granlund',
+  'Roope Hintz',
+  'Mikko Rantanen',
+  'Teuvo Teräväinen',
+  'Sebastian Aho',
+  'Artturi Lehkonen',
+  'Eetu Luostarinen',
+  'Anton Lundell',
+  'Kaapo Kakko',
+  'Eeli Tolvanen',
+  'Erik Haula',
+  'Joel Armia',
+  'Oliver Kapanen',
+  'Joel Kiviranta',
+  'Ei maalia'
+];
+
+const PENALTY_TAKERS = [
+  'Juuse Saros',
+  'Ukko-Pekka Luukkonen',
+  'Kevin Lankinen',
+  'Miro Heiskanen',
+  'Esa Lindell',
+  'Niko Mikkola',
+  'Henri Jokiharju',
+  'Rasmus Ristolainen',
+  'Nikolas Matinpalo',
+  'Olli Määttä',
+  'Mikko Lehtonen',
+  'Mikael Granlund',
+  'Roope Hintz',
+  'Mikko Rantanen',
+  'Teuvo Teräväinen',
+  'Sebastian Aho',
+  'Artturi Lehkonen',
+  'Eetu Luostarinen',
+  'Anton Lundell',
+  'Kaapo Kakko',
+  'Eeli Tolvanen',
+  'Erik Haula',
+  'Joel Armia',
+  'Oliver Kapanen',
+  'Joel Kiviranta',
+  'Ei jäähyä',
+  'Joukkue rangaistus'
+];
+
 const FIELDS = [
   {key:'lopputulos',label:'Lopputulos'},
   {key:'ekan_maalintekija',label:'Ekan maalintekijä'},
   {key:'ekan_maali_aika',label:'Ekan maalin tekoaika'},
   {key:'ekan_jahyn_saaja',label:'Ekan jäähyn saaja'},
   {key:'ekan_jahyn_syy',label:'Ekan jäähyn syy'},
-  {key:'montako_jahyja',label:'Montako jäähyä'},
+  {key:'montako_jahyja',label:'Montako jäähydä'},
   {key:'parempi_laukasu',label:'Kummalla parempi laukaus%'},
   {key:'parempi_alotus',label:'Kummalla parempi aloitus%'},
   {key:'parempi_torjunta',label:'Kummalla parempi torjunta%'},
@@ -203,14 +290,17 @@ const FIELDS = [
 
 const ONE_X_TWO_KEYS = new Set(['parempi_laukasu','parempi_alotus','parempi_torjunta','parempi_alivoima','parempi_ylivoima','era1','era2']);
 const KYLLA_EI_KEYS = new Set(['valmentaja_haasto','maali_tyhjiin']);
-const TEXT_KEYS = new Set(['ekan_maalintekija','ekan_jahyn_saaja','ekan_jahyn_syy']);
+const TEXT_KEYS = new Set([]);
 const NUMBER_KEYS = new Set(['montako_jahyja']);
+const PENALTY_REASON_KEY = 'ekan_jahyn_syy';
+const GOAL_SCORER_KEY = 'ekan_maalintekija';
+const PENALTY_TAKER_KEY = 'ekan_jahyn_saaja';
 
 let data = JSON.parse(localStorage.getItem('turnausveikkaus_data') || '{}');
 if (!data.tournaments) data.tournaments = [];
 let selectedTournamentId = data.selectedTournamentId || null;
 let selectedMatchId = null;
-let viewMode = localStorage.getItem('tv_view') || 'cards'; // default to cards so it's visible
+let viewMode = localStorage.getItem('tv_view') || 'cards';
 
 function save(){ data.selectedTournamentId = selectedTournamentId; localStorage.setItem('turnausveikkaus_data', JSON.stringify(data)); }
 function getTournament(){ return data.tournaments.find(t => String(t.id) === String(selectedTournamentId)); }
@@ -218,8 +308,8 @@ const $ = (id)=>document.getElementById(id);
 function ciEq(a,b){ return (a||'').trim().toLowerCase() === (b||'').trim().toLowerCase(); }
 
 function normalizeScore(a,b){ const A=(a||'').toString().trim(), B=(b||'').toString().trim(); if(A===''&&B==='') return ''; return `${A||'0'}-${B||'0'}`; }
-function parseScore(str){ const m=(str||'').match(/^(\\d+)\\s*[-–]\\s*(\\d+)$/); return m?[m[1],m[2]]:['','']; }
-function parseTimeParts(str){ const m=(str||'').match(/^(\\d{1,2}):(\\d{2})$/); return m ? [m[1].padStart(2,'0'), m[2]] : ['','']; }
+function parseScore(str){ const m=(str||'').match(/^(\d+)\s*[-–]\s*(\d+)$/); return m?[m[1],m[2]]:['','']; }
+function parseTimeParts(str){ const m=(str||'').match(/^(\d{1,2}):(\d{2})$/); return m ? [m[1].padStart(2,'0'), m[2]] : ['','']; }
 
 function calcMatchPoints(t, matchId, player){
   const preds = (t.predictions[matchId]||{})[player] || {};
@@ -266,7 +356,6 @@ function renderMatchSelect(){
   sel.onchange=e=>{ selectedMatchId=e.target.value||null; viewMode='cards'; localStorage.setItem('tv_view','cards'); renderPredictions(); renderActuals(); renderScoreboard(); };
 }
 
-// --- Top-3 cards ---
 function renderTopThree(){
   const wrap = $('topThreeArea');
   const t = getTournament();
@@ -346,6 +435,18 @@ function widgetHTML(kind,key,value,dataset){
   if(key==='ekan_maali_aika'){
     return `<input type="text" ${ds} value="${value||''}" placeholder="MM:SS" class="single-field" />`;
   }
+  if(key===GOAL_SCORER_KEY){
+    const opts = ['', ...GOAL_SCORERS];
+    return `<select ${ds}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o===''?'—':o}</option>`).join('')}</select>`;
+  }
+  if(key===PENALTY_TAKER_KEY){
+    const opts = ['', ...PENALTY_TAKERS];
+    return `<select ${ds}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o===''?'—':o}</option>`).join('')}</select>`;
+  }
+  if(key===PENALTY_REASON_KEY){
+    const opts = ['', ...PENALTY_REASONS];
+    return `<select ${ds}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o===''?'—':o}</option>`).join('')}</select>`;
+  }
   if(ONE_X_TWO_KEYS.has(key)){ const opts=['','1','X','2']; return `<select ${ds}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o===''?'—':o}</option>`).join('')}</select>`; }
   if(KYLLA_EI_KEYS.has(key)){ const opts=['','Kyllä','Ei']; return `<select ${ds}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o===''?'—':o}</option>`).join('')}</select>`; }
   if(NUMBER_KEYS.has(key)){ return `<input type="number" inputmode="numeric" ${ds} value="${value||''}" placeholder="0" />`; }
@@ -399,7 +500,6 @@ function renderPredictions(){
     el.innerHTML=`<div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
   }
 
-  // single inputs/selects
   el.querySelectorAll('input[data-pred], select[data-pred]').forEach(inp=>{
     inp.addEventListener('input',e=>{ const [player,key]=e.target.dataset.pred.split(':'); let value=e.target.value;
       t.predictions[selectedMatchId][player]=t.predictions[selectedMatchId][player]||{}; t.predictions[selectedMatchId][player][key]=value; setCellHighlightFor(player,key);
@@ -408,7 +508,6 @@ function renderPredictions(){
   });
 }
 
-/* === UUSI: faktat korttina ja isot kentät === */
 function renderActuals(){
   const el=$('actualsArea'), t=getTournament();
   if(!t){ el.innerHTML='<p class="muted">Luo ensin turnaus.</p>'; return; }
@@ -428,7 +527,6 @@ function renderActuals(){
     <div class="kv">${rows}</div>
   </div>`;
 
-  // päivitä highlightit (veikkausten osumat) kun faktoja muokataan
   el.querySelectorAll('input[data-act], select[data-act]').forEach(inp=>{
     inp.addEventListener('input',e=>{
       const key=e.target.dataset.act;
@@ -440,7 +538,6 @@ function renderActuals(){
   });
 }
 
-// Create actions
 document.getElementById('createTournament').onclick=()=>{
   const name=$('newTournamentName').value.trim();
   if(!name){ alert('Anna turnauksen nimi'); return; }
@@ -455,16 +552,13 @@ document.getElementById('createMatch').onclick=()=>{
   t.matches.push({ id, name }); selectedMatchId=id; viewMode='cards'; localStorage.setItem('tv_view','cards'); save(); renderAll(); $('newMatchName').value='Suomi vs ';
 };
 
-// Export / Import / Reset
 $('exportBtn').onclick=()=>{ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='turnausveikkaus_data.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); };
 $('importBtn').onclick=()=>{ $('importFile').click(); };
 $('importFile').addEventListener('change',e=>{ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=()=>{ try{ const obj=JSON.parse(reader.result); if(!obj||typeof obj!=='object') throw new Error('Virheellinen JSON'); data=obj; selectedTournamentId=data.selectedTournamentId||null; selectedMatchId=null; save(); renderAll(); alert('Data tuotu.'); }catch(err){ alert('Tuonti epäonnistui: '+err.message); } }; reader.readAsText(file,'utf-8'); });
-$('resetBtn').onclick=()=>{ if(!confirm('Tyhjennetäänkö kaikki data tältä laitteelta?')) return; data={ tournaments:[], selectedTournamentId:null }; selectedTournamentId=null; selectedMatchId=null; save(); renderAll(); };
+$('resetBtn').onclick=()=>{ if(!confirm('TyhjennetäänkÃö kaikki data tältä laitteelta?')) return; data={ tournaments:[], selectedTournamentId:null }; selectedTournamentId=null; selectedMatchId=null; save(); renderAll(); };
 
-
-// --- Top-3 visibility toggle (v5.3) ---
 let top3Visible = localStorage.getItem('tv_top3_visible');
-if (top3Visible === null) top3Visible = '1'; // default visible
+if (top3Visible === null) top3Visible = '1';
 
 function applyTop3Visibility(){
   const area = document.getElementById('topThreeArea');
@@ -477,7 +571,6 @@ function applyTop3Visibility(){
   if(btn) btn.textContent = show ? 'Piilota' : 'Näytä';
 }
 
-// Attach handler once DOM is ready
 document.addEventListener('DOMContentLoaded', ()=>{
   const btn = document.getElementById('toggleTop3');
   if(btn){
@@ -490,11 +583,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
   applyTop3Visibility();
 });
 
-// Tabs
 $('tabTable').onclick=()=>{ viewMode='table'; localStorage.setItem('tv_view','table'); renderPredictions(); };
 $('tabCards').onclick=()=>{ viewMode='cards'; localStorage.setItem('tv_view','cards'); renderPredictions(); };
 
-// Manual refresh for results
 document.getElementById('refreshCheck').addEventListener('click', ()=>{
   save(); renderScoreboard(); refreshAllHighlights();
 });
