@@ -453,10 +453,24 @@ function renderScoreboard(){
 function widgetHTML(kind,key,value,dataset){
   const ds = kind==='pred' ? `data-pred="${dataset}"` : `data-act="${key}"`;
   if(key==='lopputulos'){
-    return `<input type="text" ${ds} value="${value||''}" placeholder="3-2" class="single-field" />`;
+    const parts = (value||'').split('-');
+    const home = parts[0] ? parts[0].trim() : '';
+    const away = parts[1] ? parts[1].trim() : '';
+    return `<div class="score-combo">
+      <input type="number" inputmode="numeric" ${ds}-home value="${home}" placeholder="0" />
+      <span class="dash">-</span>
+      <input type="number" inputmode="numeric" ${ds}-away value="${away}" placeholder="0" />
+    </div>`;
    }
   if(key==='ekan_maali_aika'){
-    return `<input type="text" ${ds} value="${value||''}" placeholder="MM:SS" class="single-field" />`;
+    const parts = (value||'').split(':');
+    const min = parts[0] ? parts[0].trim() : '';
+    const sec = parts[1] ? parts[1].trim() : '';
+    return `<div class="time-combo">
+      <input type="number" inputmode="numeric" ${ds}-min value="${min}" placeholder="00" />
+      <span class="colon">:</span>
+      <input type="number" inputmode="numeric" ${ds}-sec value="${sec}" placeholder="00" />
+    </div>`;
   }
   if(key===GOAL_SCORER_KEY){
     const opts = ['', ...GOAL_SCORERS];
@@ -523,9 +537,54 @@ function renderPredictions(){
     el.innerHTML=`<div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
   }
 
-  el.querySelectorAll('input[data-pred], select[data-pred]').forEach(inp=>{
-    inp.addEventListener('input',e=>{ const [player,key]=e.target.dataset.pred.split(':'); let value=e.target.value;
-      t.predictions[selectedMatchId][player]=t.predictions[selectedMatchId][player]||{}; t.predictions[selectedMatchId][player][key]=value; setCellHighlightFor(player,key);
+  el.querySelectorAll('input[data-pred], input[data-pred-home], input[data-pred-away], input[data-pred-min], input[data-pred-sec], select[data-pred]').forEach(inp=>{
+    inp.addEventListener('input',e=>{ 
+      let dataset = e.target.dataset.pred;
+      
+      // Käsitellään lopputulos (kaksi kenttää)
+      if(e.target.dataset.predHome !== undefined || e.target.dataset.predAway !== undefined){
+        const parent = e.target.closest('.score-combo');
+        if(parent){
+          const homeInput = parent.querySelector('input[data-pred-home]');
+          const awayInput = parent.querySelector('input[data-pred-away]');
+          if(homeInput && awayInput && homeInput.dataset.predHome){
+            const [player,key] = homeInput.dataset.predHome.split(':');
+            const homeVal = homeInput.value;
+            const awayVal = awayInput.value;
+            t.predictions[selectedMatchId][player]=t.predictions[selectedMatchId][player]||{}; 
+            t.predictions[selectedMatchId][player]['lopputulos'] = homeVal && awayVal ? `${homeVal}-${awayVal}` : '';
+            setCellHighlightFor(player,'lopputulos');
+            return;
+          }
+        }
+      }
+      
+      // Käsitellään ekan maalin aika (kaksi kenttää)
+      if(e.target.dataset.predMin !== undefined || e.target.dataset.predSec !== undefined){
+        const parent = e.target.closest('.time-combo');
+        if(parent){
+          const minInput = parent.querySelector('input[data-pred-min]');
+          const secInput = parent.querySelector('input[data-pred-sec]');
+          if(minInput && secInput && minInput.dataset.predMin){
+            const [player,key] = minInput.dataset.predMin.split(':');
+            const minVal = minInput.value;
+            const secVal = secInput.value;
+            t.predictions[selectedMatchId][player]=t.predictions[selectedMatchId][player]||{}; 
+            t.predictions[selectedMatchId][player]['ekan_maali_aika'] = minVal && secVal ? `${minVal}:${secVal}` : '';
+            setCellHighlightFor(player,'ekan_maali_aika');
+            return;
+          }
+        }
+      }
+      
+      // Normaali yhden kentän käsittely
+      if(dataset){
+        const [player,key]=dataset.split(':'); 
+        let value=e.target.value;
+        t.predictions[selectedMatchId][player]=t.predictions[selectedMatchId][player]||{}; 
+        t.predictions[selectedMatchId][player][key]=value; 
+        setCellHighlightFor(player,key);
+      }
     });
     inp.addEventListener('blur',()=>{ save(); renderScoreboard(); });
   });
@@ -550,12 +609,46 @@ function renderActuals(){
     <div class="kv">${rows}</div>
   </div>`;
 
-  el.querySelectorAll('input[data-act], select[data-act]').forEach(inp=>{
+  el.querySelectorAll('input[data-act], input[data-act-home], input[data-act-away], input[data-act-min], input[data-act-sec], select[data-act]').forEach(inp=>{
     inp.addEventListener('input',e=>{
-      const key=e.target.dataset.act;
-      t.actuals[selectedMatchId][key]=e.target.value;
-      refreshHighlightsForField(key);
-      renderScoreboard();
+      let key = e.target.dataset.act;
+      
+      // Käsitellään lopputulos (kaksi kenttää)
+      if(e.target.dataset.actHome !== undefined || e.target.dataset.actAway !== undefined){
+        const parent = e.target.closest('.score-combo');
+        if(parent){
+          const homeInput = parent.querySelector('input[data-act-home]');
+          const awayInput = parent.querySelector('input[data-act-away]');
+          const homeVal = homeInput ? homeInput.value : '';
+          const awayVal = awayInput ? awayInput.value : '';
+          t.actuals[selectedMatchId]['lopputulos'] = homeVal && awayVal ? `${homeVal}-${awayVal}` : '';
+          refreshHighlightsForField('lopputulos');
+          renderScoreboard();
+          return;
+        }
+      }
+      
+      // Käsitellään ekan maalin aika (kaksi kenttää)
+      if(e.target.dataset.actMin !== undefined || e.target.dataset.actSec !== undefined){
+        const parent = e.target.closest('.time-combo');
+        if(parent){
+          const minInput = parent.querySelector('input[data-act-min]');
+          const secInput = parent.querySelector('input[data-act-sec]');
+          const minVal = minInput ? minInput.value : '';
+          const secVal = secInput ? secInput.value : '';
+          t.actuals[selectedMatchId]['ekan_maali_aika'] = minVal && secVal ? `${minVal}:${secVal}` : '';
+          refreshHighlightsForField('ekan_maali_aika');
+          renderScoreboard();
+          return;
+        }
+      }
+      
+      // Normaali yhden kentän käsittely
+      if(key){
+        t.actuals[selectedMatchId][key]=e.target.value;
+        refreshHighlightsForField(key);
+        renderScoreboard();
+      }
     });
     inp.addEventListener('blur',()=>{ save(); renderScoreboard(); });
   });
