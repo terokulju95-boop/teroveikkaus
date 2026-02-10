@@ -456,20 +456,24 @@ function widgetHTML(kind,key,value,dataset){
     const parts = (value||'').split('-');
     const home = parts[0] ? parts[0].trim() : '';
     const away = parts[1] ? parts[1].trim() : '';
+    const homeAttr = kind==='pred' ? `data-pred-home="${dataset}"` : `data-act-home`;
+    const awayAttr = kind==='pred' ? `data-pred-away="${dataset}"` : `data-act-away`;
     return `<div class="score-combo">
-      <input type="number" inputmode="numeric" ${ds}-home value="${home}" placeholder="0" />
+      <input type="number" inputmode="numeric" ${homeAttr} value="${home}" placeholder="0" />
       <span class="dash">-</span>
-      <input type="number" inputmode="numeric" ${ds}-away value="${away}" placeholder="0" />
+      <input type="number" inputmode="numeric" ${awayAttr} value="${away}" placeholder="0" />
     </div>`;
    }
   if(key==='ekan_maali_aika'){
     const parts = (value||'').split(':');
     const min = parts[0] ? parts[0].trim() : '';
     const sec = parts[1] ? parts[1].trim() : '';
+    const minAttr = kind==='pred' ? `data-pred-min="${dataset}"` : `data-act-min`;
+    const secAttr = kind==='pred' ? `data-pred-sec="${dataset}"` : `data-act-sec`;
     return `<div class="time-combo">
-      <input type="number" inputmode="numeric" ${ds}-min value="${min}" placeholder="00" />
+      <input type="number" inputmode="numeric" ${minAttr} value="${min}" placeholder="00" />
       <span class="colon">:</span>
-      <input type="number" inputmode="numeric" ${ds}-sec value="${sec}" placeholder="00" />
+      <input type="number" inputmode="numeric" ${secAttr} value="${sec}" placeholder="00" />
     </div>`;
   }
   if(key===GOAL_SCORER_KEY){
