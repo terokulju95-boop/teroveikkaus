@@ -212,60 +212,60 @@ const PENALTY_REASONS = [
 ];
 
 const GOAL_SCORERS = [
-  'Juuse Saros',
-  'Ukko-Pekka Luukkonen',
-  'Kevin Lankinen',
-  'Miro Heiskanen',
-  'Esa Lindell',
-  'Niko Mikkola',
-  'Henri Jokiharju',
-  'Rasmus Ristolainen',
-  'Nikolas Matinpalo',
-  'Olli Määttä',
-  'Mikko Lehtonen',
-  'Mikael Granlund',
-  'Roope Hintz',
-  'Mikko Rantanen',
-  'Teuvo Teräväinen',
-  'Sebastian Aho',
-  'Artturi Lehkonen',
-  'Eetu Luostarinen',
-  'Anton Lundell',
-  'Kaapo Kakko',
-  'Eeli Tolvanen',
-  'Erik Haula',
-  'Joel Armia',
-  'Oliver Kapanen',
-  'Joel Kiviranta',
+  'Juuse Saros (MV)',
+  'Joonas Korpisalo (MV)',
+  'Kevin Lankinen (MV)',
+  'Miro Heiskanen (P)',
+  'Esa Lindell (P)',
+  'Niko Mikkola (P)',
+  'Henri Jokiharju (P)',
+  'Rasmus Ristolainen (P)',
+  'Nikolas Matinpalo (P)',
+  'Olli Määttä (P)',
+  'Mikko Lehtonen (P)',
+  'Mikael Granlund (H)',
+  'Roope Hintz (H)',
+  'Mikko Rantanen (H)',
+  'Teuvo Teräväinen (H)',
+  'Sebastian Aho (H)',
+  'Artturi Lehkonen (H)',
+  'Eetu Luostarinen (H)',
+  'Anton Lundell (H)',
+  'Kaapo Kakko (H)',
+  'Eeli Tolvanen (H)',
+  'Erik Haula (H)',
+  'Joel Armia (H)',
+  'Oliver Kapanen (H)',
+  'Joel Kiviranta (H)',
   'Ei maalia'
 ];
 
 const PENALTY_TAKERS = [
-  'Juuse Saros',
-  'Ukko-Pekka Luukkonen',
-  'Kevin Lankinen',
-  'Miro Heiskanen',
-  'Esa Lindell',
-  'Niko Mikkola',
-  'Henri Jokiharju',
-  'Rasmus Ristolainen',
-  'Nikolas Matinpalo',
-  'Olli Määttä',
-  'Mikko Lehtonen',
-  'Mikael Granlund',
-  'Roope Hintz',
-  'Mikko Rantanen',
-  'Teuvo Teräväinen',
-  'Sebastian Aho',
-  'Artturi Lehkonen',
-  'Eetu Luostarinen',
-  'Anton Lundell',
-  'Kaapo Kakko',
-  'Eeli Tolvanen',
-  'Erik Haula',
-  'Joel Armia',
-  'Oliver Kapanen',
-  'Joel Kiviranta',
+  'Juuse Saros (MV)',
+  'Joonas Korpisalo (MV)',
+  'Kevin Lankinen (MV)',
+  'Miro Heiskanen (P)',
+  'Esa Lindell (P)',
+  'Niko Mikkola (P)',
+  'Henri Jokiharju (P)',
+  'Rasmus Ristolainen (P)',
+  'Nikolas Matinpalo (P)',
+  'Olli Määttä (P)',
+  'Mikko Lehtonen (P)',
+  'Mikael Granlund (H)',
+  'Roope Hintz (H)',
+  'Mikko Rantanen (H)',
+  'Teuvo Teräväinen (H)',
+  'Sebastian Aho (H)',
+  'Artturi Lehkonen (H)',
+  'Eetu Luostarinen (H)',
+  'Anton Lundell (H)',
+  'Kaapo Kakko (H)',
+  'Eeli Tolvanen (H)',
+  'Erik Haula (H)',
+  'Joel Armia (H)',
+  'Oliver Kapanen (H)',
+  'Joel Kiviranta (H)',
   'Ei jäähyä',
   'Joukkue rangaistus'
 ];
@@ -363,12 +363,21 @@ function renderTopThree(){
   t.topThreePrediction = t.topThreePrediction || {};
   t.actualTopThree = t.actualTopThree || ['','',''];
 
+  // MAAJOUKKUELISTA - Kaikki isoilla kirjaimilla
+  const NATIONAL_TEAMS = [
+    'KANADA','SUOMI','USA','RUOTSI','TSEKKI','RANSKA','SVEITSI','ITALIA',
+    'SLOVAKIA','TANSKA','SAKSA','LATVIA','VENÄJÄ','NORJA','ISO-BRITANNIA',
+    'KAZAKSTAN','VALKO-VENÄJÄ','UNKARI','ITÄVALTA','SLOVENIA','PUOLA',
+    'UKRAINA','JAPANI','ETELÄ-KOREA','KIINA','VIRO','LIETTUA',
+  ];
+  const teamOptions = '<option value=""></option>' + NATIONAL_TEAMS.map(team => `<option value="${team}">${team}</option>`).join('');
+
   let html = '<div class="t3-grid">';
   html += `<div class="t3-card">
     <div class="t3-title">Todellinen järjestys</div>
     ${[0,1,2].map(i=>`
       <div class="t3-row">
-        <input type="text" data-top3-actual-card="${i}" value="${t.actualTopThree[i]||''}" placeholder="${i+1}. sija (todellinen)" />
+        <select data-top3-actual-card="${i}">${teamOptions}</select>
       </div>`).join('')}
   </div>`;
 
@@ -378,13 +387,27 @@ function renderTopThree(){
       <div class="t3-title">${p}</div>
       ${[0,1,2].map(i=>`
         <div class="t3-row">
-          <input type="text" data-top3-card="${p}:${i}" value="${arr[i]||''}" placeholder="${i+1}. sija" />
+          <select data-top3-card="${p}:${i}">${teamOptions}</select>
         </div>`).join('')}
     </div>`;
   }).join('');
 
   html += '</div>';
   wrap.innerHTML = html;
+  
+  // Asetetaan valitut arvot
+  [0,1,2].forEach(i=>{
+    const sel = wrap.querySelector(`[data-top3-actual-card="${i}"]`);
+    if(sel && t.actualTopThree[i]) sel.value = t.actualTopThree[i];
+  });
+  PLAYERS.forEach(p=>{
+    const arr = t.topThreePrediction[p] || ['','',''];
+    [0,1,2].forEach(i=>{
+      const sel = wrap.querySelector(`[data-top3-card="${p}:${i}"]`);
+      if(sel && arr[i]) sel.value = arr[i];
+    });
+  });
+  
   function markTopThreeClasses(){
     const actual = (t.actualTopThree || []).map(x => (x||'').trim().toLowerCase());
     wrap.querySelectorAll('[data-top3-card]').forEach(inp=>{
@@ -400,24 +423,24 @@ function renderTopThree(){
     });
   }
   markTopThreeClasses();
-  wrap.querySelectorAll('input[data-top3-card]').forEach(inp=>{
-    inp.addEventListener('input', e=>{
+  wrap.querySelectorAll('select[data-top3-card]').forEach(inp=>{
+    inp.addEventListener('change', e=>{
       const [player, idx] = e.target.dataset.top3Card.split(':');
       t.topThreePrediction[player] = t.topThreePrediction[player] || ['','',''];
       t.topThreePrediction[player][Number(idx)] = e.target.value;
       markTopThreeClasses();
       renderScoreboard();
+      save();
     });
-    inp.addEventListener('blur', ()=>{ save(); renderScoreboard(); markTopThreeClasses(); });
   });
-  wrap.querySelectorAll('input[data-top3-actual-card]').forEach(inp=>{
-    inp.addEventListener('input', e=>{
+  wrap.querySelectorAll('select[data-top3-actual-card]').forEach(inp=>{
+    inp.addEventListener('change', e=>{
       const idx = Number(e.target.dataset.top3ActualCard);
       t.actualTopThree[idx] = e.target.value;
       markTopThreeClasses();
       renderScoreboard();
+      save();
     });
-    inp.addEventListener('blur', ()=>{ save(); renderScoreboard(); markTopThreeClasses(); });
   });
 }
 
