@@ -43,19 +43,19 @@
     th:first-child,td:first-child{ border-left:1px solid var(--border) } tr:first-child th{ border-top:1px solid var(--border) }
     .table-wrap { width:100%; overflow-x:auto; overflow-y:hidden; border-radius:10px; }
     .sticky-top{ position:sticky; top:0; z-index:5; background:#fafafa } .sticky-left{ position:sticky; left:0; z-index:4; background:#fafafa } .sticky-corner{ z-index:6 }
-    .correct{ background-color:#dcfce7 }
-    input.correct{ background-color:#dcfce7 !important; }
-    input.incorrect{ background-color:#fee2e2 !important; }
-    .incorrect{ background-color:#fee2e2 }
-    input.correct{ background-color:#dcfce7 !important; }
-    input.incorrect{ background-color:#fee2e2 !important; } .stack{ display:flex; flex-wrap:wrap; gap:8px; align-items:center }
+    .correct{ background-color:#86efac !important; }
+    input.correct{ background-color:#86efac !important; }
+    input.incorrect{ background-color:#fca5a5 !important; }
+    .incorrect{ background-color:#fca5a5 !important; }
+    input.correct{ background-color:#86efac !important; }
+    input.incorrect{ background-color:#fca5a5 !important; } .stack{ display:flex; flex-wrap:wrap; gap:8px; align-items:center }
     .tabs{ display:flex; border:1px solid var(--border); border-radius:10px; overflow:hidden } .tab{ flex:1; text-align:center; padding:10px; background:#fff; cursor:pointer; font-weight:700 } .tab.active{ background:var(--dark); color:#fff }
     .person-card{ border:1px solid var(--border); border-radius:12px; padding:10px; background:#fff } .person-title{ font-weight:800; margin-bottom:8px }
     .kv{ display:grid; grid-template-columns:1fr; gap:6px }
     .kv-row{ display:grid; grid-template-columns:180px 1fr; gap:8px; align-items:center }
     @media(max-width:420px){ .kv-row{ grid-template-columns:140px 1fr } }
     .kv-label{ font-weight:600 }
-    .kv-row.correct input, .kv-row.correct select{ background:#dcfce7 }
+    .kv-row.correct input, .kv-row.correct select{ background:#86efac !important; }
     .score-combo{ display:flex; align-items:center; gap:6px } .score-combo input{ width:64px; text-align:center } .dash{ font-weight:800 }
     .cell-input{ width:140px; max-width:140px; padding:10px 12px; font-size:16px }
     @media(max-width:600px){ .cell-input{ width:120px; max-width:120px } }
@@ -72,14 +72,14 @@
     .colon { font-weight:800; }
     .pts-badge { display:inline-block; background:#111827; color:#fff; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px; }
     .card-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-    .kv-row.correct { background-color:#dcfce7 !important; }
-    .kv-row.incorrect { background-color:#fee2e2 !important; }
-    .kv-row.correct input, .kv-row.correct select { background-color:#dcfce7 !important; color:#000 !important; }
-    .kv-row.incorrect input, .kv-row.incorrect select { background-color:#fee2e2 !important; color:#000 !important; }
-    table td.correct { background-color:#dcfce7 !important; }
-    table td.incorrect { background-color:#fee2e2 !important; }
-    input.correct, select.correct { background-color:#dcfce7 !important; color:#000 !important; }
-    input.incorrect, select.incorrect { background-color:#fee2e2 !important; color:#000 !important; }
+    .kv-row.correct { background-color:#86efac !important; }
+    .kv-row.incorrect { background-color:#fca5a5 !important; }
+    .kv-row.correct input, .kv-row.correct select { background-color:#86efac !important; color:#000 !important; }
+    .kv-row.incorrect input, .kv-row.incorrect select { background-color:#fca5a5 !important; color:#000 !important; }
+    table td.correct { background-color:#86efac !important; }
+    table td.incorrect { background-color:#fca5a5 !important; }
+    input.correct, select.correct { background-color:#86efac !important; color:#000 !important; }
+    input.incorrect, select.incorrect { background-color:#fca5a5 !important; color:#000 !important; }
     .tabs .tab { color: var(--text) !important; }
     .tabs .tab.active { background:#1e293b !important; color:#fff !important; }
     .kv-row.correct .kv-label,
@@ -307,6 +307,37 @@ function getTournament(){ return data.tournaments.find(t => String(t.id) === Str
 const $ = (id)=>document.getElementById(id);
 function ciEq(a,b){ return (a||'').trim().toLowerCase() === (b||'').trim().toLowerCase(); }
 
+// Vertaa aikoja: hyväksyy ±1 minuutti
+function timeMatch(predTime, actualTime) {
+  if (!predTime || !actualTime) return false;
+  
+  const parseTime = (str) => {
+    const m = (str||'').match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    return parseInt(m[1]) * 60 + parseInt(m[2]); // sekunteiksi
+  };
+  
+  const predSec = parseTime(predTime);
+  const actualSec = parseTime(actualTime);
+  
+  if (predSec === null || actualSec === null) return false;
+  
+  // ±1 minuutti = ±60 sekuntia
+  return Math.abs(predSec - actualSec) <= 60;
+}
+
+// Yleinen vertailufunktio joka käyttää oikeaa logiikkaa riippuen kentästä
+function fieldMatch(key, predValue, actualValue) {
+  if (!actualValue || actualValue === '') return false;
+  if (!predValue || predValue === '') return false;
+  
+  if (key === 'ekan_maali_aika') {
+    return timeMatch(predValue, actualValue);
+  }
+  
+  return ciEq(predValue, actualValue);
+}
+
 function normalizeScore(a,b){ const A=(a||'').toString().trim(), B=(b||'').toString().trim(); if(A===''&&B==='') return ''; return `${A||'0'}-${B||'0'}`; }
 function parseScore(str){ const m=(str||'').match(/^(\d+)\s*[-–]\s*(\d+)$/); return m?[m[1],m[2]]:['','']; }
 function parseTimeParts(str){ const m=(str||'').match(/^(\d{1,2}):(\d{2})$/); return m ? [m[1].padStart(2,'0'), m[2]] : ['','']; }
@@ -315,7 +346,11 @@ function calcMatchPoints(t, matchId, player){
   const preds = (t.predictions[matchId]||{})[player] || {};
   const actual = t.actuals[matchId] || {};
   let s = 0;
-  FIELDS.forEach(f=>{ const pv = preds[f.key]||''; const av = actual[f.key]||''; if(av!=='' && ciEq(pv,av)) s++; });
+  FIELDS.forEach(f=>{ 
+    const pv = preds[f.key]||''; 
+    const av = actual[f.key]||''; 
+    if(av!=='' && fieldMatch(f.key, pv, av)) s++; 
+  });
   return s;
 }
 function calcTotalScores(t){
@@ -323,7 +358,12 @@ function calcTotalScores(t){
   (t.matches||[]).forEach(m=>{
     const preds=t.predictions[m.id]||{}; const actual=t.actuals[m.id]||{};
     PLAYERS.forEach(p=>{
-      let s=0; FIELDS.forEach(f=>{ const pred=preds[p]?.[f.key]||''; const act=actual[f.key]||''; if(act!=='' && ciEq(pred,act)) s++; });
+      let s=0; 
+      FIELDS.forEach(f=>{ 
+        const pred=preds[p]?.[f.key]||''; 
+        const act=actual[f.key]||''; 
+        if(act!=='' && fieldMatch(f.key, pred, act)) s++; 
+      });
       totals[p]+=s;
     });
   });
@@ -498,7 +538,7 @@ function widgetHTML(kind,key,value,dataset){
 function setCellHighlightFor(player,key){
   const t=getTournament(); if(!t||!selectedMatchId) return;
   const preds=t.predictions[selectedMatchId]||{}; const actual=(t.actuals[selectedMatchId]||{})[key]||''; const val=(preds[player]||{})[key]||'';
-  const hasAct = actual!==''; const hasPred = (val||'')!==''; const eq = hasAct && ciEq(val,actual); const neq = hasAct && hasPred && !eq;
+  const hasAct = actual!==''; const hasPred = (val||'')!==''; const eq = hasAct && fieldMatch(key, val, actual); const neq = hasAct && hasPred && !eq;
   const cell=document.querySelector(`[data-pred="${player}:${key}"]`)?.closest('td'); if(cell){ cell.classList.toggle('correct',eq); cell.classList.toggle('incorrect',neq); }
   const row=document.querySelector(`[data-card-pred="${player}:${key}"]`)?.closest('.kv-row'); if(row){ row.classList.toggle('correct',eq); row.classList.toggle('incorrect',neq); }
 }
@@ -517,7 +557,7 @@ function renderPredictions(){
       const pred=t.predictions[selectedMatchId][p]||{};
       const matchPts = calcMatchPoints(t, selectedMatchId, p);
       const rows=FIELDS.map(f=>{
-        const v=pred[f.key]||''; const act=(t.actuals[selectedMatchId][f.key]||''); const isCorrect=(act!=='') && ciEq(v,act); const isIncorrect=(act!=='') && (v!=='') && !isCorrect;
+        const v=pred[f.key]||''; const act=(t.actuals[selectedMatchId][f.key]||''); const isCorrect=(act!=='') && fieldMatch(f.key, v, act); const isIncorrect=(act!=='') && (v!=='') && !isCorrect;
         const w=(f.key==='lopputulos')?`<div data-card-pred="${p}:${f.key}">${widgetHTML('pred',f.key,v,`${p}:${f.key}`)}</div>`:widgetHTML('pred',f.key,v,`${p}:${f.key}`);
         return `<div class="kv-row ${isCorrect?'correct':''} ${isIncorrect?'incorrect':''}"><div class="kv-label">${f.label}</div>${w}</div>`;
       }).join('');
@@ -530,11 +570,11 @@ function renderPredictions(){
     let tbody=FIELDS.map(f=>{
       let row=`<tr><th class="sticky-left">${f.label}</th>`;
       row+=PLAYERS.map(p=>{
-        const predVal=(t.predictions[selectedMatchId][p]||{})[f.key]||''; const isCorrect = actual[f.key] ? ciEq(predVal, actual[f.key]) : false;
+        const predVal=(t.predictions[selectedMatchId][p]||{})[f.key]||''; const isCorrect = actual[f.key] ? fieldMatch(f.key, predVal, actual[f.key]) : false;
         const hasPred = (predVal || "") !== "";
         const isIncorrect = actual[f.key] && hasPred && !isCorrect;
         let w=widgetHTML('pred',f.key,predVal,`${p}:${f.key}`); if(f.key==='lopputulos') w=`<div data-cell="${p}:${f.key}">${w}</div>`;
-        return `<td class="${isCorrect?'correct':''}">${w}</td>`;
+        return `<td class="${isCorrect?'correct':''} ${isIncorrect?'incorrect':''}">${w}</td>`;
       }).join('');
       row+='</tr>'; return row;
     }).join('');
