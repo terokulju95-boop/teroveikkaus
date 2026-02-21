@@ -175,6 +175,7 @@
         <button id="importBtn" class="btn small" style="background:#fff;color:#111;border:1px solid var(--border)">Tuo JSON</button>
         <button id="resetBtn" class="btn small" style="background:#111827">Tyhjennä kaikki</button>
         <button id="screenshotTableBtn" class="btn small" style="background:#22c55e">Ota kuva (taulukko)</button>
+        <button id="downloadPdfBtn" class="btn small" style="background:#7c3aed">📄 Lataa PDF-raportti</button>
       </div>
       <p class="muted" style="margin-top:6px">Tiedot tallentuvat tähän laitteeseen (localStorage).</p>
     </div>
@@ -968,6 +969,499 @@ renderAll();
     }catch(e){
       alert('Kuvan luonti epäonnistui: ' + (e && e.message ? e.message : e));
     }
+  });
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(function(){
+  document.getElementById('downloadPdfBtn').addEventListener('click', function(){
+    const t = (typeof getTournament === 'function') ? getTournament() : null;
+    if(!t){ alert('Valitse ensin turnaus.'); return; }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const PW = 210; // A4 leveys
+    const PH = 297; // A4 korkeus
+    const ML = 15, MR = 15, MT = 15;
+    let y = MT;
+    const usable = PW - ML - MR;
+
+    // Värit
+    const COL_ORANGE = [249, 115, 22];
+    const COL_DARK   = [17, 24, 39];
+    const COL_GRAY   = [107, 114, 128];
+    const COL_GREEN  = [34, 197, 94];
+    const COL_LIGHT  = [243, 244, 246];
+    const COL_WHITE  = [255, 255, 255];
+    const COL_PURPLE = [124, 58, 237];
+
+    function newPageIfNeeded(needed) {
+      if (y + needed > PH - 15) { doc.addPage(); y = MT; }
+    }
+
+    function drawHeader() {
+      // Oranssi yläpalkki
+      doc.setFillColor(...COL_ORANGE);
+      doc.rect(0, 0, PW, 22, 'F');
+      doc.setTextColor(...COL_WHITE);
+      doc.setFontSize(16); doc.setFont('helvetica','bold');
+      doc.text('\uD83C\uDFD2 Turnausveikkaus – ' + t.name, PW/2, 14, { align:'center' });
+      y = 28;
+    }
+
+    function sectionTitle(title, color) {
+      color = color || COL_DARK;
+      newPageIfNeeded(12);
+      doc.setFillColor(...color);
+      doc.roundedRect(ML, y, usable, 9, 2, 2, 'F');
+      doc.setTextColor(...COL_WHITE);
+      doc.setFontSize(11); doc.setFont('helvetica','bold');
+      doc.text(title, ML + 4, y + 6.5);
+      y += 13;
+    }
+
+    function bodyText(text, indent) {
+      indent = indent || 0;
+      doc.setTextColor(...COL_DARK);
+      doc.setFontSize(10); doc.setFont('helvetica','normal');
+      const lines = doc.splitTextToSize(text, usable - indent);
+      newPageIfNeeded(lines.length * 5 + 2);
+      doc.text(lines, ML + indent, y);
+      y += lines.length * 5 + 2;
+    }
+
+    function boldText(text, indent) {
+      indent = indent || 0;
+      doc.setTextColor(...COL_DARK);
+      doc.setFontSize(10); doc.setFont('helvetica','bold');
+      const lines = doc.splitTextToSize(text, usable - indent);
+      newPageIfNeeded(lines.length * 5 + 2);
+      doc.text(lines, ML + indent, y);
+      y += lines.length * 5 + 2;
+    }
+
+    function smallGray(text, indent) {
+      indent = indent || 0;
+      doc.setTextColor(...COL_GRAY);
+      doc.setFontSize(9); doc.setFont('helvetica','normal');
+      const lines = doc.splitTextToSize(text, usable - indent);
+      newPageIfNeeded(lines.length * 4.5 + 1);
+      doc.text(lines, ML + indent, y);
+      y += lines.length * 4.5 + 1;
+    }
+
+    function spacer(h) { y += h || 4; }
+
+    // --- Apufunktiot dataan ---
+    const FIELDS_LOCAL = [
+      {key:'lopputulos',label:'Lopputulos'},
+      {key:'ekan_maalintekija',label:'Ekan maalintekija'},
+      {key:'ekan_maali_aika',label:'Ekan maalin tekoaika'},
+      {key:'ekan_jahyn_saaja',label:'Ekan jaahyn saaja'},
+      {key:'ekan_jahyn_syy',label:'Ekan jaahyn syy'},
+      {key:'montako_jahyja',label:'Montako jaahyda'},
+      {key:'parempi_laukasu',label:'Kummalla parempi laukaus%'},
+      {key:'parempi_alotus',label:'Kummalla parempi aloitus%'},
+      {key:'parempi_torjunta',label:'Kummalla parempi torjunta%'},
+      {key:'parempi_alivoima',label:'Kummalla parempi alivoima%'},
+      {key:'parempi_ylivoima',label:'Kummalla parempi ylivoima%'},
+      {key:'era1',label:'1. era tulos'},
+      {key:'era2',label:'2. era tulos'},
+      {key:'valmentaja_haasto',label:'Valmentaja haasto'},
+      {key:'maali_tyhjiin',label:'Maali tyhjiin'}
+    ];
+
+    const PLAYERS_LOCAL = ["Roosa","Timo","Tero","Tiina","Tepa","Aiti","Iska"];
+
+    function ciEqLocal(a,b){ return (a||'').trim().toLowerCase() === (b||'').trim().toLowerCase(); }
+    function timeMatchLocal(p,a){
+      const parse = s => { const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? parseInt(m[1])*60+parseInt(m[2]) : null; };
+      const ps=parse(p), as=parse(a); return ps!==null && as!==null && Math.abs(ps-as)<=60;
+    }
+    function fieldMatchLocal(key,p,a){
+      if(!a||!p) return false;
+      if(key==='ekan_maali_aika') return timeMatchLocal(p,a);
+      return ciEqLocal(p,a);
+    }
+    function calcMatchPtsLocal(t,matchId,player){
+      const preds=(t.predictions[matchId]||{})[player]||{};
+      const actual=t.actuals[matchId]||{};
+      let s=0;
+      FIELDS_LOCAL.forEach(f=>{ if(actual[f.key]!==undefined && actual[f.key]!=='' && fieldMatchLocal(f.key, preds[f.key]||'', actual[f.key])) s++; });
+      return s;
+    }
+    function calcTotalsLocal(t){
+      const totals={}; PLAYERS_LOCAL.forEach(p=>totals[p]=0);
+      (t.matches||[]).forEach(m=>{
+        PLAYERS_LOCAL.forEach(p=>{ totals[p]+=calcMatchPtsLocal(t,m.id,p); });
+      });
+      if(t.topThreePrediction){
+        const actual=t.actualTopThree||[];
+        PLAYERS_LOCAL.forEach(p=>{
+          const pred=t.topThreePrediction[p]||[];
+          if(pred.length===3){ let pts=0; pred.forEach((team,i)=>{ if(team && actual[i] && ciEqLocal(team,actual[i])) pts+=2; }); totals[p]+=pts; }
+        });
+      }
+      return totals;
+    }
+
+    // ========================
+    // SIVU 1 – KANSILEHTI
+    // ========================
+    drawHeader();
+
+    // Päivämäärä
+    doc.setTextColor(...COL_GRAY);
+    doc.setFontSize(9); doc.setFont('helvetica','normal');
+    doc.text('Luotu: ' + new Date().toLocaleDateString('fi-FI'), PW - MR, y, { align:'right' });
+    spacer(6);
+
+    // Iso pistekuvio – podium
+    const totals = calcTotalsLocal(t);
+    const sorted = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+
+    sectionTitle('🏆 LOPPUSIJOITUKSET', COL_ORANGE);
+
+    const medals = ['1.', '2.', '3.'];
+    const cardW = (usable - 8) / 3;
+    const podiumColors = [[255,215,0], [192,192,192], [205,127,50]];
+    sorted.slice(0,3).forEach(([name, pts], i) => {
+      const cx = ML + i * (cardW + 4);
+      const cardH = i === 0 ? 28 : i === 1 ? 24 : 20;
+      const cy = y + (28 - cardH);
+      doc.setFillColor(...podiumColors[i]);
+      doc.roundedRect(cx, cy, cardW, cardH, 3, 3, 'F');
+      doc.setTextColor(...COL_DARK);
+      doc.setFontSize(14); doc.setFont('helvetica','bold');
+      doc.text(medals[i], cx + cardW/2, cy + 8, { align:'center' });
+      doc.setFontSize(9); doc.setFont('helvetica','bold');
+      doc.text(name, cx + cardW/2, cy + 14, { align:'center' });
+      doc.setFontSize(11); doc.setFont('helvetica','bold');
+      doc.text(pts + ' p', cx + cardW/2, cy + 21, { align:'center' });
+    });
+    y += 34;
+
+    // Kaikki pisteet taulukko
+    newPageIfNeeded(8 + sorted.length * 7);
+    const colX = [ML, ML + 50, ML + 90];
+    doc.setFillColor(...COL_LIGHT);
+    doc.rect(ML, y, usable, 7, 'F');
+    doc.setTextColor(...COL_GRAY);
+    doc.setFontSize(9); doc.setFont('helvetica','bold');
+    doc.text('Sija', colX[0]+2, y+5);
+    doc.text('Pelaaja', colX[1], y+5);
+    doc.text('Pisteet', colX[2], y+5);
+    y += 7;
+    sorted.forEach(([name, pts], i) => {
+      newPageIfNeeded(7);
+      doc.setFillColor(i%2===0 ? 255 : 248, i%2===0 ? 255 : 248, i%2===0 ? 255 : 250);
+      doc.rect(ML, y, usable, 7, 'F');
+      doc.setTextColor(...COL_DARK);
+      doc.setFontSize(10); doc.setFont('helvetica', i===0?'bold':'normal');
+      doc.text((i+1)+'.', colX[0]+2, y+5);
+      doc.text(name, colX[1], y+5);
+      doc.setFont('helvetica','bold');
+      doc.text(pts + ' p', colX[2], y+5);
+      y += 7;
+    });
+    spacer(8);
+
+    // ========================
+    // OTTELUKOHTAISET PISTEET
+    // ========================
+    sectionTitle('📊 PISTEET OTTELUITTAIN', COL_DARK);
+
+    (t.matches||[]).forEach(m => {
+      newPageIfNeeded(10 + PLAYERS_LOCAL.length * 6 + 14);
+
+      // Ottelun otsikko
+      doc.setFillColor(...COL_LIGHT);
+      doc.roundedRect(ML, y, usable, 8, 2, 2, 'F');
+      doc.setTextColor(...COL_DARK);
+      doc.setFontSize(10); doc.setFont('helvetica','bold');
+
+      const actual = t.actuals[m.id] || {};
+      const scoreStr = actual['lopputulos'] ? '  (' + actual['lopputulos'] + ')' : '';
+      doc.text(m.name + scoreStr, ML+4, y+5.5);
+      y += 10;
+
+      // Pisteet per pelaaja tässä ottelussa
+      const matchPts = PLAYERS_LOCAL.map(p => ({ name: p, pts: calcMatchPtsLocal(t, m.id, p) }))
+        .sort((a,b)=>b.pts-a.pts);
+      const barMax = Math.max(...matchPts.map(x=>x.pts), 1);
+      const barW = usable - 60;
+
+      matchPts.forEach(({name, pts}, i) => {
+        newPageIfNeeded(7);
+        doc.setTextColor(...COL_DARK);
+        doc.setFontSize(9); doc.setFont('helvetica', pts===matchPts[0].pts?'bold':'normal');
+        doc.text(name, ML+2, y+4.5);
+        // Palkki
+        const fill = (pts/barMax) * barW;
+        doc.setFillColor(...COL_LIGHT);
+        doc.roundedRect(ML+35, y+1, barW, 5, 1,1,'F');
+        if(fill > 0){
+          doc.setFillColor(...(pts===matchPts[0].pts ? COL_ORANGE : [147,197,253]));
+          doc.roundedRect(ML+35, y+1, fill, 5, 1,1,'F');
+        }
+        doc.setTextColor(...COL_DARK);
+        doc.setFontSize(9); doc.setFont('helvetica','bold');
+        doc.text(pts + ' p', ML+35+barW+3, y+4.5);
+        y += 7;
+      });
+      spacer(4);
+    });
+
+    // ========================
+    // PARAS SUORITUS
+    // ========================
+    spacer(2);
+    sectionTitle('⭐ PARHAAT SUORITUKSET', COL_PURPLE);
+
+    let bestMatch = null;
+    const playerBests = {};
+    PLAYERS_LOCAL.forEach(p => playerBests[p] = { matchName: '-', pts: 0 });
+    (t.matches||[]).forEach(m=>{
+      PLAYERS_LOCAL.forEach(p=>{
+        const pts = calcMatchPtsLocal(t, m.id, p);
+        if(!bestMatch || pts > bestMatch.pts) bestMatch = {player:p, matchName:m.name, pts};
+        if(pts > playerBests[p].pts) playerBests[p] = {matchName: m.name, pts};
+      });
+    });
+
+    if(bestMatch){
+      newPageIfNeeded(22);
+      doc.setFillColor(...COL_PURPLE);
+      doc.roundedRect(ML, y, usable, 18, 3,3,'F');
+      doc.setTextColor(...COL_WHITE);
+      doc.setFontSize(9); doc.setFont('helvetica','normal');
+      doc.text('Paras yksittainen suoritus', ML+4, y+5);
+      doc.setFontSize(14); doc.setFont('helvetica','bold');
+      doc.text(bestMatch.player, ML+4, y+12);
+      doc.setFontSize(9); doc.setFont('helvetica','normal');
+      doc.text(bestMatch.matchName, ML+4, y+17);
+      doc.setFontSize(16); doc.setFont('helvetica','bold');
+      doc.text(bestMatch.pts + ' p', PW-MR-4, y+12, {align:'right'});
+      y += 22;
+    }
+
+    spacer(4);
+    boldText('Pelaajien parhaat ottelut:');
+    PLAYERS_LOCAL.forEach(p => {
+      const b = playerBests[p];
+      newPageIfNeeded(6);
+      doc.setFontSize(9);
+      doc.setFont('helvetica','bold'); doc.setTextColor(...COL_DARK);
+      doc.text(p + ':', ML+2, y);
+      doc.setFont('helvetica','normal'); doc.setTextColor(...COL_GRAY);
+      doc.text(b.matchName + ' – ' + b.pts + ' p', ML+30, y);
+      y += 5.5;
+    });
+
+    // ========================
+    // HAUSKOJA TILASTOJA
+    // ========================
+    spacer(6);
+    sectionTitle('🔍 TILASTOJA VASTAUKSISTA', COL_DARK);
+
+    // Kerää kaikki veikkaustilastot kentittäin
+    const fieldStats = {};
+    FIELDS_LOCAL.forEach(f => fieldStats[f.key] = { label: f.label, answers: {}, correct: 0, total: 0 });
+
+    (t.matches||[]).forEach(m=>{
+      const actual = t.actuals[m.id] || {};
+      PLAYERS_LOCAL.forEach(p=>{
+        const preds = (t.predictions[m.id]||{})[p]||{};
+        FIELDS_LOCAL.forEach(f=>{
+          const pv = preds[f.key]||'';
+          const av = actual[f.key]||'';
+          if(pv){
+            fieldStats[f.key].answers[pv] = (fieldStats[f.key].answers[pv]||0)+1;
+            fieldStats[f.key].total++;
+            if(av && fieldMatchLocal(f.key, pv, av)) fieldStats[f.key].correct++;
+          }
+        });
+      });
+    });
+
+    // Todennäköisimmät veikkaukset kentittäin (top1)
+    boldText('Suosituimmat veikkaukset (eniten valitut):');
+    spacer(2);
+    FIELDS_LOCAL.forEach(f=>{
+      const entries = Object.entries(fieldStats[f.key].answers).sort((a,b)=>b[1]-a[1]);
+      if(entries.length === 0) return;
+      const [topVal, topCount] = entries[0];
+      newPageIfNeeded(6);
+      doc.setFontSize(9);
+      doc.setFont('helvetica','bold'); doc.setTextColor(...COL_DARK);
+      doc.text(f.label + ':', ML+2, y);
+      doc.setFont('helvetica','normal'); doc.setTextColor(...COL_GRAY);
+      const pct = fieldStats[f.key].total > 0 ? Math.round(topCount/PLAYERS_LOCAL.length*100) : 0;
+      doc.text('"' + topVal + '"  (' + topCount + '/' + PLAYERS_LOCAL.length + ' veikkaajaa, ' + pct + '%)', ML+55, y);
+      y += 5.5;
+    });
+
+    spacer(6);
+
+    // Kenttä jossa eniten oikeita vastauksia prosenteissa
+    boldText('Helpointa & vaikeinta:');
+    spacer(2);
+    const fieldPcts = FIELDS_LOCAL
+      .filter(f => fieldStats[f.key].total > 0)
+      .map(f => ({
+        label: f.label,
+        pct: Math.round(fieldStats[f.key].correct / fieldStats[f.key].total * 100),
+        correct: fieldStats[f.key].correct,
+        total: fieldStats[f.key].total
+      }))
+      .sort((a,b) => b.pct - a.pct);
+
+    if(fieldPcts.length > 0){
+      const easiest = fieldPcts[0];
+      const hardest = fieldPcts[fieldPcts.length-1];
+      newPageIfNeeded(14);
+      doc.setFillColor(220,252,231);
+      doc.roundedRect(ML, y, usable/2-2, 12, 2,2,'F');
+      doc.setTextColor(...COL_DARK);
+      doc.setFontSize(8); doc.setFont('helvetica','bold');
+      doc.text('Helpoin: ' + easiest.label, ML+3, y+5);
+      doc.setFont('helvetica','normal');
+      doc.text(easiest.correct + '/' + easiest.total + ' oikein (' + easiest.pct + '%)', ML+3, y+10);
+
+      doc.setFillColor(254,226,226);
+      doc.roundedRect(ML+usable/2+2, y, usable/2-2, 12, 2,2,'F');
+      doc.setTextColor(...COL_DARK);
+      doc.setFontSize(8); doc.setFont('helvetica','bold');
+      doc.text('Vaikein: ' + hardest.label, ML+usable/2+5, y+5);
+      doc.setFont('helvetica','normal');
+      doc.text(hardest.correct + '/' + hardest.total + ' oikein (' + hardest.pct + '%)', ML+usable/2+5, y+10);
+      y += 16;
+    }
+
+    // Jäähytilasto erikseen – todennäköisin jäähy
+    spacer(4);
+    const jahySyy = fieldStats['ekan_jahyn_syy'] ? fieldStats['ekan_jahyn_syy'].answers : {};
+    const jahySorted = Object.entries(jahySyy).sort((a,b)=>b[1]-a[1]);
+    if(jahySorted.length > 0){
+      boldText('Yleisimmin veikattuja jaahysyita:');
+      spacer(2);
+      jahySorted.slice(0,5).forEach(([syy, cnt], i) => {
+        newPageIfNeeded(6);
+        doc.setFontSize(9); doc.setFont('helvetica', i===0?'bold':'normal');
+        doc.setTextColor(i===0 ? COL_DARK[0] : COL_GRAY[0], i===0 ? COL_DARK[1] : COL_GRAY[1], i===0 ? COL_DARK[2] : COL_GRAY[2]);
+        doc.text((i+1)+'. ' + syy + '  (' + cnt + ' kertaa)', ML+4, y);
+        y += 5.5;
+      });
+      spacer(4);
+    }
+
+    // Maalintekohetket
+    const maalintekija = fieldStats['ekan_maalintekija'] ? fieldStats['ekan_maalintekija'].answers : {};
+    const maaliSorted = Object.entries(maalintekija).sort((a,b)=>b[1]-a[1]);
+    if(maaliSorted.length > 0){
+      boldText('Yleisimmin veikattuja ekan maalin tekijoita:');
+      spacer(2);
+      maaliSorted.slice(0,5).forEach(([pelaaja, cnt], i) => {
+        newPageIfNeeded(6);
+        doc.setFontSize(9); doc.setFont('helvetica', i===0?'bold':'normal');
+        doc.setTextColor(i===0 ? COL_DARK[0] : COL_GRAY[0], i===0 ? COL_DARK[1] : COL_GRAY[1], i===0 ? COL_DARK[2] : COL_GRAY[2]);
+        doc.text((i+1)+'. ' + pelaaja + '  (' + cnt + ' kertaa)', ML+4, y);
+        y += 5.5;
+      });
+    }
+
+    // ========================
+    // OTTELUJEN OIKEAT VASTAUKSET
+    // ========================
+    spacer(6);
+    sectionTitle('✅ OIKEAT VASTAUKSET OTTELUITTAIN', COL_GREEN);
+
+    (t.matches||[]).forEach(m=>{
+      const actual = t.actuals[m.id] || {};
+      const hasAny = FIELDS_LOCAL.some(f => actual[f.key] && actual[f.key] !== '');
+      if(!hasAny) return;
+
+      newPageIfNeeded(14);
+      doc.setFillColor(...COL_LIGHT);
+      doc.roundedRect(ML, y, usable, 8, 2,2,'F');
+      doc.setTextColor(...COL_DARK);
+      doc.setFontSize(10); doc.setFont('helvetica','bold');
+      doc.text(m.name, ML+4, y+5.5);
+      y += 10;
+
+      FIELDS_LOCAL.forEach(f=>{
+        const av = actual[f.key]||'';
+        if(!av) return;
+        newPageIfNeeded(6);
+        doc.setFontSize(9);
+        doc.setFont('helvetica','bold'); doc.setTextColor(...COL_DARK);
+        doc.text(f.label + ':', ML+3, y);
+        doc.setFont('helvetica','normal'); doc.setTextColor(...[34,120,60]);
+        doc.text(av, ML+65, y);
+        y += 5.5;
+      });
+      spacer(4);
+    });
+
+    // ========================
+    // KIITOSSIVU
+    // ========================
+    doc.addPage();
+    y = 0;
+
+    // Tumma taustapalkki koko sivulle
+    doc.setFillColor(...COL_DARK);
+    doc.rect(0, 0, PW, PH, 'F');
+
+    // Oranssi koriste yläreunassa
+    doc.setFillColor(...COL_ORANGE);
+    doc.rect(0, 0, PW, 6, 'F');
+    doc.rect(0, PH-6, PW, 6, 'F');
+
+    // Iso emoji/otsikko
+    doc.setTextColor(...COL_ORANGE);
+    doc.setFontSize(32); doc.setFont('helvetica','bold');
+    doc.text('Kiitos osallistumisesta!', PW/2, 70, {align:'center'});
+
+    doc.setTextColor(...COL_WHITE);
+    doc.setFontSize(14); doc.setFont('helvetica','normal');
+    doc.text('Turnaus: ' + t.name, PW/2, 88, {align:'center'});
+
+    // Voittaja iso
+    const winner = sorted[0];
+    doc.setFillColor(...COL_ORANGE);
+    doc.roundedRect(PW/2-40, 98, 80, 30, 4,4,'F');
+    doc.setTextColor(...COL_DARK);
+    doc.setFontSize(10); doc.setFont('helvetica','bold');
+    doc.text('TURNAUKSEN VOITTAJA', PW/2, 108, {align:'center'});
+    doc.setFontSize(18); doc.setFont('helvetica','bold');
+    doc.text(winner ? winner[0] : '-', PW/2, 120, {align:'center'});
+    doc.setFontSize(12);
+    doc.text(winner ? winner[1] + ' pistetta' : '', PW/2, 127, {align:'center'});
+
+    // Kaikki osallistujat
+    doc.setTextColor(...[148,163,184]);
+    doc.setFontSize(10); doc.setFont('helvetica','normal');
+    doc.text('Osallistujat:', PW/2, 148, {align:'center'});
+    doc.setTextColor(...COL_WHITE);
+    doc.setFontSize(11); doc.setFont('helvetica','bold');
+    const playersLine = sorted.map(([n]) => n).join('  •  ');
+    const pLines = doc.splitTextToSize(playersLine, usable);
+    doc.text(pLines, PW/2, 156, {align:'center'});
+
+    // Tähdet koristelu
+    doc.setTextColor(...COL_ORANGE);
+    doc.setFontSize(24);
+    doc.text('* * *', PW/2, 185, {align:'center'});
+
+    doc.setTextColor(...[148,163,184]);
+    doc.setFontSize(9); doc.setFont('helvetica','normal');
+    doc.text('Turnausveikkaus – tulostus ' + new Date().toLocaleDateString('fi-FI'), PW/2, 275, {align:'center'});
+
+    // Tallenna
+    const safeName = (t.name||'turnaus').replace(/[^a-zA-Z0-9_\-]/g,'_');
+    doc.save('turnausveikkaus_' + safeName + '.pdf');
   });
 })();
 </script>
