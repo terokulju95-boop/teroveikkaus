@@ -1176,6 +1176,85 @@ renderAll();
     spacer(8);
 
     // ========================
+    // KOLMEN KÄRKI – VEIKKAUKSET
+    // ========================
+    const actualTopThree = t.actualTopThree || [];
+    const hasTopThreeData = actualTopThree.some(x => x && x !== '');
+    if(hasTopThreeData || t.topThreePrediction){
+      sectionTitle('KOLMEN KARKI – VEIKKAUKSET', COL_ORANGE);
+
+      // Oikeat sijoitukset
+      newPageIfNeeded(20);
+      boldText('Oikea jarjestys:');
+      spacer(2);
+      ['1. sija', '2. sija', '3. sija'].forEach((label, i) => {
+        newPageIfNeeded(7);
+        doc.setFillColor(...podiumColors[i]);
+        doc.roundedRect(ML, y-4, usable, 6, 1,1,'F');
+        doc.setFontSize(9); doc.setFont('helvetica','bold');
+        doc.setTextColor(...COL_DARK);
+        doc.text(label + ':', ML+3, y);
+        doc.setFont('helvetica','normal');
+        doc.text(actualTopThree[i] || '—', ML+30, y);
+        y += 7;
+      });
+      spacer(4);
+
+      // Pelaajien veikkaukset + pisteet
+      if(t.topThreePrediction){
+        boldText('Pelaajien veikkaukset:');
+        spacer(2);
+
+        // Header
+        newPageIfNeeded(8 + PLAYERS_LOCAL.length * 8);
+        doc.setFillColor(...COL_LIGHT);
+        doc.rect(ML, y, usable, 7, 'F');
+        doc.setTextColor(...COL_GRAY);
+        doc.setFontSize(9); doc.setFont('helvetica','bold');
+        doc.text('Pelaaja', ML+3, y+5);
+        doc.text('1. sija', ML+40, y+5);
+        doc.text('2. sija', ML+80, y+5);
+        doc.text('3. sija', ML+120, y+5);
+        doc.text('Pisteet', PW-MR-8, y+5, {align:'right'});
+        y += 7;
+
+        // Jokainen pelaaja
+        const t3PlayerPts = PLAYERS_LOCAL.map(p => {
+          const pred = t.topThreePrediction[p] || [];
+          let pts = 0;
+          pred.forEach((team, i) => {
+            if(team && actualTopThree[i] && ciEqLocal(team, actualTopThree[i])) pts += 2;
+          });
+          return { name: p, pred, pts };
+        }).sort((a,b) => b.pts - a.pts);
+
+        t3PlayerPts.forEach(({name, pred, pts}, i) => {
+          newPageIfNeeded(8);
+          doc.setFillColor(i%2===0 ? 255 : 248, i%2===0 ? 255 : 248, i%2===0 ? 255 : 250);
+          doc.rect(ML, y, usable, 7, 'F');
+
+          doc.setFontSize(9); doc.setFont('helvetica', pts > 0 ? 'bold' : 'normal');
+          doc.setTextColor(...COL_DARK);
+          doc.text(name, ML+3, y+5);
+
+          [0,1,2].forEach((idx, col) => {
+            const team = pred[idx] || '—';
+            const isCorrect = actualTopThree[idx] && team && ciEqLocal(team, actualTopThree[idx]);
+            doc.setTextColor(...(isCorrect ? [22,163,74] : COL_GRAY));
+            doc.setFont('helvetica', isCorrect ? 'bold' : 'normal');
+            doc.text(team, ML+40 + col*40, y+5);
+          });
+
+          doc.setTextColor(...(pts > 0 ? [22,163,74] : COL_DARK));
+          doc.setFont('helvetica','bold');
+          doc.text(pts + ' p', PW-MR-8, y+5, {align:'right'});
+          y += 7;
+        });
+      }
+      spacer(8);
+    }
+
+    // ========================
     // OTTELUKOHTAISET PISTEET
     // ========================
     sectionTitle('PISTEET OTTELUITTAIN', COL_DARK);
