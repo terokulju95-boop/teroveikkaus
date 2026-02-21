@@ -527,8 +527,17 @@ function renderTopThree(){
 function renderScoreboard(){
   const el=$('scoreboard'); if(!selectedTournamentId){ el.innerHTML='<p class="muted">Valitse turnaus.</p>'; return; }
   const t=getTournament(); const totals=calcTotalScores(t); const sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
-  const icons=['🥇','🥈','🥉','💩','💩','💩','💩'];
-  el.innerHTML='<div class="score-grid">'+sorted.map(([n,pts],i)=>`<div class="score-card"><div class="name">${icons[i]||''} ${n}</div><div class="pts">${pts} p</div></div>`).join('')+'</div>';
+  // Lasketaan tasasijoitukset: jos pisteet samat kuin edellinen, sama sija
+  const rankIcons = sorted.map(([n,pts], i) => {
+    let rank = i + 1;
+    // Etsi ensimmäinen pelaaja jolla samat pisteet -> se on oikea sija
+    for (let j = 0; j < i; j++) {
+      if (sorted[j][1] === pts) { rank = j + 1; break; }
+    }
+    const iconMap = {1:'🥇', 2:'🥈', 3:'🥉'};
+    return iconMap[rank] || '💩';
+  });
+  el.innerHTML='<div class="score-grid">'+sorted.map(([n,pts],i)=>`<div class="score-card"><div class="name">${rankIcons[i]} ${n}</div><div class="pts">${pts} p</div></div>`).join('')+'</div>';
 }
 
 function widgetHTML(kind,key,value,dataset){
@@ -1506,9 +1515,11 @@ renderAll();
     doc.text('Kaikki sijoitukset:', PW/2, ky2, {align:'center'});
     ky2 += 7;
     sorted.forEach(([name, pts], i) => {
-      const rankStr = (i+1)+'. ' + name + ' - ' + pts + ' p' + (i >= 3 ? '  (poo)' : '');
-      doc.setTextColor(...(i < 3 ? COL_WHITE : [148,163,184]));
-      doc.setFontSize(i===0?12:10); doc.setFont('helvetica', i===0?'bold':'normal');
+      let rank = i + 1;
+      for (let j = 0; j < i; j++) { if (sorted[j][1] === pts) { rank = j + 1; break; } }
+      const rankStr = rank+'. ' + name + ' - ' + pts + ' p' + (rank > 3 ? '  (poo)' : '');
+      doc.setTextColor(...(rank <= 3 ? COL_WHITE : [148,163,184]));
+      doc.setFontSize(rank===1?12:10); doc.setFont('helvetica', rank===1?'bold':'normal');
       doc.text(rankStr, PW/2, ky2, {align:'center'});
       ky2 += i===0 ? 8 : 6;
     });
