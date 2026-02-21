@@ -1130,17 +1130,17 @@ renderAll();
     const podiumColors = [[255,215,0], [192,192,192], [205,127,50]];
     sorted.slice(0,3).forEach(([name, pts], i) => {
       const cx = ML + i * (cardW + 4);
-      const cardH = i === 0 ? 28 : i === 1 ? 24 : 20;
-      const cy = y + (28 - cardH);
+      const cardH = 28;
+      const cy = y;
       doc.setFillColor(...podiumColors[i]);
       doc.roundedRect(cx, cy, cardW, cardH, 3, 3, 'F');
       doc.setTextColor(...COL_DARK);
       doc.setFontSize(14); doc.setFont('helvetica','bold');
       doc.text(medals[i], cx + cardW/2, cy + 8, { align:'center' });
       doc.setFontSize(9); doc.setFont('helvetica','bold');
-      doc.text(name, cx + cardW/2, cy + 14, { align:'center' });
+      doc.text(name, cx + cardW/2, cy + 16, { align:'center' });
       doc.setFontSize(11); doc.setFont('helvetica','bold');
-      doc.text(pts + ' p', cx + cardW/2, cy + 21, { align:'center' });
+      doc.text(pts + ' p', cx + cardW/2, cy + 23, { align:'center' });
     });
     y += 34;
 
@@ -1328,93 +1328,62 @@ renderAll();
       y += 16;
     }
 
-    // Jäähytilasto erikseen – todennäköisin jäähy
-    spacer(4);
-    const jahySyy = fieldStats['ekan_jahyn_syy'] ? fieldStats['ekan_jahyn_syy'].answers : {};
-    const jahySorted = Object.entries(jahySyy).sort((a,b)=>b[1]-a[1]);
-    if(jahySorted.length > 0){
-      boldText('Todennakoisimmaksi veikattuja jaahysyita:');
-      spacer(2);
-      jahySorted.slice(0,5).forEach(([syy, cnt], i) => {
-        newPageIfNeeded(7);
-        doc.setFillColor(i===0 ? 255 : 250, i===0 ? 247 : 250, i===0 ? 237 : 250);
-        doc.roundedRect(ML, y-4, usable, 6, 1,1,'F');
-        doc.setFontSize(9); doc.setFont('helvetica', i===0?'bold':'normal');
-        doc.setTextColor(...(i===0 ? COL_DARK : COL_GRAY));
-        doc.text((i+1)+'. ' + syy, ML+3, y);
-        doc.setFont('helvetica','bold');
-        doc.text(cnt + 'x', PW-MR-3, y, {align:'right'});
-        y += 7;
-      });
-      spacer(4);
-    }
-
-    // Maalintekohetket
-    const maalintekija = fieldStats['ekan_maalintekija'] ? fieldStats['ekan_maalintekija'].answers : {};
-    const maaliSorted = Object.entries(maalintekija).sort((a,b)=>b[1]-a[1]);
-    if(maaliSorted.length > 0){
-      boldText('Todennakoisimmaksi veikattuja ekan maalin tekijoita:');
-      spacer(2);
-      maaliSorted.slice(0,5).forEach(([pelaaja, cnt], i) => {
-        newPageIfNeeded(7);
-        doc.setFillColor(i===0 ? 239 : 250, i===0 ? 246 : 250, i===0 ? 255 : 250);
-        doc.roundedRect(ML, y-4, usable, 6, 1,1,'F');
-        doc.setFontSize(9); doc.setFont('helvetica', i===0?'bold':'normal');
-        doc.setTextColor(...(i===0 ? COL_DARK : COL_GRAY));
-        doc.text((i+1)+'. ' + pelaaja, ML+3, y);
-        doc.setFont('helvetica','bold');
-        doc.text(cnt + 'x', PW-MR-3, y, {align:'right'});
-        y += 7;
-      });
-      spacer(4);
-    }
-
-    // Montako jaahyda veikattiin
-    const jahyMaara = fieldStats['montako_jahyja'] ? fieldStats['montako_jahyja'].answers : {};
-    const jahyMaaraSorted = Object.entries(jahyMaara).sort((a,b)=>Number(a[0])-Number(b[0]));
-    if(jahyMaaraSorted.length > 0){
-      boldText('Veikkaukset - montako jaahyda ottelussa:');
-      spacer(2);
-      jahyMaaraSorted.forEach(([maara, cnt]) => {
-        newPageIfNeeded(6);
-        doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(...COL_GRAY);
-        doc.text(maara + ' jaahyda:  ' + cnt + ' pelaajaa veikkasi', ML+4, y);
-        y += 5.5;
-      });
-    }
+    // (Todennakoisimmaksi veikattuja osiot poistettu)
 
     // ========================
-    // OTTELUJEN OIKEAT VASTAUKSET
+    // OIKEIDEN VASTAUSTEN PROSENTIT PER KYSYMYS
     // ========================
     spacer(6);
-    sectionTitle('OIKEAT VASTAUKSET OTTELUITTAIN', COL_GREEN);
+    sectionTitle('OIKEAT VASTAUKSET – MONTAKO ARVASI OIKEIN', COL_GREEN);
 
-    (t.matches||[]).forEach(m=>{
-      const actual = t.actuals[m.id] || {};
-      const hasAny = FIELDS_LOCAL.some(f => actual[f.key] && actual[f.key] !== '');
-      if(!hasAny) return;
+    const fieldPctsAll = FIELDS_LOCAL.map(f => ({
+      label: f.label,
+      correct: fieldStats[f.key].correct,
+      total: fieldStats[f.key].total,
+      pct: fieldStats[f.key].total > 0 ? Math.round(fieldStats[f.key].correct / fieldStats[f.key].total * 100) : null
+    })).filter(f => f.total > 0);
 
-      newPageIfNeeded(14);
+    if(fieldPctsAll.length > 0){
+      // Header
+      newPageIfNeeded(8 + fieldPctsAll.length * 8);
       doc.setFillColor(...COL_LIGHT);
-      doc.roundedRect(ML, y, usable, 8, 2,2,'F');
-      doc.setTextColor(...COL_DARK);
-      doc.setFontSize(10); doc.setFont('helvetica','bold');
-      doc.text(m.name, ML+4, y+5.5);
-      y += 10;
+      doc.rect(ML, y, usable, 7, 'F');
+      doc.setTextColor(...COL_GRAY);
+      doc.setFontSize(9); doc.setFont('helvetica','bold');
+      doc.text('Kysymys', ML+3, y+5);
+      doc.text('Oikein', PW-MR-30, y+5);
+      doc.text('%', PW-MR-8, y+5, {align:'right'});
+      y += 7;
 
-      FIELDS_LOCAL.forEach(f=>{
-        const av = actual[f.key]||'';
-        if(!av) return;
-        newPageIfNeeded(6);
-        doc.setFontSize(9);
-        doc.setFont('helvetica','bold'); doc.setTextColor(...COL_DARK);
-        doc.text(f.label + ':', ML+3, y);
-        doc.setFont('helvetica','normal'); doc.setTextColor(...[34,120,60]);
-        doc.text(av, ML+65, y);
-        y += 5.5;
+      const sortedByPct = [...fieldPctsAll].sort((a,b) => (b.pct||0)-(a.pct||0));
+      sortedByPct.forEach(({label, correct, total, pct}, i) => {
+        newPageIfNeeded(8);
+        const isEven = i%2===0;
+        doc.setFillColor(isEven ? 255 : 248, isEven ? 255 : 248, isEven ? 255 : 250);
+        doc.rect(ML, y, usable, 7, 'F');
+
+        // Color bar background
+        const barW2 = 40;
+        doc.setFillColor(230,230,230);
+        doc.roundedRect(PW-MR-barW2-14, y+1.5, barW2, 4, 1,1,'F');
+        if(pct !== null && pct > 0){
+          const fillW = (pct/100) * barW2;
+          const barColor = pct >= 60 ? [34,197,94] : pct >= 30 ? [251,146,60] : [239,68,68];
+          doc.setFillColor(...barColor);
+          doc.roundedRect(PW-MR-barW2-14, y+1.5, fillW, 4, 1,1,'F');
+        }
+
+        doc.setTextColor(...COL_DARK);
+        doc.setFontSize(9); doc.setFont('helvetica','normal');
+        doc.text(label, ML+3, y+5);
+        doc.text(correct + '/' + total, PW-MR-barW2-18, y+5, {align:'right'});
+        doc.setFont('helvetica','bold');
+        doc.text((pct !== null ? pct : '-') + '%', PW-MR-4, y+5, {align:'right'});
+        y += 7;
       });
-      spacer(4);
-    });
+    }
+
+    // (Otteluiden oikeat vastaukset poistettu PDF:stä)
 
     // ========================
     // KIITOSSIVU
@@ -1465,10 +1434,10 @@ renderAll();
       ky2 += i===0 ? 8 : 6;
     });
 
-    // Tähdet koristelu
+    // Tähdet koristelu – asetetaan dynaamisesti sijoituslistan jälkeen
     doc.setTextColor(...COL_ORANGE);
-    doc.setFontSize(24);
-    doc.text('* * *', PW/2, 185, {align:'center'});
+    doc.setFontSize(18);
+    doc.text('* * *', PW/2, ky2 + 10, {align:'center'});
 
     doc.setTextColor(...[148,163,184]);
     doc.setFontSize(9); doc.setFont('helvetica','normal');
