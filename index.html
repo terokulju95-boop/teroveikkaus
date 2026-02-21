@@ -96,6 +96,29 @@
       font-size:18px;
       border-radius:12px;
     }
+    /* Lukittu tila */
+    body.tournament-finished input,
+    body.tournament-finished select,
+    body.tournament-finished textarea {
+      pointer-events: none;
+      opacity: 0.7;
+    }
+    body.tournament-finished button:not(#exportBtn):not(#importBtn):not(#resetBtn):not(#screenshotTableBtn):not(#toggleTop3):not(#tournamentSelect) {
+      pointer-events: none;
+      opacity: 0.4;
+    }
+    body.tournament-finished #exportBtn,
+    body.tournament-finished #importBtn,
+    body.tournament-finished #resetBtn,
+    body.tournament-finished #screenshotTableBtn,
+    body.tournament-finished #toggleTop3 {
+      pointer-events: auto;
+      opacity: 1;
+    }
+    body.tournament-finished #tournamentSelect {
+      pointer-events: auto;
+      opacity: 1;
+    }
   </style>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
@@ -116,6 +139,13 @@
       </div>
       <div class="field">
           <button id="createTournament" class="btn small" style="width:100%">Luo turnaus</button>
+      </div>
+      <div class="field" id="finishTournamentArea" style="display:none">
+          <button id="finishTournament" class="btn small" style="width:100%;background:#dc2626">🏁 Päätä turnaus</button>
+          <p class="muted" style="margin-top:4px;font-size:12px">Turnaus lukitaan – muutoksia ei voi enää tehdä.</p>
+      </div>
+      <div class="field" id="tournamentFinishedBadge" style="display:none">
+          <div style="background:#22c55e;color:#fff;border-radius:10px;padding:10px;text-align:center;font-weight:700">✅ Turnaus päättyy</div>
       </div>
       <div class="separator"></div>
       <h2>Ottelut</h2>
@@ -153,6 +183,11 @@
       <div class="card">
         <h2>Yhteispisteet</h2>
         <div id="scoreboard"></div>
+      </div>
+
+      <div class="card" id="statsCard" style="display:none">
+        <h2>🏆 Turnauksen tilastot</h2>
+        <div id="statsArea"></div>
       </div>
 
       <div class="card">
@@ -701,6 +736,145 @@ function renderActuals(){
   });
 }
 
+function renderTournamentStatus(){
+  const t = getTournament();
+  const finishArea = $('finishTournamentArea');
+  const badge = $('tournamentFinishedBadge');
+  if(!t){
+    if(finishArea) finishArea.style.display='none';
+    if(badge) badge.style.display='none';
+    document.body.classList.remove('tournament-finished');
+    $('statsCard').style.display='none';
+    return;
+  }
+  if(t.finished){
+    if(finishArea) finishArea.style.display='none';
+    if(badge) badge.style.display='';
+    document.body.classList.add('tournament-finished');
+    renderStats();
+  } else {
+    if(finishArea) finishArea.style.display='';
+    if(badge) badge.style.display='none';
+    document.body.classList.remove('tournament-finished');
+    $('statsCard').style.display='none';
+  }
+}
+
+function renderStats(){
+  const t = getTournament();
+  if(!t) return;
+  $('statsCard').style.display='';
+  const el = $('statsArea');
+
+  // Laske yhteispisteet
+  const totals = calcTotalScores(t);
+  const sorted = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+
+  // Paras pisteet yhdestä ottelusta
+  let bestMatch = null; // {player, matchName, pts}
+  (t.matches||[]).forEach(m=>{
+    PLAYERS.forEach(p=>{
+      const pts = calcMatchPoints(t, m.id, p);
+      if(!bestMatch || pts > bestMatch.pts){
+        bestMatch = {player: p, matchName: m.name, pts};
+      }
+    });
+  });
+
+  // Jokaisen pelaajan paras peli
+  const playerBests = {};
+  PLAYERS.forEach(p=>{
+    let best = null;
+    (t.matches||[]).forEach(m=>{
+      const pts = calcMatchPoints(t, m.id, p);
+      if(!best || pts > best.pts) best = {matchName: m.name, pts};
+    });
+    playerBests[p] = best;
+  });
+
+  // Yksittäiset otteluvoittajat (eniten pisteitä per ottelu)
+  const matchWinners = (t.matches||[]).map(m=>{
+    let best = null;
+    PLAYERS.forEach(p=>{
+      const pts = calcMatchPoints(t, m.id, p);
+      if(!best || pts > best.pts) best = {player:p, pts};
+      else if(pts === best.pts) best.player += ' & ' + p;
+    });
+    return {matchName: m.name, ...best};
+  });
+
+  let html = '';
+
+  // Voittaja podium
+  html += `<div style="margin-bottom:14px">
+    <div style="font-weight:700;margin-bottom:8px;font-size:15px">🥇 Lopputulokset</div>
+    <div class="score-grid">
+      ${sorted.map(([n,pts],i)=>{
+        const medals=['🥇','🥈','🥉'];
+        return `<div class="score-card"><div class="name">${medals[i]||''} ${n}</div><div class="pts">${pts} p</div></div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  html += '<div class="separator"></div>';
+
+  // Paras yksittäinen suoritus
+  if(bestMatch){
+    html += `<div style="margin-bottom:14px">
+      <div style="font-weight:700;margin-bottom:6px;font-size:15px">⭐ Paras suoritus yhdestä ottelusta</div>
+      <div style="background:var(--card);border:2px solid var(--primary);border-radius:10px;padding:10px">
+        <div style="font-size:18px;font-weight:800">${bestMatch.player}</div>
+        <div style="color:var(--muted);font-size:14px">${bestMatch.matchName}</div>
+        <div style="font-size:24px;font-weight:800;color:var(--primary)">${bestMatch.pts} p</div>
+      </div>
+    </div>`;
+    html += '<div class="separator"></div>';
+  }
+
+  // Jokaisen pelaajan paras ottelu
+  html += `<div style="margin-bottom:14px">
+    <div style="font-weight:700;margin-bottom:8px;font-size:15px">🎯 Jokaisen pelaajan paras ottelu</div>
+    <div class="score-grid">
+      ${PLAYERS.map(p=>{
+        const b = playerBests[p];
+        return `<div class="score-card">
+          <div class="name">${p}</div>
+          <div class="pts">${b ? b.pts + ' p' : '—'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${b ? b.matchName : ''}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  html += '<div class="separator"></div>';
+
+  // Ottelukohtaiset voittajat
+  if(matchWinners.length > 0){
+    html += `<div style="margin-bottom:6px">
+      <div style="font-weight:700;margin-bottom:8px;font-size:15px">🏅 Ottelujen voittajat</div>
+      <div style="display:grid;gap:6px">
+        ${matchWinners.map(w=>`
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px">
+            <div style="font-size:13px;color:var(--muted)">${w.matchName}</div>
+            <div><span style="font-weight:700">${w.player}</span> <span class="pts-badge">${w.pts} p</span></div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+document.getElementById('finishTournament').onclick = ()=>{
+  const t = getTournament();
+  if(!t) return;
+  if(!confirm(`Haluatko varmasti päättää turnauksen "${t.name}"?\n\nTurnaus lukitaan eikä sitä voi enää muokata.`)) return;
+  t.finished = true;
+  save();
+  renderAll();
+  renderTournamentStatus();
+};
+
 document.getElementById('createTournament').onclick=()=>{
   const name=$('newTournamentName').value.trim();
   if(!name){ alert('Anna turnauksen nimi'); return; }
@@ -753,7 +927,8 @@ document.getElementById('refreshCheck').addEventListener('click', ()=>{
   save(); renderScoreboard(); refreshAllHighlights();
 });
 
-function renderAll(){ renderTournamentSelect(); renderMatchSelect(); renderTopThree(); renderScoreboard(); renderPredictions(); renderActuals(); }
+function renderAll(){ renderTournamentSelect(); renderMatchSelect(); renderTopThree(); renderScoreboard(); renderPredictions(); renderActuals(); renderTournamentStatus(); }
+function isFinished(){ const t=getTournament(); return t && t.finished; }
 (data.tournaments||[]).forEach(t=>{ t.matches=(t.matches||[]).map(m=>({...m, id:String(m.id)})); });
 $('newMatchName').value='Suomi vs ';
 renderAll();
