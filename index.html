@@ -1093,161 +1093,401 @@ document.getElementById('screenshotTableBtn').addEventListener('click', async ()
 <script>
 document.getElementById('downloadPdfBtn').addEventListener('click', function(){
   if(!window.jspdf){ alert('Odota hetki ja yritä uudelleen.'); return; }
-  if(typeof getTournament==='undefined'||!getTournament()){ alert('Valitse ensin turnaus.'); return; }
-  const t=getTournament();
-  const {jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const W=170,ML=20,today=new Date().toLocaleDateString('fi-FI');
-  let y=20;
+  var t = window.getTournament ? window.getTournament() : null;
+  if(!t){ alert('Valitse ensin turnaus.'); return; }
+  var {jsPDF} = window.jspdf;
+  var doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
 
-  function chk(n){if(y+n>275){doc.addPage();y=20;}}
-  function hr(){doc.setDrawColor(200);doc.line(ML,y,ML+W,y);y+=4;}
-  function h1(s){chk(10);doc.setFontSize(13);doc.setFont('helvetica','bold');doc.setTextColor(30,41,59);doc.text(s,ML,y);y+=7;doc.setTextColor(0);}
-  function h2(s){chk(8);doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text(s,ML,y);y+=5;}
-  function norm(s,ind){chk(6);doc.setFontSize(9);doc.setFont('helvetica','normal');doc.text(s,ML+(ind||0),y);y+=5.5;}
-  function hdr(cols,ws){
-    doc.setFillColor(30,41,59);doc.rect(ML,y-4,W,7,'F');
-    doc.setTextColor(255);doc.setFontSize(9);doc.setFont('helvetica','bold');
-    let x=ML;cols.forEach((c,i)=>{doc.text(String(c||''),x+2,y,{maxWidth:ws[i]-3});x+=ws[i];});
-    y+=7;doc.setTextColor(0);doc.setDrawColor(200);doc.line(ML,y-0.5,ML+W,y-0.5);
-  }
-  function row(cols,ws,ri){
-    chk(7);if(ri%2===0){doc.setFillColor(248,250,252);doc.rect(ML,y-4,W,7,'F');}
-    doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(0);
-    let x=ML;cols.forEach((c,i)=>{doc.text(String(c||''),x+2,y,{maxWidth:ws[i]-3});x+=ws[i];});
-    y+=7;doc.setDrawColor(220);doc.line(ML,y-0.5,ML+W,y-0.5);
-  }
+  // VÄRIT
+  var ORANGE = [249,115,22];
+  var DARK   = [15,23,42];
+  var DARK2  = [30,41,59];
+  var WHITE  = [255,255,255];
+  var GRAY   = [148,163,184];
+  var GOLD   = [251,191,36];
+  var SILVER = [203,213,225];
+  var BRONZE = [180,130,70];
+  var PURPLE = [124,58,237];
+  var GREEN  = [34,197,94];
+  var BAR_ORANGE = [249,115,22];
+  var BAR_BLUE   = [147,197,253];
+  var BAR_BG     = [241,245,249];
 
-  // PLAYERS & totals from app
-  const PLIST=typeof PLAYERS!=='undefined'?PLAYERS:[];
-  const tots=typeof calcTotals!=='undefined'?calcTotals(t):{};
-  const sorted=[...PLIST].sort((a,b)=>(tots[b]||0)-(tots[a]||0));
-  const aT3=t.actualTopThree||[];
-  const fmatch=typeof fieldMatch!=='undefined'?fieldMatch:(k,p,a)=>(p||'').trim().toLowerCase()===(a||'').trim().toLowerCase();
-  const cmPts=typeof calcMatchPts!=='undefined'?calcMatchPts:(t,mid,p)=>0;
+  var W = 210, H = 297, ML = 12, MR = 12, CW = W-ML-MR;
+  var y = 0;
 
-  // FIELDS for stats
-  const FLIST=[
-    {key:'lopputulos',label:'Lopputulos'},{key:'ekan_maalintekija',label:'Ekan maalintekijä'},
-    {key:'ekan_maali_aika',label:'Ekan maalin tekoaika'},{key:'ekan_jahyn_saaja',label:'Ekan jäähyn saaja'},
-    {key:'ekan_jahyn_syy',label:'Ekan jäähyn syy'},{key:'montako_jahyja',label:'Montako jäähydä'},
+  var PLIST = window.PLAYERS || [];
+  var tots = window.calcTotals ? window.calcTotals(t) : {};
+  var sorted = PLIST.slice().sort(function(a,b){ return (tots[b]||0)-(tots[a]||0); });
+  var cmPts = window.calcMatchPts || function(){ return 0; };
+  var fmatch = window.fieldMatch || function(k,p,a){ return (p||'').toLowerCase()===(a||'').toLowerCase(); };
+  var today = new Date().toLocaleDateString('fi-FI');
+  var aT3 = t.actualTopThree || [];
+
+  var FLIST = [
+    {key:'lopputulos',label:'Lopputulos'},{key:'ekan_maalintekija',label:'Ekan maalintekija'},
+    {key:'ekan_maali_aika',label:'Ekan maalin tekoaika'},{key:'ekan_jahyn_saaja',label:'Ekan jaahyn saaja'},
+    {key:'ekan_jahyn_syy',label:'Ekan jaahyn syy'},{key:'montako_jahyja',label:'Montako jaahyda'},
     {key:'parempi_laukasu',label:'Kummalla parempi laukaus%'},{key:'parempi_alotus',label:'Kummalla parempi aloitus%'},
     {key:'parempi_torjunta',label:'Kummalla parempi torjunta%'},{key:'parempi_alivoima',label:'Kummalla parempi alivoima%'},
-    {key:'parempi_ylivoima',label:'Kummalla parempi ylivoima%'},{key:'era1',label:'1. erä tulos'},
-    {key:'era2',label:'2. erä tulos'},{key:'valmentaja_haasto',label:'Valmentaja haasto'},{key:'maali_tyhjiin',label:'Maali tyhjiin'}
+    {key:'parempi_ylivoima',label:'Kummalla parempi ylivoima%'},{key:'era1',label:'1. era tulos'},
+    {key:'era2',label:'2. era tulos'},{key:'valmentaja_haasto',label:'Valmentaja haasto'},{key:'maali_tyhjiin',label:'Maali tyhjiin'}
   ];
 
-  // --- HEADER ---
-  doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text('Turnausveikkaus - '+t.name,105,y,{align:'center'});y+=8;
-  doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(120);doc.text('Luotu: '+today,105,y,{align:'center'});y+=6;doc.setTextColor(0);
-  hr();
+  function rgb(c){ doc.setFillColor(c[0],c[1],c[2]); }
+  function tc(c){ doc.setTextColor(c[0],c[1],c[2]); }
+  function dc(c){ doc.setDrawColor(c[0],c[1],c[2]); }
+  function chk(n){ if(y+n>H-10){ doc.addPage(); pageBg(); y=20; } }
 
-  // --- LOPPUSIJOITUKSET ---
-  h1('LOPPUSIJOITUKSET');
-  const med=['1.','2.','3.'];
-  sorted.slice(0,3).forEach((p,i)=>{chk(8);doc.setFontSize(13-i*1.5);doc.setFont('helvetica','bold');doc.text(med[i]+'   '+p+'   '+tots[p]+' p',ML+5,y);y+=7;});
-  y+=2;
-  hdr(['Sija','Pelaaja','Pisteet'],[25,W-55,30]);
-  let rank=1;
-  sorted.forEach((p,i)=>{
-    if(i>0&&tots[p]<tots[sorted[i-1]])rank=i+1;
-    const suf=rank>3?' (poo)':'';
-    row([rank+'.'+suf,p,tots[p]+' p'],[25,W-55,30],i);
-  });
-  y+=4;hr();
-
-  // --- KOLMEN KÄRKI ---
-  h1('KOLMEN KÄRKI – VEIKKAUKSET');
-  norm('Oikea järjestys:',0);
-  aT3.forEach((tm,i)=>norm((i+1)+'. sija: '+(tm||'—'),4));
-  y+=2;norm('Pelaajien veikkaukset:',0);
-  const cw=[35,35,35,35,W-140];
-  hdr(['Pelaaja','1. sija','2. sija','3. sija','Pisteet'],cw);
-  sorted.forEach((p,ri)=>{
-    const pred=(t.topThreePrediction||{})[p]||['','',''];
-    let pts=0;pred.forEach((v,i)=>{if(v&&aT3[i]&&v.trim().toUpperCase()===(aT3[i]||'').trim().toUpperCase())pts+=2;});
-    row([p,pred[0]||'',pred[1]||'',pred[2]||'',pts+' p'],cw,ri);
-  });
-  y+=4;hr();
-
-  // --- PISTEET OTTELUITTAIN ---
-  h1('PISTEET OTTELUITTAIN');
-  (t.matches||[]).forEach(m=>{
-    const act=(t.actuals||{})[m.id]||{};
-    const sc=act.lopputulos?' ('+act.lopputulos+')':'';
-    h2(m.name+sc);
-    const mp=sorted.map(p=>[p,cmPts(t,m.id,p)]).sort((a,b)=>b[1]-a[1]);
-    mp.forEach(([p,pts])=>norm(p+'   '+pts+' p',4));
-    y+=2;
-  });
-  hr();
-
-  // --- PARHAAT SUORITUKSET ---
-  h1('PARHAAT SUORITUKSET');
-  let best=null;
-  (t.matches||[]).forEach(m=>sorted.forEach(p=>{const pts=cmPts(t,m.id,p);if(!best||pts>best.pts)best={player:p,matchName:m.name,pts};}));
-  if(best){
-    norm('Paras yksittäinen suoritus',0);y+=1;chk(20);
-    doc.setFillColor(255,247,237);doc.rect(ML,y-4,W,18,'F');
-    doc.setDrawColor(249,115,22);doc.rect(ML,y-4,W,18,'S');
-    doc.setFontSize(14);doc.setFont('helvetica','bold');doc.setTextColor(0);doc.text(best.player,ML+W/2,y+2,{align:'center'});
-    doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(120);doc.text(best.matchName,ML+W/2,y+7,{align:'center'});
-    doc.setFontSize(18);doc.setFont('helvetica','bold');doc.setTextColor(249,115,22);doc.text(best.pts+' p',ML+W/2,y+14,{align:'center'});
-    doc.setTextColor(0);y+=22;
+  function pageBg(){
+    // White page background
+    doc.setFillColor(255,255,255);
+    doc.rect(0,0,W,H,'F');
+    // Top black bar
+    doc.setFillColor(15,23,42);
+    doc.rect(0,0,W,8,'F');
+    // Bottom black bar
+    doc.setFillColor(15,23,42);
+    doc.rect(0,H-8,W,8,'F');
   }
-  norm('Pelaajien parhaat ottelut:',0);
-  sorted.forEach(p=>{
-    let b=null;
-    (t.matches||[]).forEach(m=>{const pts=cmPts(t,m.id,p);if(!b||pts>b.pts)b={matchName:m.name,pts};});
-    norm(p+': '+(b?b.matchName:'—')+' – '+(b?b.pts:0)+' p',4);
-  });
-  y+=4;hr();
+  pageBg();
 
-  // --- TILASTOJA ---
-  h1('TILASTOJA VASTAUKSISTA');
-  const fs=FLIST.map(f=>{
-    let ok=0,tot=0;
-    (t.matches||[]).forEach(m=>{
-      const av=((t.actuals||{})[m.id]||{})[f.key];
-      if(av==null||av==='')return;
-      sorted.forEach(p=>{tot++;const pv=(((t.predictions||{})[m.id]||{})[p]||{})[f.key]||'';if(fmatch(f.key,pv,av))ok++;});
+  // ---- ORANSSI HEADER ----
+  rgb(ORANGE); doc.rect(0,0,W,22,'F');
+  tc(WHITE); doc.setFontSize(16); doc.setFont('helvetica','bold');
+  doc.text('Turnausveikkaus - '+t.name, W/2, 14, {align:'center'});
+  y = 28;
+  tc([100,116,139]); doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text('Luotu: '+today, W-MR, y, {align:'right'});
+  y += 8;
+
+  // ---- SECTION HEADER fn ----
+  function secHeader(txt, color){
+    chk(12);
+    rgb(color||ORANGE); doc.roundedRect(ML, y, CW, 9, 2, 2, 'F');
+    tc(WHITE); doc.setFontSize(10); doc.setFont('helvetica','bold');
+    doc.text(txt, ML+4, y+6);
+    y += 13;
+  }
+
+  // ---- LOPPUSIJOITUKSET ----
+  secHeader('LOPPUSIJOITUKSET', ORANGE);
+
+  // Top 3 podium boxes
+  var boxW = CW/3 - 3;
+  var boxColors = [GOLD, SILVER, BRONZE];
+  var boxLabels = ['1.','2.','3.'];
+  sorted.slice(0,3).forEach(function(p,i){
+    var bx = ML + i*(boxW+4);
+    chk(28);
+    doc.setFillColor(boxColors[i][0],boxColors[i][1],boxColors[i][2]);
+    doc.roundedRect(bx, y, boxW, 26, 3, 3, 'F');
+    tc(DARK2); doc.setFontSize(16); doc.setFont('helvetica','bold');
+    doc.text(boxLabels[i], bx+boxW/2, y+9, {align:'center'});
+    doc.setFontSize(11); doc.setFont('helvetica','bold');
+    doc.text(p, bx+boxW/2, y+16, {align:'center'});
+    doc.setFontSize(12);
+    doc.text((tots[p]||0)+' p', bx+boxW/2, y+23, {align:'center'});
+  });
+  y += 30;
+
+  // Rankings table
+  chk(8);
+  doc.setFillColor(241,245,249); doc.rect(ML,y,CW,7,'F');
+  tc([100,116,139]); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('Sija', ML+3, y+5);
+  doc.text('Pelaaja', ML+35, y+5);
+  doc.text('Pisteet', ML+100, y+5);
+  y += 7;
+  var rank=1;
+  sorted.forEach(function(p,i){
+    chk(7);
+    if(i>0 && (tots[p]||0)<(tots[sorted[i-1]]||0)) rank=i+1;
+    var isTop3 = rank<=3;
+    var isSameRank = i>0 && (tots[p]||0)===(tots[sorted[i-1]]||0);
+    if(i%2===0){ doc.setFillColor(248,250,252); doc.rect(ML,y,CW,7,'F'); }
+    var suf = rank>3 ? ' (poo)' : '';
+    tc(rank>3 ? [100,116,139] : DARK2);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', rank<=3 ? 'bold' : 'normal');
+    doc.text(rank+'.'+suf, ML+3, y+5);
+    doc.text(p, ML+35, y+5);
+    doc.setFont('helvetica','bold');
+    doc.text((tots[p]||0)+' p', ML+100, y+5);
+    y+=7;
+    dc([229,231,235]); doc.line(ML,y,ML+CW,y);
+  });
+  y += 6;
+
+  // ---- KOLMEN KÄRKI ----
+  secHeader('KOLMEN KARKI \u2013 VEIKKAUKSET', ORANGE);
+  tc(DARK2); doc.setFontSize(9); doc.setFont('helvetica','bold');
+  doc.text('Oikea jarjestys:', ML, y); y+=5;
+
+  var t3Colors = [GOLD, SILVER, BRONZE];
+  aT3.forEach(function(tm,i){
+    chk(8);
+    doc.setFillColor(t3Colors[i][0],t3Colors[i][1],t3Colors[i][2]);
+    doc.roundedRect(ML, y, CW, 7, 1.5, 1.5, 'F');
+    tc(DARK2); doc.setFontSize(9); doc.setFont('helvetica','bold');
+    doc.text((i+1)+'. sija:', ML+3, y+5);
+    doc.text(tm||'—', ML+25, y+5);
+    y+=8;
+  });
+  y+=3;
+
+  // Top3 predictions table
+  tc(DARK2); doc.setFontSize(9); doc.setFont('helvetica','bold');
+  doc.text('Pelaajien veikkaukset:', ML, y); y+=5;
+  chk(8);
+  doc.setFillColor(241,245,249); doc.rect(ML,y,CW,7,'F');
+  tc([100,116,139]); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  var cws=[38,36,36,36,20];
+  var cx=ML+2;
+  ['Pelaaja','1. sija','2. sija','3. sija','Pisteet'].forEach(function(h,i){ doc.text(h,cx,y+5); cx+=cws[i]; });
+  y+=7;
+  sorted.forEach(function(p,ri){
+    chk(7);
+    var pred=(t.topThreePrediction||{})[p]||['','',''];
+    var pts=0;
+    pred.forEach(function(v,i){ if(v&&aT3[i]&&v.trim().toUpperCase()===(aT3[i]||'').trim().toUpperCase()) pts+=2; });
+    if(ri%2===0){ doc.setFillColor(248,250,252); doc.rect(ML,y,CW,7,'F'); }
+    cx=ML+2;
+    doc.setFontSize(9);
+    // Player name - bold if has points
+    doc.setFont('helvetica', pts>0?'bold':'normal');
+    tc(DARK2); doc.text(p, cx, y+5); cx+=cws[0];
+    // Each prediction cell - color if correct/wrong
+    pred.forEach(function(v,i){
+      var av=aT3[i]||'';
+      var ok=av&&v&&v.trim().toUpperCase()===av.trim().toUpperCase();
+      var bad=av&&v&&!ok;
+      if(ok){ doc.setFillColor(34,197,94); doc.rect(cx-1,y+0.5,cws[i+1]-2,6,'F'); }
+      else if(bad){ doc.setFillColor(252,165,165); doc.rect(cx-1,y+0.5,cws[i+1]-2,6,'F'); }
+      doc.setFont('helvetica', ok?'bold':'normal');
+      tc(ok?WHITE:bad?[127,29,29]:DARK2);
+      doc.text(v||'', cx, y+5); cx+=cws[i+1];
     });
-    return {label:f.label,ok,tot,pct:tot>0?Math.round(ok/tot*100):0};
-  }).filter(f=>f.tot>0);
-  if(fs.length){
-    const easy=fs.reduce((a,b)=>a.pct>b.pct?a:b);
-    const hard=fs.reduce((a,b)=>a.pct<b.pct?a:b);
-    norm('Helpoin ja vaikein kohde:',0);
-    norm('Helpoin: '+easy.label,4);norm(easy.ok+'/'+easy.tot+' oikein ('+easy.pct+'%)',8);
-    norm('Vaikein: '+hard.label,4);norm(hard.ok+'/'+hard.tot+' oikein ('+hard.pct+'%)',8);
-    y+=3;h2('OIKEAT VASTAUKSET – MONTAKO ARVASI OIKEIN');
-    hdr(['Kysymys','Oikein','%'],[W*0.6,W*0.2,W*0.2]);
-    [...fs].sort((a,b)=>b.pct-a.pct).forEach((f,i)=>row([f.label,f.ok+'/'+f.tot,f.pct+'%'],[W*0.6,W*0.2,W*0.2],i));
+    doc.setFont('helvetica','bold');
+    tc(pts>0?[22,163,74]:DARK2);
+    doc.text(pts+' p', cx, y+5);
+    y+=7;
+    dc([229,231,235]); doc.line(ML,y,ML+CW,y);
+  });
+  y+=6;
+
+  // ---- PISTEET OTTELUITTAIN ----
+  secHeader('PISTEET OTTELUITTAIN', DARK2);
+
+  (t.matches||[]).forEach(function(m){
+    var act=(t.actuals||{})[m.id]||{};
+    var sc=act.lopputulos?' ('+act.lopputulos+')':'';
+    chk(12);
+    // Match header box
+    doc.setFillColor(241,245,249); doc.roundedRect(ML,y,CW,8,2,2,'F');
+    dc([203,213,225]); doc.roundedRect(ML,y,CW,8,2,2,'S');
+    tc(DARK2); doc.setFontSize(10); doc.setFont('helvetica','bold');
+    doc.text(m.name+' '+sc, ML+4, y+5.5);
+    y+=10;
+
+    // Get match points, find max
+    var mp=sorted.map(function(p){ return {p:p, pts:cmPts(t,m.id,p)}; })
+                 .sort(function(a,b){ return b.pts-a.pts; });
+    var maxPts=mp[0]?mp[0].pts:15;
+    if(maxPts===0) maxPts=15;
+    var barMaxW=CW-50;
+
+    mp.forEach(function(item){
+      chk(8);
+      var isTop = item.pts===maxPts;
+      var barW = maxPts>0 ? Math.round(item.pts/maxPts*barMaxW) : 0;
+
+      // Player name
+      doc.setFontSize(9); doc.setFont('helvetica', isTop?'bold':'normal');
+      tc(isTop?DARK2:DARK2);
+      doc.text(item.p, ML, y+5);
+
+      // Bar background
+      doc.setFillColor(BAR_BG[0],BAR_BG[1],BAR_BG[2]);
+      doc.roundedRect(ML+32, y+1, barMaxW, 5, 1, 1, 'F');
+
+      // Bar fill
+      if(barW>0){
+        if(isTop){ doc.setFillColor(BAR_ORANGE[0],BAR_ORANGE[1],BAR_ORANGE[2]); }
+        else { doc.setFillColor(BAR_BLUE[0],BAR_BLUE[1],BAR_BLUE[2]); }
+        doc.roundedRect(ML+32, y+1, barW, 5, 1, 1, 'F');
+      }
+
+      // Points
+      tc(DARK2); doc.setFont('helvetica','bold');
+      doc.text(item.pts+' p', ML+32+barMaxW+3, y+5);
+      y+=7;
+    });
+    y+=4;
+  });
+
+  // ---- PARHAAT SUORITUKSET ----
+  secHeader('PARHAAT SUORITUKSET', PURPLE);
+
+  // Find best overall
+  var best=null;
+  (t.matches||[]).forEach(function(m){
+    sorted.forEach(function(p){
+      var pts=cmPts(t,m.id,p);
+      if(!best||pts>best.pts) best={player:p,matchName:m.name,pts:pts};
+    });
+  });
+  if(best){
+    chk(20);
+    doc.setFillColor(124,58,237); doc.roundedRect(ML,y,CW,18,3,3,'F');
+    tc([196,181,253]); doc.setFontSize(8); doc.setFont('helvetica','normal');
+    doc.text('Paras yksittainen suoritus', ML+4, y+5);
+    tc(WHITE); doc.setFontSize(14); doc.setFont('helvetica','bold');
+    doc.text(best.player, ML+4, y+12);
+    doc.text(best.pts+' p', ML+CW-4, y+12, {align:'right'});
+    tc([196,181,253]); doc.setFontSize(8); doc.setFont('helvetica','normal');
+    doc.text(best.matchName, ML+4, y+16);
+    y+=22;
   }
 
-  // --- LOPPUSIVU ---
-  doc.addPage();y=60;
-  doc.setFontSize(11);doc.setFont('helvetica','normal');doc.setTextColor(120);
-  doc.text('Kiitos osallistumisesta!',105,y,{align:'center'});y+=7;
-  doc.text('Turnaus: '+t.name,105,y,{align:'center'});y+=12;doc.setTextColor(0);
-  doc.setFontSize(14);doc.setFont('helvetica','bold');doc.text('TURNAUKSEN VOITTAJA',105,y,{align:'center'});y+=10;
-  if(sorted.length){
-    doc.setFontSize(28);doc.setFont('helvetica','bold');doc.setTextColor(249,115,22);
-    doc.text(sorted[0],105,y,{align:'center'});y+=12;
-    doc.setFontSize(14);doc.setFont('helvetica','normal');doc.setTextColor(120);
-    doc.text(tots[sorted[0]]+' pistettä',105,y,{align:'center'});y+=10;doc.setTextColor(0);
-  }
-  doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('Kaikki sijoitukset:',ML,y);y+=7;
-  rank=1;
-  sorted.forEach((p,i)=>{
-    if(i>0&&tots[p]<tots[sorted[i-1]])rank=i+1;
-    const suf=rank>3?' (poo)':'';
-    norm(rank+'. '+p+' - '+tots[p]+' p'+suf,0);
+  tc(DARK2); doc.setFontSize(9); doc.setFont('helvetica','bold');
+  doc.text('Pelaajien parhaat ottelut:', ML, y); y+=6;
+  sorted.forEach(function(p){
+    chk(6);
+    var b=null;
+    (t.matches||[]).forEach(function(m){ var pts=cmPts(t,m.id,p); if(!b||pts>b.pts) b={matchName:m.name,pts:pts}; });
+    doc.setFontSize(9); doc.setFont('helvetica','bold'); tc(DARK2);
+    doc.text(p+':', ML+3, y);
+    doc.setFont('helvetica','normal'); tc([100,116,139]);
+    doc.text((b?b.matchName:'—')+' \u2013 '+(b?b.pts:0)+' p', ML+28, y);
+    y+=5.5;
   });
-  y+=8;
-  doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(150);
-  doc.text('* * *',105,y,{align:'center'});y+=6;
-  doc.text('Turnausveikkaus - raportti '+today,105,y,{align:'center'});
+  y+=4;
+
+  // ---- TILASTOJA VASTAUKSISTA ----
+  secHeader('TILASTOJA VASTAUKSISTA', DARK2);
+
+  var fs=FLIST.map(function(f){
+    var ok=0,tot=0;
+    (t.matches||[]).forEach(function(m){
+      var av=((t.actuals||{})[m.id]||{})[f.key];
+      if(av==null||av==='') return;
+      sorted.forEach(function(p){ tot++; var pv=(((t.predictions||{})[m.id]||{})[p]||{})[f.key]||''; if(fmatch(f.key,pv,av)) ok++; });
+    });
+    return {label:f.label,ok:ok,tot:tot,pct:tot>0?Math.round(ok/tot*100):0};
+  }).filter(function(f){ return f.tot>0; });
+
+  if(fs.length){
+    // Easy/hard boxes side by side
+    var easy=fs.reduce(function(a,b){ return a.pct>b.pct?a:b; });
+    var hard=fs.reduce(function(a,b){ return a.pct<b.pct?a:b; });
+    tc(DARK2); doc.setFontSize(9); doc.setFont('helvetica','bold');
+    doc.text('Helpoin ja vaikein kohde:', ML, y); y+=5;
+    chk(18);
+    var hw=(CW-4)/2;
+    // Easy box - green tint
+    doc.setFillColor(220,252,231); doc.roundedRect(ML,y,hw,16,2,2,'F');
+    dc([134,239,172]); doc.roundedRect(ML,y,hw,16,2,2,'S');
+    tc([22,101,52]); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text('Helpoin: '+easy.label, ML+3, y+6);
+    doc.setFont('helvetica','normal'); tc([21,128,61]);
+    doc.text(easy.ok+'/'+easy.tot+' oikein ('+easy.pct+'%)', ML+3, y+12);
+    // Hard box - red tint
+    var hx=ML+hw+4;
+    doc.setFillColor(254,226,226); doc.roundedRect(hx,y,hw,16,2,2,'F');
+    dc([252,165,165]); doc.roundedRect(hx,y,hw,16,2,2,'S');
+    tc([153,27,27]); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text('Vaikein: '+hard.label, hx+3, y+6);
+    doc.setFont('helvetica','normal'); tc([185,28,28]);
+    doc.text(hard.ok+'/'+hard.tot+' oikein ('+hard.pct+'%)', hx+3, y+12);
+    y+=20;
+
+    // Stats table header
+    secHeader('OIKEAT VASTAUKSET \u2013 MONTAKO ARVASI OIKEIN', GREEN);
+
+    // Table header row
+    chk(7);
+    doc.setFillColor(241,245,249); doc.rect(ML,y,CW,7,'F');
+    tc([100,116,139]); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text('Kysymys', ML+2, y+5);
+    doc.text('Oikein', ML+85, y+5);
+    doc.text('%', ML+CW-8, y+5, {align:'right'});
+    y+=7;
+
+    var barCW=55;
+    fs.slice().sort(function(a,b){ return b.pct-a.pct; }).forEach(function(f,i){
+      chk(7);
+      if(i%2===0){ doc.setFillColor(248,250,252); doc.rect(ML,y,CW,7,'F'); }
+      tc(DARK2); doc.setFontSize(8); doc.setFont('helvetica','normal');
+      doc.text(f.label, ML+2, y+5);
+      doc.text(f.ok+'/'+f.tot, ML+85, y+5);
+
+      // Color bar
+      var barColor;
+      if(f.pct>=50) barColor=[34,197,94];
+      else if(f.pct>=25) barColor=[249,115,22];
+      else barColor=[239,68,68];
+
+      var bx=ML+105, bw=barCW;
+      doc.setFillColor(229,231,235); doc.roundedRect(bx,y+1.5,bw,4,1,1,'F');
+      if(f.pct>0){
+        doc.setFillColor(barColor[0],barColor[1],barColor[2]);
+        doc.roundedRect(bx,y+1.5,Math.max(1,Math.round(f.pct/100*bw)),4,1,1,'F');
+      }
+      tc(DARK2); doc.setFont('helvetica','bold');
+      doc.text(f.pct+'%', ML+CW-2, y+5, {align:'right'});
+      y+=7;
+      dc([229,231,235]); doc.line(ML,y,ML+CW,y);
+    });
+  }
+
+  // ---- LOPPUSIVU ----
+  doc.addPage(); pageBg();
+  // Full dark background
+  doc.setFillColor(15,23,42); doc.rect(0,8,W,H-16,'F');
+  // Orange stripes top/bottom already in pageBg
+  doc.setFillColor(249,115,22); doc.rect(0,0,W,8,'F');
+  doc.setFillColor(249,115,22); doc.rect(0,H-8,W,8,'F');
+
+  var cy=80;
+  tc(ORANGE); doc.setFontSize(22); doc.setFont('helvetica','bold');
+  doc.text('Kiitos osallistumisesta!', W/2, cy, {align:'center'}); cy+=14;
+  tc(WHITE); doc.setFontSize(12); doc.setFont('helvetica','normal');
+  doc.text('Turnaus: '+t.name, W/2, cy, {align:'center'}); cy+=16;
+
+  // Winner box
+  if(sorted.length){
+    var winner=sorted[0];
+    var wbW=90, wbH=38, wbX=(W-wbW)/2;
+    doc.setFillColor(249,115,22); doc.roundedRect(wbX,cy,wbW,wbH,4,4,'F');
+    tc(WHITE); doc.setFontSize(9); doc.setFont('helvetica','bold');
+    doc.text('TURNAUKSEN VOITTAJA', W/2, cy+9, {align:'center'});
+    doc.setFontSize(20); doc.setFont('helvetica','bold');
+    doc.text(winner, W/2, cy+22, {align:'center'});
+    doc.setFontSize(12);
+    doc.text((tots[winner]||0)+' pistettä', W/2, cy+32, {align:'center'});
+    cy+=44;
+  }
+
+  cy+=6;
+  tc([148,163,184]); doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.text('Kaikki sijoitukset:', W/2, cy, {align:'center'}); cy+=7;
+  var rank2=1;
+  sorted.forEach(function(p,i){
+    if(i>0&&(tots[p]||0)<(tots[sorted[i-1]]||0)) rank2=i+1;
+    var suf=rank2>3?' (poo)':'';
+    var isTop=rank2<=3;
+    doc.setFontSize(isTop?11:9);
+    doc.setFont('helvetica',isTop?'bold':'normal');
+    tc(isTop?WHITE:GRAY);
+    doc.text(rank2+'. '+p+' - '+(tots[p]||0)+' p'+suf, W/2, cy, {align:'center'});
+    cy+=isTop?7:6;
+  });
+  cy+=8;
+  tc(ORANGE); doc.setFontSize(14); doc.setFont('helvetica','bold');
+  doc.text('* * *', W/2, cy, {align:'center'}); cy+=8;
+  tc(GRAY); doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.text('Turnausveikkaus - raportti '+today, W/2, cy, {align:'center'});
 
   doc.save('turnausveikkaus_'+t.name.replace(/\s+/g,'_')+'.pdf');
 });
