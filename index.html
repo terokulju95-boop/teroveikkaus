@@ -104,6 +104,21 @@
     .pred-card-me{ position:relative; }
     .pred-card-me .person-card{ border:2px solid var(--primary) !important; box-shadow:0 0 0 3px rgba(249,115,22,0.2); }
     .pred-card-you-label{ background:var(--primary); color:#fff; font-size:12px; font-weight:700; padding:4px 12px; border-radius:8px 8px 0 0; display:inline-block; margin-bottom:-2px; }
+    /* Oikein/väärin animaatiot */
+    @keyframes pop-correct{ 0%{transform:scale(1)} 40%{transform:scale(1.06)} 100%{transform:scale(1)} }
+    @keyframes shake-wrong{ 0%,100%{transform:translateX(0)} 20%{transform:translateX(-5px)} 40%{transform:translateX(5px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
+    @keyframes fade-in-color{ from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+    .kv-row.correct{ animation:pop-correct 0.4s ease; }
+    .kv-row.incorrect{ animation:shake-wrong 0.4s ease; }
+    .kv-row.correct, .kv-row.incorrect{ animation-fill-mode:both; }
+    /* Oma ennätys */
+    .personal-best{ background:linear-gradient(135deg,#1e293b,#0f172a); border:1px solid var(--primary); border-radius:12px; padding:10px 14px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .personal-best-label{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
+    .personal-best-value{ font-size:22px; font-weight:900; color:var(--primary); }
+    .personal-best-match{ font-size:12px; color:var(--muted); margin-top:1px; }
+    /* Muokkaushistoria */
+    .edit-history{ font-size:11px; color:var(--muted); text-align:right; padding:4px 0; }
+    .edit-history span{ background:var(--border); border-radius:4px; padding:2px 6px; }
     .open-banner{ background:#22c55e; color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:10px; }
     #countdown{ margin-bottom:10px; }
     .countdown-box{ background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%); border:2px solid var(--primary); border-radius:14px; padding:12px 16px; text-align:center; }
@@ -410,6 +425,15 @@ function hideStatus(){ setTimeout(()=>{ const el=$('fb-status'); if(el) el.style
 async function save(){
   data.selectedTournamentId = tid;
   data.selectedMatchId = mid;
+  // Tallenna muokkaushistoria
+  if(currentUser && mid){
+    const t=getTournament();
+    if(t){
+      t.editHistory=t.editHistory||{};
+      t.editHistory[mid]=t.editHistory[mid]||{};
+      t.editHistory[mid][currentUser]=new Date().toISOString();
+    }
+  }
   try{ localStorage.setItem('tv_bkp', JSON.stringify(data)); }catch(e){}
   if(isSaving){ saveQueued=true; return; }
   isSaving=true; showStatus('💾 Tallennetaan…','#f97316');
@@ -558,12 +582,13 @@ function predCardHTML(t, match, player, showColors){
   const locked=isLocked(match);
   const canEdit = (player===currentUser && !locked);
   const pts = calcMatchPts(t, match.id, player);
-  const rows = FIELDS.map(f=>{
+  const rows = FIELDS.map((f,fi)=>{
     const v=pred[f.key]||'', av=actual[f.key]||'';
     const ok = showColors && av!=='' && fieldMatch(f.key,v,av);
     const bad = showColors && av!=='' && v!=='' && !ok;
     const w = widget(f.key, v, player+':'+f.key, !canEdit, false);
-    return `<div class="kv-row ${ok?'correct':''} ${bad?'incorrect':''}">`+
+    const delay = showColors && (ok||bad) ? `animation-delay:${fi*40}ms` : '';
+    return `<div class="kv-row ${ok?'correct':''} ${bad?'incorrect':''}" style="${delay}">`+
            `<div class="kv-label">${f.label}</div>${w}</div>`;
   }).join('');
   return `<div class="person-card"><div class="card-head">`+
@@ -704,7 +729,25 @@ function renderPredictions(){
         }).join('');
     } else {
       // Peli ei alkanut: näytä vain oma kortti
-      el.innerHTML=predCardHTML(t,match,currentUser,false);
+      const best=getPersonalBest(currentUser);
+      const bestHTML=best&&best.pts>0?
+        '<div class="personal-best">'+
+          '<div>'+
+            '<div class="personal-best-label">⭐ Oma ennätys</div>'+
+            '<div class="personal-best-match">'+best.tournamentName+' – '+best.matchName+'</div>'+
+          '</div>'+
+          '<div>'+
+            '<div class="personal-best-value">'+best.pts+' p</div>'+
+          '</div>'+
+        '</div>':''
+      ;
+      // Muokkaushistoria
+      const hist=((t.editHistory||{})[match.id]||{})[currentUser];
+      const histHTML=hist?
+        '<div class="edit-history">Viimeksi muokattu: <span>'+
+          new Date(hist).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})+
+        '</span></div>':'';
+      el.innerHTML=bestHTML+predCardHTML(t,match,currentUser,false)+histHTML;
     }
   }
   attachPredListeners(el,t,match.id);
@@ -752,10 +795,14 @@ function renderPlayerStatus(){
   if(!t || !match || currentUser!==ADMIN){ el.innerHTML=''; return; }
   const preds=(t.predictions||{})[match.id]||{};
   const locked=isLocked(match);
+  const hist=(t.editHistory||{})[match.id]||{};
   el.innerHTML='<div class="player-status-grid">'+PLAYERS.map(p=>{
     const voted=preds[p]&&Object.values(preds[p]).some(v=>v!=='');
     const cls=locked?'done':voted?'voted':'not-voted';
-    return `<div class="player-status-card ${cls}">${voted?'✅':'❌'} ${p}</div>`;
+    const lastEdit=hist[p]?new Date(hist[p]).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    return '<div class="player-status-card '+cls+'">'+(voted?'✅':'❌')+' '+p+
+      (lastEdit?'<div style="font-size:10px;opacity:0.7;margin-top:2px">'+lastEdit+'</div>':'')+
+    '</div>';
   }).join('')+'</div>';
 }
 
@@ -1047,6 +1094,21 @@ window._logout=function(){
   $('loginScreen').style.display=''; $('appScreen').style.display='none';
   $('loginStep1').style.display=''; $('loginStep2').style.display='none';
 };
+
+// ============================
+// PERSONAL BEST helper
+// ============================
+function getPersonalBest(player){
+  const allMatches = [];
+  (data.tournaments||[]).forEach(t=>{
+    (t.matches||[]).forEach(m=>{
+      const pts = calcMatchPts(t, m.id, player);
+      allMatches.push({pts, matchName:m.name, tournamentName:t.name});
+    });
+  });
+  if(!allMatches.length) return null;
+  return allMatches.reduce((best,cur)=>cur.pts>best.pts?cur:best);
+}
 
 // ============================
 // EXPOSE TO WINDOW (PDF-skripti tarvitsee)
