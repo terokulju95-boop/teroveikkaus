@@ -293,12 +293,11 @@ const db = getFirestore(fbApp);
 const DATA_DOC = doc(db, "app", "data");
 const PINS_DOC = doc(db, "app", "pins");
 
-// =====================
+// ============================
 // VAKIOT
-// =====================
+// ============================
 const PLAYERS = ["Roosa","Timo","Tero","Tiina","Tepa","Äiti","Iskä"];
 const ADMIN = "Tero";
-
 const PENALTY_REASONS = ['Koukkaaminen','Mailasta kiinnipitäminen','Estäminen','Päähän kohdistuva taklaus','Huitominen','Väkivaltaisuus','Ryntäys','Tappelu','Liian monta pelaajaa jäällä','Poikittainen maila','Kampitus','Kiinnipitäminen','Mailan tai esineen heittäminen','Laitataklaus','Sukeltaminen','Kyynärpäätaklaus','Pelin viivyttäminen','Kiekon sulkeminen','Korkea maila','Selästä taklaaminen','Käytösrangaistus','Päällä iskeminen','Polvitaklaus','Mailan päällä lyöminen tai sen yritys','Keihästäminen','Jalkapyyhkäisy','Rikkoutuneella mailalla pelaaminen','Väärä varuste','Pelaajaa ei ole merkitty pöytäkirjaan','Potkaisee tai sylkee','Ei jäähyä'];
 const GOAL_SCORERS = ['Juuse Saros (MV)','Joonas Korpisalo (MV)','Kevin Lankinen (MV)','Miro Heiskanen (P)','Esa Lindell (P)','Niko Mikkola (P)','Henri Jokiharju (P)','Rasmus Ristolainen (P)','Nikolas Matinpalo (P)','Olli Määttä (P)','Mikko Lehtonen (P)','Mikael Granlund (H)','Roope Hintz (H)','Mikko Rantanen (H)','Teuvo Teräväinen (H)','Sebastian Aho (H)','Artturi Lehkonen (H)','Eetu Luostarinen (H)','Anton Lundell (H)','Kaapo Kakko (H)','Eeli Tolvanen (H)','Erik Haula (H)','Joel Armia (H)','Oliver Kapanen (H)','Joel Kiviranta (H)','Ei maalia'];
 const PENALTY_TAKERS = [...GOAL_SCORERS.slice(0,-1),'Ei jäähyä','Joukkue rangaistus'];
@@ -315,210 +314,190 @@ const ONE_X_TWO = new Set(['parempi_laukasu','parempi_alotus','parempi_torjunta'
 const KYLLA_EI = new Set(['valmentaja_haasto','maali_tyhjiin']);
 const NUMBER_K = new Set(['montako_jahyja']);
 
-// =====================
+// ============================
 // TILA
-// =====================
+// ============================
 let data = {tournaments:[]};
-let selectedTournamentId = null;
-let selectedMatchId = null;
+let pins = {};
+let tid = null; // selected tournament id
+let mid = null; // selected match id
 let viewMode = 'cards';
 let currentUser = null;
 let isSaving = false;
 let saveQueued = false;
-let cdInterval = null;
-let pins = {}; // { "Roosa": "1234", ... } – ladataan Firestoresta
+let cdTimer = null;      // countdown setInterval handle
+let cdRunning = false;   // guard: is countdown active?
 
-// Tallenna ja palauta valinnat localStorage:sta (varmuuskopio)
-function saveSelections(){ try{ localStorage.setItem('tv_sel',JSON.stringify({t:selectedTournamentId,m:selectedMatchId})); }catch(e){} }
-function restoreSelections(){ try{ const s=JSON.parse(localStorage.getItem('tv_sel')||'{}'); if(!selectedTournamentId&&s.t) selectedTournamentId=s.t; if(!selectedMatchId&&s.m) selectedMatchId=s.m; }catch(e){} }
-
-// =====================
+// ============================
 // HELPERS
-// =====================
+// ============================
 const $ = id => document.getElementById(id);
-function ciEq(a,b){ return (a||'').trim().toLowerCase()===(b||'').trim().toLowerCase(); }
-function getTournament(){ return (data.tournaments||[]).find(t=>String(t.id)===String(selectedTournamentId)); }
-function getMatch(){ const t=getTournament(); return t?(t.matches||[]).find(m=>String(m.id)===String(selectedMatchId)):null; }
-function isLocked(match){ return match&&match.startTime&&Date.now()>=new Date(match.startTime).getTime(); }
-function timeMatch(p,a){ const parse=s=>{const m=(s||'').match(/^(\d{1,2}):(\d{2})$/);return m?+m[1]*60+ +m[2]:null;}; const ps=parse(p),as=parse(a); return ps!=null&&as!=null&&Math.abs(ps-as)<=60; }
-function fieldMatch(key,pv,av){ if(!av||!pv) return false; if(key==='ekan_maali_aika') return timeMatch(pv,av); return ciEq(pv,av); }
-function calcMatchPts(t,mid,player){ const pr=(t.predictions[mid]||{})[player]||{},ac=t.actuals[mid]||{}; let s=0; FIELDS.forEach(f=>{if(ac[f.key]!=null&&ac[f.key]!==''&&fieldMatch(f.key,pr[f.key]||'',ac[f.key]))s++;}); return s; }
-function calcTotals(t){ const tot={}; PLAYERS.forEach(p=>tot[p]=0); (t.matches||[]).forEach(m=>PLAYERS.forEach(p=>{tot[p]+=calcMatchPts(t,m.id,p);})); if(t.topThreePrediction){const aT=t.actualTopThree||[];PLAYERS.forEach(p=>{const pr=t.topThreePrediction[p]||[];if(pr.length===3){let pts=0;pr.forEach((team,i)=>{if(team&&aT[i]&&ciEq(team,aT[i]))pts+=2;});tot[p]+=pts;}});} return tot; }
+const ciEq = (a,b) => (a||'').trim().toLowerCase() === (b||'').trim().toLowerCase();
+const getTournament = () => (data.tournaments||[]).find(t => String(t.id)===String(tid)) || null;
+const getMatch = () => { const t=getTournament(); return t ? (t.matches||[]).find(m=>String(m.id)===String(mid))||null : null; };
+const isLocked = m => !!(m && m.startTime && Date.now() >= new Date(m.startTime).getTime());
 
-// =====================
+function timeMatch(p,a){
+  const parse = s => { const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
+  const ps=parse(p), as=parse(a);
+  return ps!==null && as!==null && Math.abs(ps-as)<=60;
+}
+function fieldMatch(key,pv,av){
+  if(!av || !pv) return false;
+  if(key==='ekan_maali_aika') return timeMatch(pv,av);
+  return ciEq(pv,av);
+}
+function calcMatchPts(t, matchId, player){
+  const pr = ((t.predictions||{})[matchId]||{})[player]||{};
+  const ac = (t.actuals||{})[matchId]||{};
+  let s=0;
+  FIELDS.forEach(f=>{ if(ac[f.key]!=null && ac[f.key]!=='' && fieldMatch(f.key, pr[f.key]||'', ac[f.key])) s++; });
+  return s;
+}
+function calcTotals(t){
+  const tot={}; PLAYERS.forEach(p=>tot[p]=0);
+  (t.matches||[]).forEach(m => PLAYERS.forEach(p => { tot[p] += calcMatchPts(t, m.id, p); }));
+  if(t.topThreePrediction){
+    const aT = t.actualTopThree||[];
+    PLAYERS.forEach(p => {
+      const pr = t.topThreePrediction[p]||[];
+      let pts=0; pr.forEach((team,i) => { if(team && aT[i] && ciEq(team,aT[i])) pts+=2; });
+      tot[p] += pts;
+    });
+  }
+  return tot;
+}
+
+// Tallenna/palauta valinnat
+function saveSelections(){ try{ localStorage.setItem('tv_sel', JSON.stringify({t:tid,m:mid})); }catch(e){} }
+function restoreSelections(){
+  try{
+    const s = JSON.parse(localStorage.getItem('tv_sel')||'{}');
+    if(!tid && s.t) tid=s.t;
+    if(!mid && s.m) mid=s.m;
+  }catch(e){}
+}
+
+// ============================
 // STATUS BAR
-// =====================
-function showStatus(msg,color){ const el=$('fb-status'); el.textContent=msg; el.style.background=color||'#f97316'; el.style.color='#fff'; el.style.opacity='1'; }
-function hideStatus(){ setTimeout(()=>{ $('fb-status').style.opacity='0'; },1800); }
+// ============================
+function showStatus(msg, color){
+  const el=$('fb-status'); if(!el) return;
+  el.textContent=msg; el.style.background=color||'#f97316'; el.style.color='#fff'; el.style.opacity='1';
+}
+function hideStatus(){ setTimeout(()=>{ const el=$('fb-status'); if(el) el.style.opacity='0'; }, 1800); }
 
-// =====================
+// ============================
 // FIREBASE
-// =====================
+// ============================
 async function save(){
-  data.selectedTournamentId=selectedTournamentId;
-  data.selectedMatchId=selectedMatchId;
-  try{ localStorage.setItem('tv_bkp',JSON.stringify(data)); }catch(e){}
+  data.selectedTournamentId = tid;
+  data.selectedMatchId = mid;
+  try{ localStorage.setItem('tv_bkp', JSON.stringify(data)); }catch(e){}
   if(isSaving){ saveQueued=true; return; }
   isSaving=true; showStatus('💾 Tallennetaan…','#f97316');
-  try{ await setDoc(DATA_DOC,{json:JSON.stringify(data)}); showStatus('✅ Tallennettu','#22c55e'); hideStatus(); }
-  catch(e){ showStatus('❌ Tallennus epäonnistui','#dc2626'); }
-  isSaving=false; if(saveQueued){ saveQueued=false; save(); }
+  try{
+    await setDoc(DATA_DOC, {json: JSON.stringify(data)});
+    showStatus('✅ Tallennettu','#22c55e'); hideStatus();
+  }catch(e){ showStatus('❌ Tallennus epäonnistui','#dc2626'); }
+  isSaving=false;
+  if(saveQueued){ saveQueued=false; save(); }
 }
 
 async function loadData(){
   showStatus('⏳ Ladataan…','#6366f1');
   try{
     const [snap, pinSnap] = await Promise.all([getDoc(DATA_DOC), getDoc(PINS_DOC)]);
-    if(snap.exists()){ data=JSON.parse(snap.data().json); selectedTournamentId=data.selectedTournamentId||null; selectedMatchId=data.selectedMatchId||null; }
+    if(snap.exists()){ data=JSON.parse(snap.data().json); }
     if(pinSnap.exists()){ pins=pinSnap.data().pins||{}; }
   }catch(e){
     const bkp=localStorage.getItem('tv_bkp');
-    if(bkp) try{data=JSON.parse(bkp);selectedTournamentId=data.selectedTournamentId||null;selectedMatchId=data.selectedMatchId||null;}catch(e2){}
+    if(bkp) try{ data=JSON.parse(bkp); }catch(e2){}
     showStatus('⚠️ Yhteysvirhe – paikallinen data','#f59e0b');
   }
   if(!data.tournaments) data.tournaments=[];
-  hideStatus(); renderAll();
-  onSnapshot(DATA_DOC,snap=>{
-    if(!snap.exists()||isSaving) return;
+  // Palauta valinnat datasta tai localStoragesta
+  if(!tid) tid = data.selectedTournamentId||null;
+  if(!mid) mid = data.selectedMatchId||null;
+  restoreSelections();
+  hideStatus();
+  render();
+
+  // Kuuntele muutoksia – ÄLÄ nollaa käyttäjän valintoja
+  onSnapshot(DATA_DOC, snap => {
+    if(!snap.exists() || isSaving) return;
     try{
-      const remote=JSON.parse(snap.data().json);
-      // Säilytä valinnat - älä nollaa niitä snapshot-päivityksessä
-      const prevTid=selectedTournamentId, prevMid=selectedMatchId;
-      data=remote; if(!data.tournaments) data.tournaments=[];
-      // Palauta valinnat: käytä aiempia jos ne ovat edelleen valideja
-      const tStillExists=prevTid&&data.tournaments.find(t=>String(t.id)===String(prevTid));
-      if(tStillExists){
-        selectedTournamentId=prevTid;
+      const prevTid=tid, prevMid=mid;
+      data = JSON.parse(snap.data().json);
+      if(!data.tournaments) data.tournaments=[];
+      // Säilytä valinnat jos ne ovat edelleen valideja
+      const tOk = prevTid && data.tournaments.find(t=>String(t.id)===String(prevTid));
+      if(tOk){
+        tid=prevTid;
         const tObj=data.tournaments.find(t=>String(t.id)===String(prevTid));
-        const mStillExists=prevMid&&(tObj.matches||[]).find(m=>String(m.id)===String(prevMid));
-        selectedMatchId=mStillExists?prevMid:(data.selectedMatchId||null);
+        const mOk = prevMid && (tObj.matches||[]).find(m=>String(m.id)===String(prevMid));
+        mid = mOk ? prevMid : null;
       } else {
-        selectedTournamentId=data.selectedTournamentId||null;
-        selectedMatchId=data.selectedMatchId||null;
+        tid=data.selectedTournamentId||null;
+        mid=data.selectedMatchId||null;
       }
-      renderAll();
+      render();
     }catch(e){}
   });
 }
 
-// =====================
-// KIRJAUTUMINEN + PIN
-// =====================
-let pinBuffer = '';
-let pendingLoginName = '';
-
-function buildLogin(){
-  $('playerGrid').innerHTML=PLAYERS.map(p=>`<button class="player-btn ${p===ADMIN?'admin':''}" onclick="window._selectName('${p}')">${p===ADMIN?'👑 ':''}${p}</button>`).join('');
+// ============================
+// COUNTDOWN – ei ikuista silmukkaa
+// ============================
+function stopCountdown(){
+  if(cdTimer){ clearInterval(cdTimer); cdTimer=null; }
+  cdRunning=false;
+  const el=$('countdown'); if(el) el.textContent='';
 }
 
-window._selectName = function(name){
-  pendingLoginName = name;
-  pinBuffer = '';
-  $('loginStep1').style.display='none';
-  $('loginStep2').style.display='';
-  $('loginName').textContent = name;
-  $('pinError').textContent = '';
-  renderPinDots();
-};
+function startCountdown(match){
+  stopCountdown();
+  if(!match || !match.startTime) return;
+  const target = new Date(match.startTime).getTime();
+  if(Date.now() >= target) return; // Jo lukittu, ei tarvita countdownia
 
-window._backToNames = function(){
-  pendingLoginName=''; pinBuffer='';
-  $('loginStep1').style.display='';
-  $('loginStep2').style.display='none';
-};
-
-function renderPinDots(){
-  $('pinDots').innerHTML = [0,1,2,3].map(i=>
-    `<div class="pin-dot ${i<pinBuffer.length?'filled':''}"></div>`
-  ).join('');
-}
-
-function handlePinKey(v){
-  if(v==='clear'){ pinBuffer=''; renderPinDots(); $('pinError').textContent=''; return; }
-  if(v==='back'){ pinBuffer=pinBuffer.slice(0,-1); renderPinDots(); $('pinError').textContent=''; return; }
-  if(pinBuffer.length>=4) return;
-  pinBuffer+=v;
-  renderPinDots();
-  if(pinBuffer.length===4) checkPin();
-}
-
-async function checkPin(){
-  const name=pendingLoginName;
-  // Lataa tuoreet PINit Firestoresta
-  try{
-    const snap=await getDoc(PINS_DOC);
-    if(snap.exists()) pins=snap.data().pins||{};
-  }catch(e){}
-
-  const storedPin=pins[name];
-  if(!storedPin){
-    // Ei PINiä asetettu – admin voi sisään, muut eivät
-    if(name===ADMIN){
-      doLogin(name);
-    } else {
-      $('pinError').textContent='PIN-koodia ei ole asetettu. Pyydä adminia asettamaan PIN.';
-      pinBuffer=''; renderPinDots();
+  cdRunning=true;
+  const el=$('countdown');
+  const tick = () => {
+    const diff = target - Date.now();
+    if(diff <= 0){
+      stopCountdown();
+      // Päivitä vain banneri ja veikkausalue, EI koko renderAll
+      renderMatchBanner(match);
+      renderPredictions();
+      return;
     }
-    return;
-  }
-  if(pinBuffer===storedPin){
-    doLogin(name);
-  } else {
-    $('pinError').textContent='Väärä PIN-koodi. Yritä uudelleen.';
-    pinBuffer=''; renderPinDots();
-  }
+    const h=Math.floor(diff/3600000), m=Math.floor((diff%3600000)/60000), s=Math.floor((diff%60000)/1000);
+    if(el) el.textContent = '⏳ Veikkauksia voi muuttaa vielä: '+(h>0?h+'t ':'')+m+'min '+s+'s';
+  };
+  tick();
+  cdTimer = setInterval(tick, 1000);
 }
 
-function doLogin(name){
-  currentUser=name;
-  localStorage.setItem('tv_user',name);
-  $('loginScreen').style.display='none';
-  $('appScreen').style.display='';
-  $('currentUserBadge').textContent=(name===ADMIN?'👑 ':'')+name;
-  const isAdmin=name===ADMIN;
-  $('adminTournamentTools').style.display=isAdmin?'':'none';
-  $('adminMatchTools').style.display=isAdmin?'':'none';
-  $('adminStatusCard').style.display=isAdmin?'':'none';
-  $('adminPinTools').style.display=isAdmin?'':'none';
-  $('importBtn').style.display=isAdmin?'':'none';
-  $('viewTabs').style.display=isAdmin?'':'none';
-  loadData();
-}
-
-window._logout = function(){
-  currentUser=null; localStorage.removeItem('tv_user');
-  pinBuffer=''; pendingLoginName='';
-  $('loginScreen').style.display=''; $('appScreen').style.display='none';
-  $('loginStep1').style.display=''; $('loginStep2').style.display='none';
-  if(cdInterval) clearInterval(cdInterval);
-};
-
-// PIN nappi-handler
-document.addEventListener('DOMContentLoaded',()=>{
-  document.querySelectorAll('.pin-key').forEach(btn=>{
-    btn.addEventListener('click',()=>handlePinKey(btn.dataset.v));
-  });
-});
-
-// =====================
-// WIDGET
-// =====================
-function widget(kind,key,value,dataset,disabled){
-  const ds=kind==='pred'?`data-pred="${dataset}"`:`data-act="${key}"`;
-  const dis=disabled?'disabled':'';
+// ============================
+// WIDGET (kenttä)
+// ============================
+function widget(key, value, dataset, disabled, isAct){
+  const ds = isAct ? `data-act="${key}"` : `data-pred="${dataset}"`;
+  const dis = disabled ? 'disabled' : '';
   if(key==='lopputulos'){
-    const p=(value||'').split('-'),h=p[0]?p[0].trim():'',a=p[1]?p[1].trim():'';
-    const ha=kind==='pred'?`data-pred-home="${dataset}"`:'data-act-home';
-    const aa=kind==='pred'?`data-pred-away="${dataset}"`:'data-act-away';
-    return `<div class="score-combo"><input type="number" inputmode="numeric" ${ha} value="${h}" placeholder="0" ${dis}/><span class="dash">-</span><input type="number" inputmode="numeric" ${aa} value="${a}" placeholder="0" ${dis}/></div>`;
+    const p=(value||'').split('-'), h=p[0]?p[0].trim():'', a=p[1]?p[1].trim():'';
+    const hAttr = isAct ? 'data-act-home' : `data-pred-home="${dataset}"`;
+    const aAttr = isAct ? 'data-act-away' : `data-pred-away="${dataset}"`;
+    return `<div class="score-combo"><input type="number" inputmode="numeric" ${hAttr} value="${h}" placeholder="0" ${dis}/><span class="dash">-</span><input type="number" inputmode="numeric" ${aAttr} value="${a}" placeholder="0" ${dis}/></div>`;
   }
   if(key==='ekan_maali_aika'){
-    const p=(value||'').split(':'),m=p[0]?p[0].trim():'',s=p[1]?p[1].trim():'';
-    const ma=kind==='pred'?`data-pred-min="${dataset}"`:'data-act-min';
-    const sa=kind==='pred'?`data-pred-sec="${dataset}"`:'data-act-sec';
-    return `<div class="time-combo"><input type="number" inputmode="numeric" ${ma} value="${m}" placeholder="00" ${dis}/><span class="colon">:</span><input type="number" inputmode="numeric" ${sa} value="${s}" placeholder="00" ${dis}/></div>`;
+    const p=(value||'').split(':'), m=p[0]?p[0].trim():'', s=p[1]?p[1].trim():'';
+    const mAttr = isAct ? 'data-act-min' : `data-pred-min="${dataset}"`;
+    const sAttr = isAct ? 'data-act-sec' : `data-pred-sec="${dataset}"`;
+    return `<div class="time-combo"><input type="number" inputmode="numeric" ${mAttr} value="${m}" placeholder="00" ${dis}/><span class="colon">:</span><input type="number" inputmode="numeric" ${sAttr} value="${s}" placeholder="00" ${dis}/></div>`;
   }
-  const makeSelect=(opts)=>`<select ${ds} ${dis}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o||'—'}</option>`).join('')}</select>`;
+  const makeSelect = opts => `<select ${ds} ${dis}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o||'—'}</option>`).join('')}</select>`;
   if(key==='ekan_maalintekija') return makeSelect(['', ...GOAL_SCORERS]);
   if(key==='ekan_jahyn_saaja') return makeSelect(['', ...PENALTY_TAKERS]);
   if(key==='ekan_jahyn_syy') return makeSelect(['', ...PENALTY_REASONS]);
@@ -528,117 +507,202 @@ function widget(kind,key,value,dataset,disabled){
   return `<input type="text" ${ds} value="${value||''}" placeholder="…" ${dis}/>`;
 }
 
-// =====================
-// PRED LISTENERS
-// =====================
-function attachPredListeners(el,t,matchId){
-  function handlePred(e){
-    if(e.target.dataset.predHome!=null||e.target.dataset.predAway!=null){
+// ============================
+// PRED CARD HTML
+// ============================
+function predCardHTML(t, match, player, showColors){
+  const pred=((t.predictions||{})[match.id]||{})[player]||{};
+  const actual=(t.actuals||{})[match.id]||{};
+  const locked=isLocked(match);
+  const canEdit = (player===currentUser && !locked);
+  const pts = calcMatchPts(t, match.id, player);
+  const rows = FIELDS.map(f=>{
+    const v=pred[f.key]||'', av=actual[f.key]||'';
+    const ok = showColors && av!=='' && fieldMatch(f.key,v,av);
+    const bad = showColors && av!=='' && v!=='' && !ok;
+    const w = widget(f.key, v, player+':'+f.key, !canEdit, false);
+    return `<div class="kv-row ${ok?'correct':''} ${bad?'incorrect':''}">`+
+           `<div class="kv-label">${f.label}</div>${w}</div>`;
+  }).join('');
+  return `<div class="person-card"><div class="card-head">`+
+         `<div class="person-title">${player===ADMIN?'👑 ':''}${player}</div>`+
+         `${showColors?`<div class="pts-badge">${pts} p</div>`:''}</div>`+
+         `<div class="kv">${rows}</div></div>`;
+}
+
+// ============================
+// ATTACH LISTENERS – veikkaukset
+// ============================
+function attachPredListeners(el, t, matchId){
+  const handle = e => {
+    if(e.target.dataset.predHome!==undefined || e.target.dataset.predAway!==undefined){
       const par=e.target.closest('.score-combo'); if(!par) return;
-      const hi=par.querySelector('[data-pred-home]'),ai=par.querySelector('[data-pred-away]');
-      if(!hi||!hi.dataset.predHome) return;
-      const [pl]=hi.dataset.predHome.split(':');
-      t.predictions[matchId]=t.predictions[matchId]||{}; t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
-      t.predictions[matchId][pl]['lopputulos']=hi.value&&ai.value?`${hi.value}-${ai.value}`:''; return;
+      const hi=par.querySelector('[data-pred-home]'), ai=par.querySelector('[data-pred-away]');
+      if(!hi || hi.dataset.predHome===undefined) return;
+      const pl=hi.dataset.predHome.split(':')[0];
+      t.predictions[matchId]=t.predictions[matchId]||{};
+      t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
+      t.predictions[matchId][pl]['lopputulos']=(hi.value&&ai.value)?(hi.value+'-'+ai.value):'';
+      return;
     }
-    if(e.target.dataset.predMin!=null||e.target.dataset.predSec!=null){
+    if(e.target.dataset.predMin!==undefined || e.target.dataset.predSec!==undefined){
       const par=e.target.closest('.time-combo'); if(!par) return;
-      const mi=par.querySelector('[data-pred-min]'),si=par.querySelector('[data-pred-sec]');
-      if(!mi||!mi.dataset.predMin) return;
-      const [pl]=mi.dataset.predMin.split(':');
-      t.predictions[matchId]=t.predictions[matchId]||{}; t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
-      t.predictions[matchId][pl]['ekan_maali_aika']=mi.value&&si.value?`${mi.value}:${si.value}`:''; return;
+      const mi=par.querySelector('[data-pred-min]'), si=par.querySelector('[data-pred-sec]');
+      if(!mi || mi.dataset.predMin===undefined) return;
+      const pl=mi.dataset.predMin.split(':')[0];
+      t.predictions[matchId]=t.predictions[matchId]||{};
+      t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
+      t.predictions[matchId][pl]['ekan_maali_aika']=(mi.value&&si.value)?(mi.value+':'+si.value):'';
+      return;
     }
     const ds=e.target.dataset.pred; if(!ds) return;
     const [pl,key]=ds.split(':');
-    t.predictions[matchId]=t.predictions[matchId]||{}; t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
+    t.predictions[matchId]=t.predictions[matchId]||{};
+    t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
     t.predictions[matchId][pl][key]=e.target.value;
+  };
+  el.querySelectorAll('input[data-pred],input[data-pred-home],input[data-pred-away],input[data-pred-min],input[data-pred-sec]')
+    .forEach(i=>{ i.addEventListener('input',handle); i.addEventListener('blur',()=>{ save(); renderScoreboard(); }); });
+  el.querySelectorAll('select[data-pred]')
+    .forEach(s=>{ s.addEventListener('change',e=>{ handle(e); save(); renderScoreboard(); }); });
+}
+
+// ============================
+// ATTACH LISTENERS – faktat
+// ============================
+function attachActualListeners(el, t, matchId){
+  const handle = e => {
+    if(e.target.dataset.actHome!==undefined || e.target.dataset.actAway!==undefined){
+      const par=e.target.closest('.score-combo'); if(!par) return;
+      const hi=par.querySelector('[data-act-home]'), ai=par.querySelector('[data-act-away]');
+      t.actuals[matchId]=t.actuals[matchId]||{};
+      t.actuals[matchId]['lopputulos']=(hi.value&&ai.value)?(hi.value+'-'+ai.value):'';
+      renderScoreboard(); save(); return;
+    }
+    if(e.target.dataset.actMin!==undefined || e.target.dataset.actSec!==undefined){
+      const par=e.target.closest('.time-combo'); if(!par) return;
+      const mi=par.querySelector('[data-act-min]'), si=par.querySelector('[data-act-sec]');
+      t.actuals[matchId]=t.actuals[matchId]||{};
+      t.actuals[matchId]['ekan_maali_aika']=(mi.value&&si.value)?(mi.value+':'+si.value):'';
+      renderScoreboard(); save(); return;
+    }
+    const key=e.target.dataset.act; if(!key) return;
+    t.actuals[matchId]=t.actuals[matchId]||{};
+    t.actuals[matchId][key]=e.target.value;
+    renderScoreboard(); save();
+  };
+  el.querySelectorAll('input[data-act],input[data-act-home],input[data-act-away],input[data-act-min],input[data-act-sec]')
+    .forEach(i=>i.addEventListener('input',handle));
+  el.querySelectorAll('select[data-act]')
+    .forEach(s=>s.addEventListener('change',handle));
+}
+
+// ============================
+// RENDER: BANNERI
+// ============================
+function renderMatchBanner(match){
+  const el=$('matchLockBanner'); if(!el) return;
+  if(!match){ el.innerHTML=''; return; }
+  if(isLocked(match)){
+    el.innerHTML='<div class="lock-banner">🔒 Peli alkanut – veikkaukset lukittu – tulokset näkyvissä</div>';
+  } else {
+    const ts=match.startTime?new Date(match.startTime).toLocaleString('fi-FI',{weekday:'short',day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    el.innerHTML='<div class="open-banner">✅ Veikkaukset auki'+(ts?' – lukittuu '+ts:'')+'</div>';
   }
-  // Numerokenttiin 'input', valintoihin 'change' (tallennetaan heti)
-  el.querySelectorAll('input[data-pred],input[data-pred-home],input[data-pred-away],input[data-pred-min],input[data-pred-sec]').forEach(inp=>{
-    inp.addEventListener('input', handlePred);
-    inp.addEventListener('blur',()=>{ save(); renderScoreboard(); });
-  });
-  el.querySelectorAll('select[data-pred]').forEach(sel=>{
-    sel.addEventListener('change', handlePred);
-    sel.addEventListener('change',()=>{ save(); renderScoreboard(); });
-  });
 }
 
-// =====================
-// HIGHLIGHT
-// =====================
-function doHighlight(player,key){
-  const t=getTournament(); if(!t||!selectedMatchId) return;
-  const av=(t.actuals[selectedMatchId]||{})[key]||'';
-  const pv=(t.predictions[selectedMatchId]||{})[player]?.[key]||'';
-  const eq=av!==''&&fieldMatch(key,pv,av), neq=av!==''&&pv!==''&&!eq;
-  const row=document.querySelector(`[data-card-row="${player}:${key}"]`);
-  if(row){ row.classList.toggle('correct',eq); row.classList.toggle('incorrect',neq); }
-}
-function refreshAllHL(){ FIELDS.forEach(f=>PLAYERS.forEach(p=>doHighlight(p,f.key))); }
+// ============================
+// RENDER: VEIKKAUKSET
+// ============================
+function renderPredictions(){
+  const el=$('predictionsArea'); if(!el) return;
+  const t=getTournament(), match=getMatch();
+  if(!t || !match){ el.innerHTML='<p class="muted">Valitse ottelu.</p>'; return; }
 
-// =====================
-// RENDER: KIRJAUTUMINEN
-// =====================
-buildLogin();
-const savedUser=localStorage.getItem('tv_user');
-if(savedUser&&PLAYERS.includes(savedUser)){
-  // Auto-login: luota tallennettua sessiota (PIN on jo tarkistettu aiemmin)
-  doLogin(savedUser);
-}
+  const locked=isLocked(match);
+  t.predictions=t.predictions||{};
+  t.actuals=t.actuals||{};
 
-// =====================
-// RENDER: TURNAUSVALINTA
-// =====================
-function renderTournamentSelect(){
-  const sel=$('tournamentSelect');
-  sel.innerHTML=['<option value="">Valitse turnaus…</option>'].concat(
-    (data.tournaments||[]).map(t=>`<option value="${t.id}" ${String(t.id)===String(selectedTournamentId)?'selected':''}>${t.name}${t.finished?' ✅':''}</option>`)
-  ).join('');
-  sel.onchange=e=>{ selectedTournamentId=e.target.value||null; selectedMatchId=null; saveSelections(); save(); renderAll(); };
-}
-
-// =====================
-// RENDER: OTTELUVALINTA
-// =====================
-function renderMatchSelect(){
-  const sel=$('matchSelect'),t=getTournament();
-  if(!t){ sel.innerHTML='<option value="">—</option>'; sel.disabled=true; selectedMatchId=null; return; }
-  sel.disabled=false;
-
-  // Auto-valitse ainoa ottelu tai viimeksi valittu
-  if(!selectedMatchId && t.matches && t.matches.length===1){
-    selectedMatchId=String(t.matches[0].id);
+  if(currentUser===ADMIN){
+    if(!locked){
+      el.innerHTML=predCardHTML(t,match,ADMIN,false);
+    } else if(viewMode==='table'){
+      const actual=(t.actuals||{})[match.id]||{};
+      let thead='<tr><th class="sticky-top sticky-left sticky-corner">Kohde</th>'+
+        PLAYERS.map(p=>'<th class="sticky-top">'+(p===ADMIN?'👑':'')+' '+p+'</th>').join('')+'</tr>';
+      let tbody=FIELDS.map(f=>{
+        let row='<tr><th class="sticky-left">'+f.label+'</th>';
+        row+=PLAYERS.map(p=>{
+          const pv=((t.predictions[match.id]||{})[p]||{})[f.key]||'';
+          const av=actual[f.key]||'';
+          const ok=av!==''&&fieldMatch(f.key,pv,av);
+          const bad=av!==''&&pv!==''&&!ok;
+          return '<td class="'+(ok?'correct':bad?'incorrect':'')+'">'+widget(f.key,pv,p+':'+f.key,true,false)+'</td>';
+        }).join('');
+        return row+'</tr>';
+      }).join('');
+      el.innerHTML='<div class="table-wrap"><table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table></div>';
+    } else {
+      el.innerHTML=PLAYERS.map(p=>predCardHTML(t,match,p,true)).join('');
+    }
+  } else {
+    el.innerHTML=predCardHTML(t,match,currentUser,locked);
   }
-
-  sel.innerHTML=['<option value="">Valitse ottelu…</option>'].concat(
-    (t.matches||[]).map(m=>{
-      const lk=isLocked(m)?'🔒 ':'';
-      const ts=m.startTime?' ('+new Date(m.startTime).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})+')':'';
-      return `<option value="${m.id}" ${String(m.id)===String(selectedMatchId)?'selected':''}>${lk}${m.name}${ts}</option>`;
-    })
-  ).join('');
-  sel.onchange=e=>{ selectedMatchId=e.target.value||null; saveSelections(); updateDeleteMatchBtn(); renderMatchView(); };
-  updateDeleteMatchBtn();
+  attachPredListeners(el,t,match.id);
 }
 
-// =====================
+// ============================
+// RENDER: FAKTAT
+// ============================
+function renderActuals(){
+  const el=$('actualsArea'); if(!el) return;
+  const t=getTournament(), match=getMatch();
+  if(!t || !match){ el.innerHTML='<p class="muted">Valitse ottelu.</p>'; return; }
+  t.actuals=t.actuals||{};
+  t.actuals[match.id]=t.actuals[match.id]||{};
+  const act=t.actuals[match.id];
+  const isAdmin=currentUser===ADMIN;
+  const rows=FIELDS.map(f=>'<div class="kv-row"><div class="kv-label">'+f.label+'</div>'+widget(f.key,act[f.key]||'',f.key,!isAdmin,true)+'</div>').join('');
+  el.innerHTML='<div class="person-card actuals-card"><div class="card-head"><div class="person-title">Faktat</div>'+
+    '<div class="pill">'+(isAdmin?'Muokattavissa':'Vain luku')+'</div></div><div class="kv">'+rows+'</div></div>';
+  if(isAdmin) attachActualListeners(el,t,match.id);
+}
+
+// ============================
 // RENDER: SCOREBOARD
-// =====================
+// ============================
 function renderScoreboard(){
-  const el=$('scoreboard');
-  if(!selectedTournamentId){ el.innerHTML='<p class="muted">Valitse turnaus.</p>'; return; }
-  const t=getTournament(), totals=calcTotals(t), sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+  const el=$('scoreboard'); if(!el) return;
+  const t=getTournament();
+  if(!t){ el.innerHTML='<p class="muted">Valitse turnaus.</p>'; return; }
+  const totals=calcTotals(t);
+  const sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
   const uPts=[...new Set(sorted.map(x=>x[1]))].sort((a,b)=>b-a);
   const icon=pts=>{ const r=uPts.indexOf(pts)+1; return r===1?'🥇':r===2?'🥈':r===3?'🥉':'💩'; };
-  el.innerHTML='<div class="score-grid">'+sorted.map(([n,pts])=>`<div class="score-card"><div class="name">${icon(pts)} ${n}</div><div class="pts">${pts} p</div></div>`).join('')+'</div>';
+  el.innerHTML='<div class="score-grid">'+sorted.map(([n,pts])=>
+    `<div class="score-card"><div class="name">${icon(pts)} ${n}</div><div class="pts">${pts} p</div></div>`
+  ).join('')+'</div>';
 }
 
-// =====================
+// ============================
+// RENDER: PLAYER STATUS (admin)
+// ============================
+function renderPlayerStatus(){
+  const el=$('playerStatusArea'); if(!el) return;
+  const t=getTournament(), match=getMatch();
+  if(!t || !match || currentUser!==ADMIN){ el.innerHTML=''; return; }
+  const preds=(t.predictions||{})[match.id]||{};
+  const locked=isLocked(match);
+  el.innerHTML='<div class="player-status-grid">'+PLAYERS.map(p=>{
+    const voted=preds[p]&&Object.values(preds[p]).some(v=>v!=='');
+    const cls=locked?'done':voted?'voted':'not-voted';
+    return `<div class="player-status-card ${cls}">${voted?'✅':'❌'} ${p}</div>`;
+  }).join('')+'</div>';
+}
+
+// ============================
 // RENDER: KOLMEN KÄRKI
-// =====================
-// Kolmen kärki lukittuu kun ensimmäinen ottelu alkaa
+// ============================
 function isTop3Locked(t){
   if(!t||!(t.matches||[]).length) return false;
   const first=[...t.matches].sort((a,b)=>new Date(a.startTime||0)-new Date(b.startTime||0))[0];
@@ -646,458 +710,356 @@ function isTop3Locked(t){
 }
 
 function renderTopThree(){
-  const wrap=$('topThreeArea'),t=getTournament();
+  const wrap=$('topThreeArea'), t=getTournament();
   if(!t){ wrap.innerHTML='<p class="muted">Luo ensin turnaus.</p>'; return; }
   t.topThreePrediction=t.topThreePrediction||{}; t.actualTopThree=t.actualTopThree||['','',''];
   const TEAMS=['KANADA','SUOMI','USA','RUOTSI','TSEKKI','RANSKA','SVEITSI','ITALIA','SLOVAKIA','TANSKA','SAKSA','LATVIA','NORJA','ISO-BRITANNIA','KAZAKSTAN','ITÄVALTA','SLOVENIA','PUOLA','UKRAINA','VIRO','LIETTUA'];
   const tOpts='<option value=""></option>'+TEAMS.map(tm=>`<option value="${tm}">${tm}</option>`).join('');
   const isAdmin=currentUser===ADMIN;
+  const locked=isTop3Locked(t);
+  const showResults=t.finished;
   const uPred=t.topThreePrediction[currentUser]||['','',''];
   const aT3=t.actualTopThree||[];
-  const locked=isTop3Locked(t);           // Lukittu kun 1. peli alkaa
-  const showResults=t.finished;           // Tulokset ja faktat-kenttä vasta turnauksen jälkeen
-  const hasVoted=uPred.some(v=>v!=='');
 
-  // Status-banneri
   let banner='';
-  if(!t.matches||!t.matches.length){
-    banner=`<p class="muted" style="margin-bottom:8px">Veikkaus avautuu kun ensimmäinen ottelu luodaan.</p>`;
-  } else if(locked&&!showResults){
-    banner=`<div class="lock-banner" style="margin-bottom:8px">🔒 Kolmen kärki lukittu – tulokset näkyvät turnauksen jälkeen</div>`;
+  if(!(t.matches||[]).length){
+    banner='<p class="muted" style="margin-bottom:8px">Veikkaus avautuu kun ensimmäinen ottelu luodaan.</p>';
+  } else if(locked && !showResults){
+    banner='<div class="lock-banner" style="margin-bottom:8px">🔒 Kolmen kärki lukittu – tulokset näkyvät turnauksen jälkeen</div>';
   } else if(!locked){
     const first=[...t.matches].sort((a,b)=>new Date(a.startTime||0)-new Date(b.startTime||0))[0];
     const ts=first.startTime?new Date(first.startTime).toLocaleString('fi-FI',{weekday:'short',day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-    banner=`<div class="open-banner" style="margin-bottom:8px">✅ Veikkaukset auki${ts?' – lukittuu '+ts:''}</div>`;
+    banner='<div class="open-banner" style="margin-bottom:8px">✅ Veikkaukset auki'+(ts?' – lukittuu '+ts:'')+'</div>';
   }
 
-  // Admin: näytä kuka on veikannut (ei sisältöä ennen turnauksen päättymistä)
   let adminStatus='';
   if(isAdmin){
-    adminStatus=`<div style="margin-bottom:10px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">👥 Kuka on veikannut kolmen kärjen?</div><div class="player-status-grid">`+
+    adminStatus='<div style="margin-bottom:10px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">👥 Kuka on veikannut?</div><div class="player-status-grid">'+
     PLAYERS.map(p=>{
-      const pv=t.topThreePrediction[p]||[];
-      const voted=pv.some(v=>v!=='');
-      const cls=showResults?'done':voted?'voted':'not-voted';
-      const icon=voted?'✅':'❌';
-      return `<div class="player-status-card ${cls}">${icon} ${p}</div>`;
-    }).join('')+`</div></div>`;
+      const voted=(t.topThreePrediction[p]||[]).some(v=>v!=='');
+      return `<div class="player-status-card ${voted?'voted':'not-voted'}">${voted?'✅':'❌'} ${p}</div>`;
+    }).join('')+'</div></div>';
   }
 
   let html=banner+adminStatus+'<div class="t3-grid">';
-
-  // Admin: faktat-kenttä heti kun turnaus on lukittu
-  if(isAdmin&&locked){
-    html+=`<div class="t3-card"><div class="t3-title">✅ Lisää todellinen järjestys</div>${[0,1,2].map(i=>`<div class="t3-row"><label style="font-size:12px;color:var(--muted);margin-bottom:2px">${i+1}. sija</label><select data-t3a="${i}">${tOpts}</select></div>`).join('')}</div>`;
+  if(isAdmin && locked){
+    html+='<div class="t3-card"><div class="t3-title">✅ Lisää todellinen järjestys</div>'+
+      [0,1,2].map(i=>'<div class="t3-row"><label style="font-size:12px;color:var(--muted);margin-bottom:2px">'+(i+1)+'. sija</label><select data-t3a="'+i+'">'+tOpts+'</select></div>').join('')+'</div>';
   }
 
-  // Veikkauskortit
-  if(t.matches&&t.matches.length){
+  if((t.matches||[]).length){
     if(showResults){
-      // Turnaus päättynyt: näytä KAIKKIEN veikkaukset
       PLAYERS.forEach(p=>{
         const pPred=t.topThreePrediction[p]||['','',''];
-        const act=(t.actualTopThree||[]);
         const rows=[0,1,2].map(i=>{
-          const v=pPred[i]||'';
-          const av=act[i]||'';
-          const correct=av&&ciEq(v,av);
-          const incorrect=av&&v&&!correct;
-          return `<div class="kv-row ${correct?'correct':''} ${incorrect?'incorrect':''}">
-            <div class="kv-label">${i+1}. sija</div>
-            <div style="padding:8px;font-weight:600">${v||'—'}</div>
-          </div>`;
+          const v=pPred[i]||'', av=aT3[i]||'';
+          const ok=av&&ciEq(v,av), bad=av&&v&&!ok;
+          return '<div class="kv-row '+(ok?'correct':bad?'incorrect':'')+'"><div class="kv-label">'+(i+1)+'. sija</div><div style="padding:8px;font-weight:600">'+(v||'—')+'</div></div>';
         }).join('');
-        html+=`<div class="t3-card"><div class="t3-title">${p===ADMIN?'👑 ':''}${p}</div>${rows}</div>`;
+        html+='<div class="t3-card"><div class="t3-title">'+(p===ADMIN?'👑 ':'')+p+'</div>'+rows+'</div>';
       });
     } else if(locked){
-      // Lukittu mutta ei vielä päättynyt: oma veikkaus lukittuna
-      html+=`<div class="t3-card"><div class="t3-title">Oma veikkaus 🔒</div><p class="muted" style="font-size:13px">Veikkauksesi on tallennettu. Tulokset näkyvät turnauksen jälkeen.</p></div>`;
+      html+='<div class="t3-card"><div class="t3-title">Oma veikkaus 🔒</div><p class="muted" style="font-size:13px">Veikkauksesi on tallennettu. Tulokset näkyvät turnauksen jälkeen.</p></div>';
     } else {
-      // Auki: veikkaa
-      html+=`<div class="t3-card"><div class="t3-title">Oma veikkaus</div>${[0,1,2].map(i=>`<div class="t3-row"><label style="font-size:12px;color:var(--muted);margin-bottom:2px">${i+1}. sija</label><select data-t3m="${i}">${tOpts}</select></div>`).join('')}</div>`;
+      html+='<div class="t3-card"><div class="t3-title">Oma veikkaus</div>'+
+        [0,1,2].map(i=>'<div class="t3-row"><label style="font-size:12px;color:var(--muted);margin-bottom:2px">'+(i+1)+'. sija</label><select data-t3m="'+i+'">'+tOpts+'</select></div>').join('')+'</div>';
     }
   }
-
   html+='</div>';
   wrap.innerHTML=html;
 
-  // Aseta arvot
-  if(isAdmin&&locked) [0,1,2].forEach(i=>{ const s=wrap.querySelector(`[data-t3a="${i}"]`); if(s&&aT3[i]) s.value=aT3[i]; });
-  if(showResults||!locked) [0,1,2].forEach(i=>{ const s=wrap.querySelector(`[data-t3m="${i}"]`); if(s&&uPred[i]) s.value=uPred[i]; });
-
-  const markT3=()=>{
-    if(!showResults) return; // Ei värejä ennen turnauksen päättymistä
-    const act=(t.actualTopThree||[]).map(x=>(x||'').toLowerCase());
-    wrap.querySelectorAll('[data-t3m]').forEach(inp=>{
-      inp.classList.remove('correct','incorrect');
-      const v=(inp.value||'').toLowerCase(),idx=+inp.dataset.t3m,ac=act[idx]||'';
-      if(ac){ if(v&&v===ac)inp.classList.add('correct'); else if(v)inp.classList.add('incorrect'); }
-    });
-  };
-  markT3();
-
-  if(!locked) wrap.querySelectorAll('[data-t3m]').forEach(inp=>inp.addEventListener('change',e=>{
-    const idx=+e.target.dataset.t3m;
-    t.topThreePrediction[currentUser]=t.topThreePrediction[currentUser]||['','',''];
-    t.topThreePrediction[currentUser][idx]=e.target.value;
-    markT3(); renderScoreboard(); save();
-  }));
-  if(isAdmin&&locked) wrap.querySelectorAll('[data-t3a]').forEach(inp=>inp.addEventListener('change',e=>{
-    t.actualTopThree[+e.target.dataset.t3a]=e.target.value;
-    markT3(); renderScoreboard(); save();
-  }));
-}
-
-// =====================
-// RENDER: ADMIN STATUS
-// =====================
-function renderPlayerStatus(){
-  const el=$('playerStatusArea'),t=getTournament(),match=getMatch();
-  if(!t||!match||currentUser!==ADMIN){ el.innerHTML=''; return; }
-  const preds=t.predictions[match.id]||{};
-  const locked=isLocked(match);
-  el.innerHTML='<div class="player-status-grid">'+PLAYERS.map(p=>{
-    const voted=preds[p]&&Object.values(preds[p]).some(v=>v!=='');
-    const cls=locked?'done':voted?'voted':'not-voted';
-    const icon=locked?'✅':voted?'✅':'❌';
-    return `<div class="player-status-card ${cls}">${icon} ${p}</div>`;
-  }).join('')+'</div>';
-}
-
-// =====================
-// RENDER: COUNTDOWN
-// =====================
-let countdownRenderPending = false;
-function startCountdown(match){
-  if(cdInterval) clearInterval(cdInterval);
-  const el=$('countdown');
-  if(!match||!match.startTime){ el.textContent=''; return; }
-  const update=()=>{
-    const diff=new Date(match.startTime).getTime()-Date.now();
-    if(diff<=0){
-      el.textContent='';
-      clearInterval(cdInterval);
-      cdInterval=null;
-      // Renderöi vain kerran, ei silmukkaa
-      if(!countdownRenderPending){
-        countdownRenderPending=true;
-        setTimeout(()=>{ countdownRenderPending=false; renderAll(); }, 100);
-      }
-      return;
-    }
-    const h=Math.floor(diff/3600000),m=Math.floor((diff%3600000)/60000),s=Math.floor((diff%60000)/1000);
-    el.textContent='⏳ Veikkauksia voi muuttaa vielä: '+(h>0?h+'t ':'')+m+'min '+s+'s';
-  };
-  update(); cdInterval=setInterval(update,1000);
-}
-
-// =====================
-// RENDER: VEIKKAUKSET
-// =====================
-function renderPredCard(t,match,player,showResults){
-  const pred=(t.predictions[match.id]||{})[player]||{};
-  const actual=t.actuals[match.id]||{};
-  const locked=isLocked(match);
-  const canEdit=(player===currentUser&&!locked)||(currentUser===ADMIN&&showResults);
-  const pts=calcMatchPts(t,match.id,player);
-  const rows=FIELDS.map(f=>{
-    const v=pred[f.key]||'',av=actual[f.key]||'';
-    const correct=showResults&&av!==''&&fieldMatch(f.key,v,av);
-    const incorrect=showResults&&av!==''&&v!==''&&!correct;
-    const w=widget('pred',f.key,v,`${player}:${f.key}`,!canEdit);
-    return `<div class="kv-row ${correct?'correct':''} ${incorrect?'incorrect':''}" data-card-row="${player}:${f.key}"><div class="kv-label">${f.label}</div>${w}</div>`;
-  }).join('');
-  return `<div class="person-card"><div class="card-head"><div class="person-title">${player===ADMIN?'👑 ':''} ${player}</div>${showResults?`<div class="pts-badge">${pts} p</div>`:''}</div><div class="kv">${rows}</div></div>`;
-}
-
-function renderMatchView(){
-  const banEl=$('matchLockBanner'),cdEl=$('countdown'),predEl=$('predictionsArea');
-  try {
-    // Hae turnaus ja ottelu suoraan – älä luota getMatch():iin yksin
-    const t=getTournament();
-    const match=t?(t.matches||[]).find(m=>String(m.id)===String(selectedMatchId)):null;
-
-    if(!t||!match){
-      banEl.innerHTML='';
-      cdEl.textContent='';
-      predEl.innerHTML='<p class="muted">Valitse ottelu.</p>';
-      try{renderActuals();}catch(e){}
-      try{renderPlayerStatus();}catch(e){}
-      return;
-    }
-
-    const mid=match.id;
-    const locked=isLocked(match);
-
-    // Banneri
-    if(locked){
-      banEl.innerHTML='<div class="lock-banner">🔒 Peli alkanut – veikkaukset lukittu – tulokset näkyvissä</div>';
-    } else {
-      const ts=match.startTime?new Date(match.startTime).toLocaleString('fi-FI',{weekday:'short',day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-      banEl.innerHTML='<div class="open-banner">✅ Veikkaukset auki'+(ts?' – lukittuu '+ts:'')+'</div>';
-    }
-
-    try{startCountdown(match);}catch(e){}
-    try{renderPlayerStatus();}catch(e){}
-
-    // Veikkaukset
-    if(currentUser===ADMIN){
-      if(!locked){
-        predEl.innerHTML=renderPredCard(t,match,ADMIN,false);
-        attachPredListeners(predEl,t,mid);
-      } else if(viewMode==='table'){
-        const actual=t.actuals[mid]||{};
-        let thead='<tr><th class="sticky-top sticky-left sticky-corner">Kohde</th>'+PLAYERS.map(p=>'<th class="sticky-top">'+(p===ADMIN?'👑':'')+' '+p+'</th>').join('')+'</tr>';
-        let tbody=FIELDS.map(f=>{
-          let row='<tr><th class="sticky-left">'+f.label+'</th>';
-          row+=PLAYERS.map(p=>{
-            const pv=((t.predictions[mid]||{})[p]||{})[f.key]||'';
-            const av=(actual[f.key]||'');
-            const correct=av!==''&&fieldMatch(f.key,pv,av);
-            const incorrect=av!==''&&pv!==''&&!correct;
-            const w=widget('pred',f.key,pv,p+':'+f.key,true);
-            return '<td class="'+(correct?'correct':'')+(incorrect?' incorrect':'')+'">'+w+'</td>';
-          }).join('');
-          return row+'</tr>';
-        }).join('');
-        predEl.innerHTML='<div class="table-wrap"><table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table></div>';
-        attachPredListeners(predEl,t,mid);
-      } else {
-        predEl.innerHTML=PLAYERS.map(p=>renderPredCard(t,match,p,true)).join('');
-        attachPredListeners(predEl,t,mid);
-      }
-    } else {
-      predEl.innerHTML=renderPredCard(t,match,currentUser,locked);
-      attachPredListeners(predEl,t,mid);
-    }
-
-    try{renderActuals(mid);}catch(e){ console.error('renderActuals error',e); }
-  } catch(e) {
-    console.error('renderMatchView error:', e);
-    predEl.innerHTML='<p class="muted" style="color:red">Virhe: '+e.message+'</p>';
+  if(isAdmin && locked){
+    [0,1,2].forEach(i=>{ const s=wrap.querySelector('[data-t3a="'+i+'"]'); if(s&&aT3[i]) s.value=aT3[i]; });
+    wrap.querySelectorAll('[data-t3a]').forEach(inp=>inp.addEventListener('change',e=>{
+      t.actualTopThree[+e.target.dataset.t3a]=e.target.value; renderScoreboard(); save();
+    }));
+  }
+  if(!locked){
+    [0,1,2].forEach(i=>{ const s=wrap.querySelector('[data-t3m="'+i+'"]'); if(s&&uPred[i]) s.value=uPred[i]; });
+    wrap.querySelectorAll('[data-t3m]').forEach(inp=>inp.addEventListener('change',e=>{
+      const idx=+e.target.dataset.t3m;
+      t.topThreePrediction[currentUser]=t.topThreePrediction[currentUser]||['','',''];
+      t.topThreePrediction[currentUser][idx]=e.target.value;
+      renderScoreboard(); save();
+    }));
   }
 }
 
-// =====================
-// RENDER: FAKTAT
-// =====================
-function renderActuals(matchIdOverride){
-  const el=$('actualsArea');
-  if(!el) return;
-  try {
-    const t=getTournament();
-    const mid=matchIdOverride||selectedMatchId;
-    if(!t||!mid){ el.innerHTML='<p class="muted">Valitse ottelu.</p>'; return; }
-    // Varmista että ottelu on olemassa
-    const match=(t.matches||[]).find(m=>String(m.id)===String(mid));
-    if(!match){ el.innerHTML='<p class="muted">Valitse ottelu.</p>'; return; }
-    t.actuals[mid]=t.actuals[mid]||{};
-    const act=t.actuals[mid];
-    const isAdmin=currentUser===ADMIN;
-    const rows=FIELDS.map(f=>'<div class="kv-row"><div class="kv-label">'+f.label+'</div>'+widget('act',f.key,act[f.key]||'',f.key,!isAdmin)+'</div>').join('');
-    el.innerHTML='<div class="person-card actuals-card"><div class="card-head"><div class="person-title">Faktat</div><div class="pill">'+(isAdmin?'Muokattavissa':'Vain luku')+'</div></div><div class="kv">'+rows+'</div></div>';
-    if(!isAdmin) return;
-    function handleActualChange(e){
-      if(e.target.dataset.actHome!=null||e.target.dataset.actAway!=null){
-        const par=e.target.closest('.score-combo'); if(!par) return;
-        const hi=par.querySelector('[data-act-home]'),ai=par.querySelector('[data-act-away]');
-        t.actuals[mid]['lopputulos']=hi.value&&ai.value?(hi.value+'-'+ai.value):''; renderScoreboard(); save(); return;
-      }
-      if(e.target.dataset.actMin!=null||e.target.dataset.actSec!=null){
-        const par=e.target.closest('.time-combo'); if(!par) return;
-        const mi=par.querySelector('[data-act-min]'),si=par.querySelector('[data-act-sec]');
-        t.actuals[mid]['ekan_maali_aika']=mi.value&&si.value?(mi.value+':'+si.value):''; renderScoreboard(); save(); return;
-      }
-      const key=e.target.dataset.act; if(!key) return;
-      t.actuals[mid][key]=e.target.value; renderScoreboard(); save();
-    }
-    el.querySelectorAll('input[data-act],input[data-act-home],input[data-act-away],input[data-act-min],input[data-act-sec]').forEach(inp=>{
-      inp.addEventListener('input', handleActualChange);
-    });
-    el.querySelectorAll('select[data-act]').forEach(s=>{
-      s.addEventListener('change', handleActualChange);
-    });
-  } catch(e) {
-    console.error('renderActuals error:', e);
-    el.innerHTML='<p class="muted" style="color:red">Virhe: '+e.message+'</p>';
-  }
-}
-
-// =====================
+// ============================
 // RENDER: TURNAUKSEN STATUS
-// =====================
+// ============================
 function renderTournamentStatus(){
-  try{
-    const t=getTournament();
-    const fa=$('finishTournamentArea'),badge=$('tournamentFinishedBadge'),del=$('deleteTournamentArea');
-    const sc=$('statsCard');
-    if(!t||currentUser!==ADMIN){
-      if(fa)fa.style.display='none';
-      if(badge)badge.style.display='none';
-      if(del)del.style.display='none';
-      if(sc)sc.style.display='none';
-      return;
-    }
-    if(del) del.style.display='';
-    if(t.finished){
-      if(fa)fa.style.display='none';
-      if(badge)badge.style.display='';
-      if(sc)sc.style.display='';
-      renderStats();
-    } else {
-      if(fa)fa.style.display='';
-      if(badge)badge.style.display='none';
-      if(sc)sc.style.display='none';
-    }
-  }catch(e){ console.error('renderTournamentStatus error:',e); }
+  const t=getTournament();
+  const fa=$('finishTournamentArea'), badge=$('tournamentFinishedBadge'), del=$('deleteTournamentArea'), sc=$('statsCard');
+  if(!t || currentUser!==ADMIN){
+    if(fa) fa.style.display='none';
+    if(badge) badge.style.display='none';
+    if(del) del.style.display='none';
+    if(sc) sc.style.display='none';
+    return;
+  }
+  if(del) del.style.display='';
+  if(t.finished){
+    if(fa) fa.style.display='none';
+    if(badge) badge.style.display='';
+    if(sc) sc.style.display='';
+    renderStats();
+  } else {
+    if(fa) fa.style.display='';
+    if(badge) badge.style.display='none';
+    if(sc) sc.style.display='none';
+  }
 }
 
-// =====================
+// ============================
 // RENDER: STATS
-// =====================
+// ============================
 function renderStats(){
   const t=getTournament(); if(!t) return;
-  $('statsCard').style.display='';
-  const el=$('statsArea');
-  const totals=calcTotals(t),sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+  const el=$('statsArea'); if(!el) return;
+  const totals=calcTotals(t), sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
   const medals=['🥇','🥈','🥉'];
   let best=null;
   (t.matches||[]).forEach(m=>PLAYERS.forEach(p=>{ const pts=calcMatchPts(t,m.id,p); if(!best||pts>best.pts) best={player:p,matchName:m.name,pts}; }));
-  const mW=(t.matches||[]).map(m=>{ let b=null; PLAYERS.forEach(p=>{ const pts=calcMatchPts(t,m.id,p); if(!b||pts>b.pts) b={player:p,pts}; else if(pts===b.pts) b.player+=' & '+p; }); return{matchName:m.name,...b}; });
-  let html=`<div style="margin-bottom:14px"><div style="font-weight:700;margin-bottom:8px">🥇 Lopputulokset</div><div class="score-grid">${sorted.map(([n,pts],i)=>`<div class="score-card"><div class="name">${medals[i]||''} ${n}</div><div class="pts">${pts} p</div></div>`).join('')}</div></div><div class="separator"></div>`;
-  if(best) html+=`<div style="margin-bottom:14px"><div style="font-weight:700;margin-bottom:6px">⭐ Paras suoritus</div><div style="background:var(--card);border:2px solid var(--primary);border-radius:10px;padding:10px"><div style="font-size:18px;font-weight:800">${best.player}</div><div style="color:var(--muted);font-size:14px">${best.matchName}</div><div style="font-size:24px;font-weight:800;color:var(--primary)">${best.pts} p</div></div></div><div class="separator"></div>`;
-  html+=`<div><div style="font-weight:700;margin-bottom:8px">🏅 Otteluvoittajat</div><div style="display:grid;gap:6px">${mW.map(w=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px"><div style="font-size:13px;color:var(--muted)">${w.matchName}</div><div><span style="font-weight:700">${w.player}</span> <span class="pts-badge">${w.pts} p</span></div></div>`).join('')}</div></div>`;
+  const mW=(t.matches||[]).map(m=>{
+    let b=null;
+    PLAYERS.forEach(p=>{ const pts=calcMatchPts(t,m.id,p); if(!b||pts>b.pts) b={player:p,pts}; else if(pts===b.pts) b.player+=' & '+p; });
+    return {matchName:m.name,...b};
+  });
+  let html='<div style="margin-bottom:14px"><div style="font-weight:700;margin-bottom:8px">🥇 Lopputulokset</div><div class="score-grid">'+
+    sorted.map(([n,pts],i)=>'<div class="score-card"><div class="name">'+(medals[i]||'')+ ' '+n+'</div><div class="pts">'+pts+' p</div></div>').join('')+'</div></div><div class="separator"></div>';
+  if(best) html+='<div style="margin-bottom:14px"><div style="font-weight:700;margin-bottom:6px">⭐ Paras suoritus</div><div style="background:var(--card);border:2px solid var(--primary);border-radius:10px;padding:10px"><div style="font-size:18px;font-weight:800">'+best.player+'</div><div style="color:var(--muted);font-size:14px">'+best.matchName+'</div><div style="font-size:24px;font-weight:800;color:var(--primary)">'+best.pts+' p</div></div></div><div class="separator"></div>';
+  html+='<div><div style="font-weight:700;margin-bottom:8px">🏅 Otteluvoittajat</div><div style="display:grid;gap:6px">'+
+    mW.map(w=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px"><div style="font-size:13px;color:var(--muted)">'+w.matchName+'</div><div><span style="font-weight:700">'+w.player+'</span> <span class="pts-badge">'+w.pts+' p</span></div></div>').join('')+'</div></div>';
   el.innerHTML=html;
 }
 
-// =====================
-// POISTO-NAPIT
-// =====================
-function updateDeleteMatchBtn(){
-  const del=$('deleteMatchArea');
-  if(!del) return;
-  del.style.display=(currentUser===ADMIN&&selectedMatchId)?'':'none';
-}
-
-$('deleteTournament').onclick=()=>{
-  const t=getTournament(); if(!t) return;
-  if(!confirm(`Poistetaanko turnaus "${t.name}" ja kaikki sen ottelut?\n\nTätä ei voi peruuttaa!`)) return;
-  data.tournaments=data.tournaments.filter(x=>String(x.id)!==String(selectedTournamentId));
-  selectedTournamentId=null; selectedMatchId=null;
-  save(); renderAll();
-};
-
-$('deleteMatch').onclick=()=>{
-  const t=getTournament(); if(!t||!selectedMatchId) return;
-  const match=getMatch(); if(!match) return;
-  if(!confirm(`Poistetaanko ottelu "${match.name}" ja kaikki sen veikkaukset?\n\nTätä ei voi peruuttaa!`)) return;
-  t.matches=t.matches.filter(m=>String(m.id)!==String(selectedMatchId));
-  delete t.predictions[selectedMatchId];
-  delete t.actuals[selectedMatchId];
-  selectedMatchId=null;
-  save(); renderAll();
-};
-
-// =====================
-// RENDER: PIN HALLINTA (admin)
-// =====================
+// ============================
+// RENDER: PIN HALLINTA
+// ============================
 function renderPinManage(){
   const el=$('pinManageArea'); if(!el) return;
   el.innerHTML=PLAYERS.map(p=>{
     const hasPin=pins[p]?'✅ PIN asetettu':'❌ Ei PINiä';
     const col=pins[p]?'#166534':'#991b1b';
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:8px">
-      <div>
-        <div style="font-weight:700">${p==='Tero'?'👑 ':''} ${p}</div>
-        <div style="font-size:12px;color:${col}">${hasPin}</div>
-      </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <input type="password" inputmode="numeric" maxlength="4" placeholder="1234"
-          id="pin_${p}" style="width:80px;padding:8px;font-size:16px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)" />
-        <button class="btn small" onclick="window._savePin('${p}')">Tallenna</button>
-      </div>
-    </div>`;
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:8px">'+
+      '<div><div style="font-weight:700">'+(p===ADMIN?'👑 ':'')+p+'</div><div style="font-size:12px;color:'+col+'">'+hasPin+'</div></div>'+
+      '<div style="display:flex;gap:6px;align-items:center">'+
+      '<input type="password" inputmode="numeric" maxlength="4" placeholder="1234" id="pin_'+p+'" style="width:80px;padding:8px;font-size:16px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)" />'+
+      '<button class="btn small" data-pin-player="' + p + '">Tallenna</button></div></div>';
   }).join('');
 }
 
+// PIN save via event delegation (called from renderPinManage)
+document.addEventListener('click', async e => {
+  const btn = e.target.closest('[data-pin-player]');
+  if(!btn) return;
+  window._savePin(btn.dataset.pinPlayer);
+});
+
 window._savePin = async function(player){
-  const input=$(`pin_${player}`);
-  const val=(input?input.value:'').trim();
+  const input=$('pin_'+player); if(!input) return;
+  const val=input.value.trim();
   if(!/^\d{4}$/.test(val)){ alert('PIN-koodin pitää olla 4 numeroa!'); return; }
   pins[player]=val;
-  try{
-    await setDoc(PINS_DOC,{pins});
-    input.value='';
-    renderPinManage();
-    showStatus(`✅ ${player}:n PIN tallennettu`,'#22c55e');
-    hideStatus();
-  }catch(e){ alert('Tallennus epäonnistui: '+e.message); }
+  try{ await setDoc(PINS_DOC,{pins}); input.value=''; renderPinManage(); showStatus('✅ '+player+':n PIN tallennettu','#22c55e'); hideStatus(); }
+  catch(e){ alert('Tallennus epäonnistui: '+e.message); }
 };
 
-// =====================
-// RENDERALL
-// =====================
-function renderAll(){
-  try{ restoreSelections(); }catch(e){}
-  try{ renderTournamentSelect(); }catch(e){ console.error('renderTournamentSelect:',e); }
-  try{ renderMatchSelect(); }catch(e){ console.error('renderMatchSelect:',e); }
-  try{ renderTopThree(); }catch(e){ console.error('renderTopThree:',e); }
-  try{ renderScoreboard(); }catch(e){ console.error('renderScoreboard:',e); }
-  try{ renderMatchView(); }catch(e){ console.error('renderMatchView:',e); }
-  try{ renderTournamentStatus(); }catch(e){ console.error('renderTournamentStatus:',e); }
-  if(currentUser===ADMIN) try{ renderPinManage(); }catch(e){}
+// ============================
+// RENDER: KAIKKI KERRALLA
+// ============================
+function render(){
+  renderTournamentSelects();
+  renderTopThree();
+  renderScoreboard();
+  renderMatchArea();
+  renderTournamentStatus();
+  if(currentUser===ADMIN) renderPinManage();
 }
 
-// =====================
+function renderTournamentSelects(){
+  // Turnausvalinta
+  const tSel=$('tournamentSelect');
+  if(tSel){
+    tSel.innerHTML='<option value="">Valitse turnaus…</option>'+
+      (data.tournaments||[]).map(t=>'<option value="'+t.id+'" '+(String(t.id)===String(tid)?'selected':'')+'>'+t.name+(t.finished?' ✅':'')+'</option>').join('');
+    tSel.onchange=e=>{ tid=e.target.value||null; mid=null; saveSelections(); save(); render(); };
+  }
+  // Otteluvalinta
+  const mSel=$('matchSelect'), t=getTournament();
+  if(!mSel) return;
+  if(!t){ mSel.innerHTML='<option value="">—</option>'; mSel.disabled=true; mid=null; return; }
+  mSel.disabled=false;
+  // Auto-valitse jos vain yksi ottelu
+  if(!mid && (t.matches||[]).length===1) mid=String(t.matches[0].id);
+  mSel.innerHTML='<option value="">Valitse ottelu…</option>'+
+    (t.matches||[]).map(m=>{
+      const lk=isLocked(m)?'🔒 ':'';
+      const ts=m.startTime?' ('+new Date(m.startTime).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})+')':'';
+      return '<option value="'+m.id+'" '+(String(m.id)===String(mid)?'selected':'')+'>'+lk+m.name+ts+'</option>';
+    }).join('');
+  mSel.onchange=e=>{ mid=e.target.value||null; saveSelections(); renderMatchArea(); };
+  // Poista ottelu -nappi
+  const da=$('deleteMatchArea');
+  if(da) da.style.display=(currentUser===ADMIN&&mid)?'':'none';
+}
+
+function renderMatchArea(){
+  const t=getTournament(), match=getMatch();
+  renderMatchBanner(match);
+  renderPlayerStatus();
+  renderPredictions();
+  renderActuals();
+  // Countdown vain jos ei lukittu
+  if(match && !isLocked(match)){
+    startCountdown(match);
+  } else {
+    stopCountdown();
+  }
+}
+
+// ============================
+// KIRJAUTUMINEN + PIN
+// ============================
+let pinBuffer='', pendingName='';
+
+function buildLogin(){
+  const grid=$('playerGrid'); if(!grid) return;
+  grid.innerHTML=PLAYERS.map(p=>'<button class="player-btn '+(p===ADMIN?'admin':'')+'" data-login-name="'+p+'">'+( p===ADMIN?'👑 ':'')+p+'</button>').join('');
+  grid.querySelectorAll('[data-login-name]').forEach(btn=>btn.addEventListener('click',()=>window._selectName(btn.dataset.loginName)));
+}
+
+window._selectName=function(name){
+  pendingName=name; pinBuffer='';
+  $('loginStep1').style.display='none'; $('loginStep2').style.display='';
+  $('loginName').textContent=name; $('pinError').textContent='';
+  renderPinDots();
+};
+window._backToNames=function(){
+  pendingName=''; pinBuffer='';
+  $('loginStep1').style.display=''; $('loginStep2').style.display='none';
+};
+
+function renderPinDots(){
+  const el=$('pinDots'); if(!el) return;
+  el.innerHTML=[0,1,2,3].map(i=>'<div class="pin-dot '+(i<pinBuffer.length?'filled':'')+'"></div>').join('');
+}
+
+function handlePinKey(v){
+  if(v==='clear'){ pinBuffer=''; renderPinDots(); $('pinError').textContent=''; return; }
+  if(v==='back'){ pinBuffer=pinBuffer.slice(0,-1); renderPinDots(); $('pinError').textContent=''; return; }
+  if(pinBuffer.length>=4) return;
+  pinBuffer+=v; renderPinDots();
+  if(pinBuffer.length===4) checkPin();
+}
+
+async function checkPin(){
+  const name=pendingName;
+  try{ const snap=await getDoc(PINS_DOC); if(snap.exists()) pins=snap.data().pins||{}; }catch(e){}
+  const stored=pins[name];
+  if(!stored){
+    if(name===ADMIN){ doLogin(name); }
+    else{ $('pinError').textContent='PIN-koodia ei ole asetettu. Pyydä adminia.'; pinBuffer=''; renderPinDots(); }
+    return;
+  }
+  if(pinBuffer===stored){ doLogin(name); }
+  else{ $('pinError').textContent='Väärä PIN-koodi.'; pinBuffer=''; renderPinDots(); }
+}
+
+function doLogin(name){
+  currentUser=name;
+  localStorage.setItem('tv_user',name);
+  $('loginScreen').style.display='none'; $('appScreen').style.display='';
+  $('currentUserBadge').textContent=(name===ADMIN?'👑 ':'')+name;
+  const isAdmin=name===ADMIN;
+  ['adminTournamentTools','adminMatchTools','adminStatusCard','adminPinTools'].forEach(id=>{
+    const el=$(id); if(el) el.style.display=isAdmin?'':'none';
+  });
+  const ib=$('importBtn'); if(ib) ib.style.display=isAdmin?'':'none';
+  const vt=$('viewTabs'); if(vt) vt.style.display=isAdmin?'':'none';
+  loadData();
+}
+
+window._logout=function(){
+  currentUser=null; localStorage.removeItem('tv_user');
+  pinBuffer=''; pendingName='';
+  stopCountdown();
+  $('loginScreen').style.display=''; $('appScreen').style.display='none';
+  $('loginStep1').style.display=''; $('loginStep2').style.display='none';
+};
+
+// ============================
+// INIT
+// ============================
+buildLogin();
+document.querySelectorAll('.pin-key').forEach(btn=>btn.addEventListener('click',()=>handlePinKey(btn.dataset.v)));
+
+const savedUser=localStorage.getItem('tv_user');
+if(savedUser && PLAYERS.includes(savedUser)) doLogin(savedUser);
+
+// ============================
 // NAPIT
-// =====================
+// ============================
 $('createTournament').onclick=()=>{
   const name=$('newTournamentName').value.trim(); if(!name){alert('Anna nimi');return;}
   const id=Date.now().toString();
   data.tournaments.push({id,name,matches:[],predictions:{},actuals:{},topThreePrediction:{},actualTopThree:[]});
-  selectedTournamentId=id; saveSelections(); save(); renderAll(); $('newTournamentName').value='';
+  tid=id; mid=null; saveSelections(); save(); render(); $('newTournamentName').value='';
 };
-
 $('finishTournament').onclick=()=>{
   const t=getTournament(); if(!t) return;
-  if(!confirm(`Päätä turnaus "${t.name}"?`)) return;
-  t.finished=true; save(); renderAll();
+  if(!confirm('Päätä turnaus "'+t.name+'"?')) return;
+  t.finished=true; save(); render();
 };
-
+$('deleteTournament').onclick=()=>{
+  const t=getTournament(); if(!t) return;
+  if(!confirm('Poistetaanko turnaus "'+t.name+'" ja kaikki sen data? Tätä ei voi peruuttaa!')) return;
+  data.tournaments=data.tournaments.filter(x=>String(x.id)!==String(tid));
+  tid=null; mid=null; saveSelections(); save(); render();
+};
 $('createMatch').onclick=()=>{
   const t=getTournament(); if(!t){alert('Luo ensin turnaus');return;}
   const name=$('newMatchName').value.trim(); if(!name){alert('Anna ottelun nimi');return;}
   const tv=$('newMatchTime').value; if(!tv){alert('Aseta pelin alkuaika');return;}
   const id=Date.now().toString();
   t.matches.push({id,name,startTime:new Date(tv).toISOString()});
-  selectedMatchId=id; saveSelections(); save(); renderAll(); $('newMatchName').value=''; $('newMatchTime').value='';
+  t.predictions=t.predictions||{}; t.actuals=t.actuals||{};
+  mid=id; saveSelections(); save(); render(); $('newMatchName').value=''; $('newMatchTime').value='';
 };
-
-$('tabTable').onclick=()=>{ viewMode='table'; $('tabTable').classList.add('active'); $('tabCards').classList.remove('active'); renderMatchView(); };
-$('tabCards').onclick=()=>{ viewMode='cards'; $('tabCards').classList.add('active'); $('tabTable').classList.remove('active'); renderMatchView(); };
-$('refreshCheck').onclick=()=>{ save(); renderScoreboard(); refreshAllHL(); };
+$('deleteMatch').onclick=()=>{
+  const t=getTournament(); if(!t||!mid) return;
+  const match=getMatch(); if(!match) return;
+  if(!confirm('Poistetaanko ottelu "'+match.name+'"? Tätä ei voi peruuttaa!')) return;
+  t.matches=t.matches.filter(m=>String(m.id)!==String(mid));
+  delete (t.predictions||{})[mid]; delete (t.actuals||{})[mid];
+  mid=null; saveSelections(); save(); render();
+};
+$('tabTable').onclick=()=>{ viewMode='table'; $('tabTable').classList.add('active'); $('tabCards').classList.remove('active'); renderPredictions(); };
+$('tabCards').onclick=()=>{ viewMode='cards'; $('tabCards').classList.add('active'); $('tabTable').classList.remove('active'); renderPredictions(); };
+$('refreshCheck').onclick=()=>{ save(); renderScoreboard(); renderPredictions(); };
 $('saveTopThree').onclick=()=>save();
-$('exportBtn').onclick=()=>{ const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download='turnausveikkaus_data.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u); };
+$('exportBtn').onclick=()=>{
+  const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download='turnausveikkaus_data.json';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u);
+};
 $('importBtn').onclick=()=>$('importFile').click();
-$('importFile').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=async()=>{ try{const obj=JSON.parse(r.result);data=obj;selectedTournamentId=data.selectedTournamentId||null;selectedMatchId=null;await save();renderAll();alert('Tuotu!');}catch(er){alert('Virhe: '+er.message);} }; r.readAsText(f,'utf-8'); });
+$('importFile').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=async()=>{
+    try{ const obj=JSON.parse(r.result); data=obj; tid=data.selectedTournamentId||null; mid=null; await save(); render(); alert('Tuotu!'); }
+    catch(er){ alert('Virhe: '+er.message); }
+  }; r.readAsText(f,'utf-8');
+});
 
 let t3v=localStorage.getItem('tv_top3')!=='0';
 function applyT3(){ $('topThreeArea').style.display=t3v?'':'none'; $('saveTop3Row').style.display=t3v?'':'none'; $('toggleTop3').textContent=t3v?'Piilota':'Näytä'; }
-$('toggleTop3').onclick=()=>{ t3v=!t3v; localStorage.setItem('tv_top3',t3v?'1':'0'); applyT3(); };
+$('toggleTop3').onclick=()=>{ t3v=!t3v; localStorage.setItem('tv_top3',t3v?'1':'0'); applyT3(); }; applyT3();
 
 let pinsVisible=localStorage.getItem('tv_pins')!=='0';
-function applyPinsToggle(){
-  const area=$('pinManageArea'); const btn=$('togglePins');
-  if(!area||!btn) return;
-  area.style.display=pinsVisible?'':'none';
-  btn.textContent=pinsVisible?'Piilota':'Näytä';
-}
-document.addEventListener('DOMContentLoaded',()=>{
-  const btn=$('togglePins');
-  if(btn) btn.addEventListener('click',()=>{ pinsVisible=!pinsVisible; localStorage.setItem('tv_pins',pinsVisible?'1':'0'); applyPinsToggle(); });
-  applyPinsToggle();
-});
-applyT3();
+function applyPinsToggle(){ const a=$('pinManageArea'),b=$('togglePins'); if(!a||!b) return; a.style.display=pinsVisible?'':'none'; b.textContent=pinsVisible?'Piilota':'Näytä'; }
+const tpBtn=$('togglePins'); if(tpBtn) tpBtn.addEventListener('click',()=>{ pinsVisible=!pinsVisible; localStorage.setItem('tv_pins',pinsVisible?'1':'0'); applyPinsToggle(); }); applyPinsToggle();
 
 </script>
 
