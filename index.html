@@ -800,111 +800,145 @@ function renderPredCard(t,match,player,showResults){
 }
 
 function renderMatchView(){
-  const t=getTournament(),match=getMatch();
   const banEl=$('matchLockBanner'),cdEl=$('countdown'),predEl=$('predictionsArea');
-  if(!match){ banEl.innerHTML=''; cdEl.textContent=''; predEl.innerHTML='<p class="muted">Valitse ottelu.</p>'; renderActuals(); renderPlayerStatus(); return; }
+  try {
+    // Hae turnaus ja ottelu suoraan – älä luota getMatch():iin yksin
+    const t=getTournament();
+    const match=t?(t.matches||[]).find(m=>String(m.id)===String(selectedMatchId)):null;
 
-  const locked=isLocked(match);
-  const showResults=locked; // Tulokset näkyy kun peli alkaa
+    if(!t||!match){
+      banEl.innerHTML='';
+      cdEl.textContent='';
+      predEl.innerHTML='<p class="muted">Valitse ottelu.</p>';
+      try{renderActuals();}catch(e){}
+      try{renderPlayerStatus();}catch(e){}
+      return;
+    }
 
-  // Banneri
-  if(locked){
-    banEl.innerHTML=`<div class="lock-banner">🔒 Peli alkanut – veikkaukset lukittu – tulokset näkyvissä</div>`;
-  } else {
-    const ts=match.startTime?new Date(match.startTime).toLocaleString('fi-FI',{weekday:'short',day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-    banEl.innerHTML=`<div class="open-banner">✅ Veikkaukset auki${ts?' – lukittuu '+ts:''}</div>`;
-  }
+    const mid=match.id;
+    const locked=isLocked(match);
 
-  startCountdown(match);
-  renderPlayerStatus();
+    // Banneri
+    if(locked){
+      banEl.innerHTML='<div class="lock-banner">🔒 Peli alkanut – veikkaukset lukittu – tulokset näkyvissä</div>';
+    } else {
+      const ts=match.startTime?new Date(match.startTime).toLocaleString('fi-FI',{weekday:'short',day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+      banEl.innerHTML='<div class="open-banner">✅ Veikkaukset auki'+(ts?' – lukittuu '+ts:'')+'</div>';
+    }
 
-  if(currentUser===ADMIN){
-    if(!locked){
-      // Ennen pelin alkua: admin näkee VAIN omat veikkauksensa
-      predEl.innerHTML=renderPredCard(t,match,ADMIN,false);
-      attachPredListeners(predEl,t,match.id);
-    } else if(viewMode==='table'){
-      // Pelin jälkeen taulukko
-      const actual=t.actuals[match.id]||{};
-      let thead=`<tr><th class="sticky-top sticky-left sticky-corner">Kohde</th>${PLAYERS.map(p=>`<th class="sticky-top">${p===ADMIN?'👑':''} ${p}</th>`).join('')}</tr>`;
-      let tbody=FIELDS.map(f=>{
-        let row=`<tr><th class="sticky-left">${f.label}</th>`;
-        row+=PLAYERS.map(p=>{
-          const pv=(t.predictions[match.id]||{})[p]?.[f.key]||'';
-          const av=actual[f.key]||'';
-          const correct=av!==''&&fieldMatch(f.key,pv,av);
-          const incorrect=av!==''&&pv!==''&&!correct;
-          const w=widget('pred',f.key,pv,`${p}:${f.key}`,true);
-          return `<td class="${correct?'correct':''} ${incorrect?'incorrect':''}">${w}</td>`;
+    try{startCountdown(match);}catch(e){}
+    try{renderPlayerStatus();}catch(e){}
+
+    // Veikkaukset
+    if(currentUser===ADMIN){
+      if(!locked){
+        predEl.innerHTML=renderPredCard(t,match,ADMIN,false);
+        attachPredListeners(predEl,t,mid);
+      } else if(viewMode==='table'){
+        const actual=t.actuals[mid]||{};
+        let thead='<tr><th class="sticky-top sticky-left sticky-corner">Kohde</th>'+PLAYERS.map(p=>'<th class="sticky-top">'+(p===ADMIN?'👑':'')+' '+p+'</th>').join('')+'</tr>';
+        let tbody=FIELDS.map(f=>{
+          let row='<tr><th class="sticky-left">'+f.label+'</th>';
+          row+=PLAYERS.map(p=>{
+            const pv=((t.predictions[mid]||{})[p]||{})[f.key]||'';
+            const av=(actual[f.key]||'');
+            const correct=av!==''&&fieldMatch(f.key,pv,av);
+            const incorrect=av!==''&&pv!==''&&!correct;
+            const w=widget('pred',f.key,pv,p+':'+f.key,true);
+            return '<td class="'+(correct?'correct':'')+(incorrect?' incorrect':'')+'">'+w+'</td>';
+          }).join('');
+          return row+'</tr>';
         }).join('');
-        return row+'</tr>';
-      }).join('');
-      predEl.innerHTML=`<div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
-      attachPredListeners(predEl,t,match.id);
+        predEl.innerHTML='<div class="table-wrap"><table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table></div>';
+        attachPredListeners(predEl,t,mid);
+      } else {
+        predEl.innerHTML=PLAYERS.map(p=>renderPredCard(t,match,p,true)).join('');
+        attachPredListeners(predEl,t,mid);
+      }
     } else {
-      // Pelin jälkeen kortit: admin näkee kaikki
-      predEl.innerHTML=PLAYERS.map(p=>renderPredCard(t,match,p,true)).join('');
-      attachPredListeners(predEl,t,match.id);
+      predEl.innerHTML=renderPredCard(t,match,currentUser,locked);
+      attachPredListeners(predEl,t,mid);
     }
-  } else {
-    // Veikkaaja: näkee vain oman kortin
-    if(showResults){
-      // Pelin jälkeen: oma kortti + scoreboard näkyvissä
-      predEl.innerHTML=renderPredCard(t,match,currentUser,true);
-    } else {
-      predEl.innerHTML=renderPredCard(t,match,currentUser,false);
-    }
-    attachPredListeners(predEl,t,match.id);
-  }
 
-  renderActuals(selectedMatchId);
+    try{renderActuals(mid);}catch(e){ console.error('renderActuals error',e); }
+  } catch(e) {
+    console.error('renderMatchView error:', e);
+    predEl.innerHTML='<p class="muted" style="color:red">Virhe: '+e.message+'</p>';
+  }
 }
 
 // =====================
 // RENDER: FAKTAT
 // =====================
 function renderActuals(matchIdOverride){
-  const el=$('actualsArea'),t=getTournament();
-  const mid=matchIdOverride||selectedMatchId;
-  if(!t||!mid){ el.innerHTML='<p class="muted">Valitse ottelu.</p>'; return; }
-  t.actuals[mid]=t.actuals[mid]||{};
-  const act=t.actuals[mid];
-  const isAdmin=currentUser===ADMIN;
-  const rows=FIELDS.map(f=>`<div class="kv-row"><div class="kv-label">${f.label}</div>${widget('act',f.key,act[f.key]||'',f.key,!isAdmin)}</div>`).join('');
-  el.innerHTML=`<div class="person-card actuals-card"><div class="card-head"><div class="person-title">Faktat</div><div class="pill">${isAdmin?'Muokattavissa':'Vain luku'}</div></div><div class="kv">${rows}</div></div>`;
-  if(!isAdmin) return;
-  function handleActualChange(e){
-    if(e.target.dataset.actHome!=null||e.target.dataset.actAway!=null){
-      const par=e.target.closest('.score-combo'); if(!par) return;
-      const hi=par.querySelector('[data-act-home]'),ai=par.querySelector('[data-act-away]');
-      t.actuals[mid]['lopputulos']=hi.value&&ai.value?`${hi.value}-${ai.value}`:''; renderScoreboard(); save(); return;
+  const el=$('actualsArea');
+  if(!el) return;
+  try {
+    const t=getTournament();
+    const mid=matchIdOverride||selectedMatchId;
+    if(!t||!mid){ el.innerHTML='<p class="muted">Valitse ottelu.</p>'; return; }
+    // Varmista että ottelu on olemassa
+    const match=(t.matches||[]).find(m=>String(m.id)===String(mid));
+    if(!match){ el.innerHTML='<p class="muted">Valitse ottelu.</p>'; return; }
+    t.actuals[mid]=t.actuals[mid]||{};
+    const act=t.actuals[mid];
+    const isAdmin=currentUser===ADMIN;
+    const rows=FIELDS.map(f=>'<div class="kv-row"><div class="kv-label">'+f.label+'</div>'+widget('act',f.key,act[f.key]||'',f.key,!isAdmin)+'</div>').join('');
+    el.innerHTML='<div class="person-card actuals-card"><div class="card-head"><div class="person-title">Faktat</div><div class="pill">'+(isAdmin?'Muokattavissa':'Vain luku')+'</div></div><div class="kv">'+rows+'</div></div>';
+    if(!isAdmin) return;
+    function handleActualChange(e){
+      if(e.target.dataset.actHome!=null||e.target.dataset.actAway!=null){
+        const par=e.target.closest('.score-combo'); if(!par) return;
+        const hi=par.querySelector('[data-act-home]'),ai=par.querySelector('[data-act-away]');
+        t.actuals[mid]['lopputulos']=hi.value&&ai.value?(hi.value+'-'+ai.value):''; renderScoreboard(); save(); return;
+      }
+      if(e.target.dataset.actMin!=null||e.target.dataset.actSec!=null){
+        const par=e.target.closest('.time-combo'); if(!par) return;
+        const mi=par.querySelector('[data-act-min]'),si=par.querySelector('[data-act-sec]');
+        t.actuals[mid]['ekan_maali_aika']=mi.value&&si.value?(mi.value+':'+si.value):''; renderScoreboard(); save(); return;
+      }
+      const key=e.target.dataset.act; if(!key) return;
+      t.actuals[mid][key]=e.target.value; renderScoreboard(); save();
     }
-    if(e.target.dataset.actMin!=null||e.target.dataset.actSec!=null){
-      const par=e.target.closest('.time-combo'); if(!par) return;
-      const mi=par.querySelector('[data-act-min]'),si=par.querySelector('[data-act-sec]');
-      t.actuals[mid]['ekan_maali_aika']=mi.value&&si.value?`${mi.value}:${si.value}`:''; renderScoreboard(); save(); return;
-    }
-    const key=e.target.dataset.act; if(!key) return;
-    t.actuals[mid][key]=e.target.value; renderScoreboard(); save();
+    el.querySelectorAll('input[data-act],input[data-act-home],input[data-act-away],input[data-act-min],input[data-act-sec]').forEach(inp=>{
+      inp.addEventListener('input', handleActualChange);
+    });
+    el.querySelectorAll('select[data-act]').forEach(s=>{
+      s.addEventListener('change', handleActualChange);
+    });
+  } catch(e) {
+    console.error('renderActuals error:', e);
+    el.innerHTML='<p class="muted" style="color:red">Virhe: '+e.message+'</p>';
   }
-  el.querySelectorAll('input[data-act],input[data-act-home],input[data-act-away],input[data-act-min],input[data-act-sec]').forEach(inp=>{
-    inp.addEventListener('input', handleActualChange);
-  });
-  el.querySelectorAll('select[data-act]').forEach(sel=>{
-    sel.addEventListener('change', handleActualChange);
-  });
 }
 
 // =====================
 // RENDER: TURNAUKSEN STATUS
 // =====================
 function renderTournamentStatus(){
-  const t=getTournament();
-  const fa=$('finishTournamentArea'),badge=$('tournamentFinishedBadge'),del=$('deleteTournamentArea');
-  if(!t||currentUser!==ADMIN){ if(fa)fa.style.display='none'; if(badge)badge.style.display='none'; if(del)del.style.display='none'; $('statsCard').style.display='none'; return; }
-  if(del) del.style.display=''; // Poista-nappi aina näkyvissä adminille kun turnaus valittu
-  if(t.finished){ if(fa)fa.style.display='none'; if(badge)badge.style.display=''; renderStats(); }
-  else { if(fa)fa.style.display=''; if(badge)badge.style.display='none'; $('statsCard').style.display='none'; }
+  try{
+    const t=getTournament();
+    const fa=$('finishTournamentArea'),badge=$('tournamentFinishedBadge'),del=$('deleteTournamentArea');
+    const sc=$('statsCard');
+    if(!t||currentUser!==ADMIN){
+      if(fa)fa.style.display='none';
+      if(badge)badge.style.display='none';
+      if(del)del.style.display='none';
+      if(sc)sc.style.display='none';
+      return;
+    }
+    if(del) del.style.display='';
+    if(t.finished){
+      if(fa)fa.style.display='none';
+      if(badge)badge.style.display='';
+      if(sc)sc.style.display='';
+      renderStats();
+    } else {
+      if(fa)fa.style.display='';
+      if(badge)badge.style.display='none';
+      if(sc)sc.style.display='none';
+    }
+  }catch(e){ console.error('renderTournamentStatus error:',e); }
 }
 
 // =====================
@@ -993,9 +1027,14 @@ window._savePin = async function(player){
 // RENDERALL
 // =====================
 function renderAll(){
-  restoreSelections();
-  renderTournamentSelect(); renderMatchSelect(); renderTopThree(); renderScoreboard();
-  renderMatchView(); renderTournamentStatus(); if(currentUser===ADMIN) renderPinManage();
+  try{ restoreSelections(); }catch(e){}
+  try{ renderTournamentSelect(); }catch(e){ console.error('renderTournamentSelect:',e); }
+  try{ renderMatchSelect(); }catch(e){ console.error('renderMatchSelect:',e); }
+  try{ renderTopThree(); }catch(e){ console.error('renderTopThree:',e); }
+  try{ renderScoreboard(); }catch(e){ console.error('renderScoreboard:',e); }
+  try{ renderMatchView(); }catch(e){ console.error('renderMatchView:',e); }
+  try{ renderTournamentStatus(); }catch(e){ console.error('renderTournamentStatus:',e); }
+  if(currentUser===ADMIN) try{ renderPinManage(); }catch(e){}
 }
 
 // =====================
