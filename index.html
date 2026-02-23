@@ -515,30 +515,36 @@ function widget(kind,key,value,dataset,disabled){
 // PRED LISTENERS
 // =====================
 function attachPredListeners(el,t,matchId){
-  el.querySelectorAll('input[data-pred],input[data-pred-home],input[data-pred-away],input[data-pred-min],input[data-pred-sec],select[data-pred]').forEach(inp=>{
-    inp.addEventListener('input',e=>{
-      if(e.target.dataset.predHome!=null||e.target.dataset.predAway!=null){
-        const par=e.target.closest('.score-combo'); if(!par) return;
-        const hi=par.querySelector('[data-pred-home]'),ai=par.querySelector('[data-pred-away]');
-        if(!hi||!hi.dataset.predHome) return;
-        const [pl]=hi.dataset.predHome.split(':');
-        t.predictions[matchId]=t.predictions[matchId]||{}; t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
-        t.predictions[matchId][pl]['lopputulos']=hi.value&&ai.value?`${hi.value}-${ai.value}`:''; return;
-      }
-      if(e.target.dataset.predMin!=null||e.target.dataset.predSec!=null){
-        const par=e.target.closest('.time-combo'); if(!par) return;
-        const mi=par.querySelector('[data-pred-min]'),si=par.querySelector('[data-pred-sec]');
-        if(!mi||!mi.dataset.predMin) return;
-        const [pl]=mi.dataset.predMin.split(':');
-        t.predictions[matchId]=t.predictions[matchId]||{}; t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
-        t.predictions[matchId][pl]['ekan_maali_aika']=mi.value&&si.value?`${mi.value}:${si.value}`:''; return;
-      }
-      const ds=e.target.dataset.pred; if(!ds) return;
-      const [pl,key]=ds.split(':');
+  function handlePred(e){
+    if(e.target.dataset.predHome!=null||e.target.dataset.predAway!=null){
+      const par=e.target.closest('.score-combo'); if(!par) return;
+      const hi=par.querySelector('[data-pred-home]'),ai=par.querySelector('[data-pred-away]');
+      if(!hi||!hi.dataset.predHome) return;
+      const [pl]=hi.dataset.predHome.split(':');
       t.predictions[matchId]=t.predictions[matchId]||{}; t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
-      t.predictions[matchId][pl][key]=e.target.value;
-    });
+      t.predictions[matchId][pl]['lopputulos']=hi.value&&ai.value?`${hi.value}-${ai.value}`:''; return;
+    }
+    if(e.target.dataset.predMin!=null||e.target.dataset.predSec!=null){
+      const par=e.target.closest('.time-combo'); if(!par) return;
+      const mi=par.querySelector('[data-pred-min]'),si=par.querySelector('[data-pred-sec]');
+      if(!mi||!mi.dataset.predMin) return;
+      const [pl]=mi.dataset.predMin.split(':');
+      t.predictions[matchId]=t.predictions[matchId]||{}; t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
+      t.predictions[matchId][pl]['ekan_maali_aika']=mi.value&&si.value?`${mi.value}:${si.value}`:''; return;
+    }
+    const ds=e.target.dataset.pred; if(!ds) return;
+    const [pl,key]=ds.split(':');
+    t.predictions[matchId]=t.predictions[matchId]||{}; t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
+    t.predictions[matchId][pl][key]=e.target.value;
+  }
+  // Numerokenttiin 'input', valintoihin 'change' (tallennetaan heti)
+  el.querySelectorAll('input[data-pred],input[data-pred-home],input[data-pred-away],input[data-pred-min],input[data-pred-sec]').forEach(inp=>{
+    inp.addEventListener('input', handlePred);
     inp.addEventListener('blur',()=>{ save(); renderScoreboard(); });
+  });
+  el.querySelectorAll('select[data-pred]').forEach(sel=>{
+    sel.addEventListener('change', handlePred);
+    sel.addEventListener('change',()=>{ save(); renderScoreboard(); });
   });
 }
 
@@ -626,7 +632,7 @@ function renderTopThree(){
   const uPred=t.topThreePrediction[currentUser]||['','',''];
   const aT3=t.actualTopThree||[];
   const locked=isTop3Locked(t);           // Lukittu kun 1. peli alkaa
-  const showResults=t.finished;           // Tulokset vasta turnauksen jälkeen
+  const showResults=t.finished;           // Tulokset ja faktat-kenttä vasta turnauksen jälkeen
   const hasVoted=uPred.some(v=>v!=='');
 
   // Status-banneri
@@ -656,9 +662,9 @@ function renderTopThree(){
 
   let html=banner+adminStatus+'<div class="t3-grid">';
 
-  // Admin: faktat-kenttä vain turnauksen jälkeen
-  if(isAdmin&&showResults){
-    html+=`<div class="t3-card"><div class="t3-title">✅ Todellinen järjestys</div>${[0,1,2].map(i=>`<div class="t3-row"><label style="font-size:12px;color:var(--muted);margin-bottom:2px">${i+1}. sija</label><select data-t3a="${i}">${tOpts}</select></div>`).join('')}</div>`;
+  // Admin: faktat-kenttä heti kun turnaus on lukittu
+  if(isAdmin&&locked){
+    html+=`<div class="t3-card"><div class="t3-title">✅ Lisää todellinen järjestys</div>${[0,1,2].map(i=>`<div class="t3-row"><label style="font-size:12px;color:var(--muted);margin-bottom:2px">${i+1}. sija</label><select data-t3a="${i}">${tOpts}</select></div>`).join('')}</div>`;
   }
 
   // Oma veikkaus – piilotettu jos ei ole luotu otteluita vielä
@@ -680,7 +686,7 @@ function renderTopThree(){
   wrap.innerHTML=html;
 
   // Aseta arvot
-  if(isAdmin&&showResults) [0,1,2].forEach(i=>{ const s=wrap.querySelector(`[data-t3a="${i}"]`); if(s&&aT3[i]) s.value=aT3[i]; });
+  if(isAdmin&&locked) [0,1,2].forEach(i=>{ const s=wrap.querySelector(`[data-t3a="${i}"]`); if(s&&aT3[i]) s.value=aT3[i]; });
   if(showResults||!locked) [0,1,2].forEach(i=>{ const s=wrap.querySelector(`[data-t3m="${i}"]`); if(s&&uPred[i]) s.value=uPred[i]; });
 
   const markT3=()=>{
@@ -700,7 +706,7 @@ function renderTopThree(){
     t.topThreePrediction[currentUser][idx]=e.target.value;
     markT3(); renderScoreboard(); save();
   }));
-  if(isAdmin&&showResults) wrap.querySelectorAll('[data-t3a]').forEach(inp=>inp.addEventListener('change',e=>{
+  if(isAdmin&&locked) wrap.querySelectorAll('[data-t3a]').forEach(inp=>inp.addEventListener('change',e=>{
     t.actualTopThree[+e.target.dataset.t3a]=e.target.value;
     markT3(); renderScoreboard(); save();
   }));
@@ -830,22 +836,25 @@ function renderActuals(){
   const rows=FIELDS.map(f=>`<div class="kv-row"><div class="kv-label">${f.label}</div>${widget('act',f.key,act[f.key]||'',f.key,!isAdmin)}</div>`).join('');
   el.innerHTML=`<div class="person-card actuals-card"><div class="card-head"><div class="person-title">Faktat</div><div class="pill">${isAdmin?'Muokattavissa':'Vain luku'}</div></div><div class="kv">${rows}</div></div>`;
   if(!isAdmin) return;
-  el.querySelectorAll('input[data-act],input[data-act-home],input[data-act-away],input[data-act-min],input[data-act-sec],select[data-act]').forEach(inp=>{
-    inp.addEventListener('input',e=>{
-      if(e.target.dataset.actHome!=null||e.target.dataset.actAway!=null){
-        const par=e.target.closest('.score-combo'); if(!par) return;
-        const hi=par.querySelector('[data-act-home]'),ai=par.querySelector('[data-act-away]');
-        t.actuals[selectedMatchId]['lopputulos']=hi.value&&ai.value?`${hi.value}-${ai.value}`:''; renderScoreboard(); return;
-      }
-      if(e.target.dataset.actMin!=null||e.target.dataset.actSec!=null){
-        const par=e.target.closest('.time-combo'); if(!par) return;
-        const mi=par.querySelector('[data-act-min]'),si=par.querySelector('[data-act-sec]');
-        t.actuals[selectedMatchId]['ekan_maali_aika']=mi.value&&si.value?`${mi.value}:${si.value}`:''; renderScoreboard(); return;
-      }
-      const key=e.target.dataset.act; if(!key) return;
-      t.actuals[selectedMatchId][key]=e.target.value; renderScoreboard();
-    });
-    inp.addEventListener('blur',()=>save());
+  function handleActualChange(e){
+    if(e.target.dataset.actHome!=null||e.target.dataset.actAway!=null){
+      const par=e.target.closest('.score-combo'); if(!par) return;
+      const hi=par.querySelector('[data-act-home]'),ai=par.querySelector('[data-act-away]');
+      t.actuals[selectedMatchId]['lopputulos']=hi.value&&ai.value?`${hi.value}-${ai.value}`:''; renderScoreboard(); save(); return;
+    }
+    if(e.target.dataset.actMin!=null||e.target.dataset.actSec!=null){
+      const par=e.target.closest('.time-combo'); if(!par) return;
+      const mi=par.querySelector('[data-act-min]'),si=par.querySelector('[data-act-sec]');
+      t.actuals[selectedMatchId]['ekan_maali_aika']=mi.value&&si.value?`${mi.value}:${si.value}`:''; renderScoreboard(); save(); return;
+    }
+    const key=e.target.dataset.act; if(!key) return;
+    t.actuals[selectedMatchId][key]=e.target.value; renderScoreboard(); save();
+  }
+  el.querySelectorAll('input[data-act],input[data-act-home],input[data-act-away],input[data-act-min],input[data-act-sec]').forEach(inp=>{
+    inp.addEventListener('input', handleActualChange);
+  });
+  el.querySelectorAll('select[data-act]').forEach(sel=>{
+    sel.addEventListener('change', handleActualChange);
   });
 }
 
