@@ -82,6 +82,11 @@
     @media(max-width:480px){ .actuals-card .kv-row{ grid-template-columns:150px 1fr; } }
     .actuals-card input, .actuals-card select{ padding:14px 16px; font-size:18px; border-radius:12px; }
     #loginScreen{ max-width:420px; margin:60px auto; text-align:center; }
+    .pin-dot{ width:16px; height:16px; border-radius:50%; border:2px solid var(--border); background:transparent; transition:background 0.15s; }
+    .pin-dot.filled{ background:var(--primary); border-color:var(--primary); }
+    .pin-key{ padding:18px; font-size:20px; font-weight:700; border:2px solid var(--border); border-radius:14px; background:var(--card); color:var(--text); cursor:pointer; transition:all 0.1s; }
+    .pin-key:hover{ border-color:var(--primary); background:var(--primary); color:#fff; }
+    .pin-key:active{ transform:scale(0.93); }
     .player-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:24px; }
     .player-btn{ padding:20px; font-size:17px; font-weight:700; border:2px solid var(--border); border-radius:14px; background:var(--card); color:var(--text); cursor:pointer; transition:all 0.15s; }
     .player-btn:hover{ border-color:var(--primary); background:var(--primary); color:#fff; }
@@ -109,8 +114,35 @@
 <div id="loginScreen">
   <div style="font-size:48px;margin-bottom:8px">🏒</div>
   <h1 style="font-size:26px;margin:0 0 6px">Turnausveikkaus</h1>
-  <p class="muted">Valitse nimesi kirjautuaksesi</p>
-  <div class="player-grid" id="playerGrid"></div>
+
+  <!-- Vaihe 1: valitse nimi -->
+  <div id="loginStep1">
+    <p class="muted">Valitse nimesi</p>
+    <div class="player-grid" id="playerGrid"></div>
+  </div>
+
+  <!-- Vaihe 2: syötä PIN -->
+  <div id="loginStep2" style="display:none;margin-top:16px">
+    <p class="muted">Tervetuloa, <strong id="loginName"></strong>!</p>
+    <p class="muted" style="margin-top:4px">Syötä PIN-koodi</p>
+    <div style="display:flex;gap:8px;justify-content:center;margin:16px 0" id="pinDots"></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:220px;margin:0 auto">
+      <button class="pin-key" data-v="1">1</button>
+      <button class="pin-key" data-v="2">2</button>
+      <button class="pin-key" data-v="3">3</button>
+      <button class="pin-key" data-v="4">4</button>
+      <button class="pin-key" data-v="5">5</button>
+      <button class="pin-key" data-v="6">6</button>
+      <button class="pin-key" data-v="7">7</button>
+      <button class="pin-key" data-v="8">8</button>
+      <button class="pin-key" data-v="9">9</button>
+      <button class="pin-key" data-v="back" style="background:#6b7280">←</button>
+      <button class="pin-key" data-v="0">0</button>
+      <button class="pin-key" data-v="clear" style="background:#6b7280">✕</button>
+    </div>
+    <p id="pinError" style="color:#dc2626;font-weight:700;margin-top:12px;min-height:20px"></p>
+    <button class="btn small secondary" style="margin-top:8px" onclick="window._backToNames()">← Vaihda nimi</button>
+  </div>
 </div>
 
 <!-- PÄÄSOVELLUS -->
@@ -145,6 +177,9 @@
         <div id="tournamentFinishedBadge" style="display:none">
           <div style="background:#22c55e;color:#fff;border-radius:10px;padding:10px;text-align:center;font-weight:700;margin-top:6px">✅ Turnaus päättynyt</div>
         </div>
+        <div class="field" id="deleteTournamentArea" style="display:none;margin-top:6px">
+          <button id="deleteTournament" class="btn small danger" style="width:100%">🗑️ Poista turnaus</button>
+        </div>
       </div>
 
       <div class="separator"></div>
@@ -164,6 +199,9 @@
         </div>
         <div class="field">
           <button id="createMatch" class="btn small" style="width:100%">Luo ottelu</button>
+        </div>
+        <div class="field" id="deleteMatchArea" style="display:none;margin-top:4px">
+          <button id="deleteMatch" class="btn small danger" style="width:100%">🗑️ Poista ottelu</button>
         </div>
       </div>
 
@@ -187,6 +225,11 @@
         <button id="downloadPdfBtn" class="btn small" style="background:#7c3aed">📄 PDF</button>
       </div>
       <p class="muted" style="margin-top:6px">☁️ Data tallentuu Firebase-pilveen</p>
+      <div id="adminPinTools" style="display:none;margin-top:8px">
+        <div class="separator"></div>
+        <h2>🔐 PIN-koodit</h2>
+        <div id="pinManageArea"></div>
+      </div>
     </div>
 
     <div class="grid">
@@ -245,6 +288,7 @@ const firebaseConfig = {
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
 const DATA_DOC = doc(db, "app", "data");
+const PINS_DOC = doc(db, "app", "pins");
 
 // =====================
 // VAKIOT
@@ -279,6 +323,7 @@ let currentUser = null;
 let isSaving = false;
 let saveQueued = false;
 let cdInterval = null;
+let pins = {}; // { "Roosa": "1234", ... } – ladataan Firestoresta
 
 // =====================
 // HELPERS
@@ -315,8 +360,9 @@ async function save(){
 async function loadData(){
   showStatus('⏳ Ladataan…','#6366f1');
   try{
-    const snap=await getDoc(DATA_DOC);
+    const [snap, pinSnap] = await Promise.all([getDoc(DATA_DOC), getDoc(PINS_DOC)]);
     if(snap.exists()){ data=JSON.parse(snap.data().json); selectedTournamentId=data.selectedTournamentId||null; }
+    if(pinSnap.exists()){ pins=pinSnap.data().pins||{}; }
   }catch(e){
     const bkp=localStorage.getItem('tv_bkp');
     if(bkp) try{data=JSON.parse(bkp);selectedTournamentId=data.selectedTournamentId||null;}catch(e2){}
@@ -336,13 +382,74 @@ async function loadData(){
 }
 
 // =====================
-// KIRJAUTUMINEN
+// KIRJAUTUMINEN + PIN
 // =====================
+let pinBuffer = '';
+let pendingLoginName = '';
+
 function buildLogin(){
-  $('playerGrid').innerHTML=PLAYERS.map(p=>`<button class="player-btn ${p===ADMIN?'admin':''}" onclick="window._login('${p}')">${p===ADMIN?'👑 ':''}${p}</button>`).join('');
+  $('playerGrid').innerHTML=PLAYERS.map(p=>`<button class="player-btn ${p===ADMIN?'admin':''}" onclick="window._selectName('${p}')">${p===ADMIN?'👑 ':''}${p}</button>`).join('');
 }
 
-window._login = function(name){
+window._selectName = function(name){
+  pendingLoginName = name;
+  pinBuffer = '';
+  $('loginStep1').style.display='none';
+  $('loginStep2').style.display='';
+  $('loginName').textContent = name;
+  $('pinError').textContent = '';
+  renderPinDots();
+};
+
+window._backToNames = function(){
+  pendingLoginName=''; pinBuffer='';
+  $('loginStep1').style.display='';
+  $('loginStep2').style.display='none';
+};
+
+function renderPinDots(){
+  $('pinDots').innerHTML = [0,1,2,3].map(i=>
+    `<div class="pin-dot ${i<pinBuffer.length?'filled':''}"></div>`
+  ).join('');
+}
+
+function handlePinKey(v){
+  if(v==='clear'){ pinBuffer=''; renderPinDots(); $('pinError').textContent=''; return; }
+  if(v==='back'){ pinBuffer=pinBuffer.slice(0,-1); renderPinDots(); $('pinError').textContent=''; return; }
+  if(pinBuffer.length>=4) return;
+  pinBuffer+=v;
+  renderPinDots();
+  if(pinBuffer.length===4) checkPin();
+}
+
+async function checkPin(){
+  const name=pendingLoginName;
+  // Lataa tuoreet PINit Firestoresta
+  try{
+    const snap=await getDoc(PINS_DOC);
+    if(snap.exists()) pins=snap.data().pins||{};
+  }catch(e){}
+
+  const storedPin=pins[name];
+  if(!storedPin){
+    // Ei PINiä asetettu – admin voi sisään, muut eivät
+    if(name===ADMIN){
+      doLogin(name);
+    } else {
+      $('pinError').textContent='PIN-koodia ei ole asetettu. Pyydä adminia asettamaan PIN.';
+      pinBuffer=''; renderPinDots();
+    }
+    return;
+  }
+  if(pinBuffer===storedPin){
+    doLogin(name);
+  } else {
+    $('pinError').textContent='Väärä PIN-koodi. Yritä uudelleen.';
+    pinBuffer=''; renderPinDots();
+  }
+}
+
+function doLogin(name){
   currentUser=name;
   localStorage.setItem('tv_user',name);
   $('loginScreen').style.display='none';
@@ -352,16 +459,26 @@ window._login = function(name){
   $('adminTournamentTools').style.display=isAdmin?'':'none';
   $('adminMatchTools').style.display=isAdmin?'':'none';
   $('adminStatusCard').style.display=isAdmin?'':'none';
+  $('adminPinTools').style.display=isAdmin?'':'none';
   $('importBtn').style.display=isAdmin?'':'none';
   $('viewTabs').style.display=isAdmin?'':'none';
   loadData();
-};
+}
 
 window._logout = function(){
   currentUser=null; localStorage.removeItem('tv_user');
+  pinBuffer=''; pendingLoginName='';
   $('loginScreen').style.display=''; $('appScreen').style.display='none';
+  $('loginStep1').style.display=''; $('loginStep2').style.display='none';
   if(cdInterval) clearInterval(cdInterval);
 };
+
+// PIN nappi-handler
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.pin-key').forEach(btn=>{
+    btn.addEventListener('click',()=>handlePinKey(btn.dataset.v));
+  });
+});
 
 // =====================
 // WIDGET
@@ -440,7 +557,10 @@ function refreshAllHL(){ FIELDS.forEach(f=>PLAYERS.forEach(p=>doHighlight(p,f.ke
 // =====================
 buildLogin();
 const savedUser=localStorage.getItem('tv_user');
-if(savedUser&&PLAYERS.includes(savedUser)) window._login(savedUser);
+if(savedUser&&PLAYERS.includes(savedUser)){
+  // Auto-login: luota tallennettua sessiota (PIN on jo tarkistettu aiemmin)
+  doLogin(savedUser);
+}
 
 // =====================
 // RENDER: TURNAUSVALINTA
@@ -467,7 +587,8 @@ function renderMatchSelect(){
       return `<option value="${m.id}" ${String(m.id)===String(selectedMatchId)?'selected':''}>${lk}${m.name}${ts}</option>`;
     })
   ).join('');
-  sel.onchange=e=>{ selectedMatchId=e.target.value||null; renderMatchView(); };
+  sel.onchange=e=>{ selectedMatchId=e.target.value||null; updateDeleteMatchBtn(); renderMatchView(); };
+  updateDeleteMatchBtn();
 }
 
 // =====================
@@ -653,8 +774,12 @@ function renderMatchView(){
   renderPlayerStatus();
 
   if(currentUser===ADMIN){
-    if(viewMode==='table'){
-      // Taulukko
+    if(!locked){
+      // Ennen pelin alkua: admin näkee VAIN omat veikkauksensa
+      predEl.innerHTML=renderPredCard(t,match,ADMIN,false);
+      attachPredListeners(predEl,t,match.id);
+    } else if(viewMode==='table'){
+      // Pelin jälkeen taulukko
       const actual=t.actuals[match.id]||{};
       let thead=`<tr><th class="sticky-top sticky-left sticky-corner">Kohde</th>${PLAYERS.map(p=>`<th class="sticky-top">${p===ADMIN?'👑':''} ${p}</th>`).join('')}</tr>`;
       let tbody=FIELDS.map(f=>{
@@ -662,20 +787,20 @@ function renderMatchView(){
         row+=PLAYERS.map(p=>{
           const pv=(t.predictions[match.id]||{})[p]?.[f.key]||'';
           const av=actual[f.key]||'';
-          const correct=showResults&&av!==''&&fieldMatch(f.key,pv,av);
-          const incorrect=showResults&&av!==''&&pv!==''&&!correct;
-          const canEdit=(p===ADMIN&&!locked)||(showResults);
-          const w=widget('pred',f.key,pv,`${p}:${f.key}`,!canEdit);
+          const correct=av!==''&&fieldMatch(f.key,pv,av);
+          const incorrect=av!==''&&pv!==''&&!correct;
+          const w=widget('pred',f.key,pv,`${p}:${f.key}`,true);
           return `<td class="${correct?'correct':''} ${incorrect?'incorrect':''}">${w}</td>`;
         }).join('');
         return row+'</tr>';
       }).join('');
       predEl.innerHTML=`<div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+      attachPredListeners(predEl,t,match.id);
     } else {
-      // Kortit: admin näkee kaikki kortit
-      predEl.innerHTML=PLAYERS.map(p=>renderPredCard(t,match,p,showResults)).join('');
+      // Pelin jälkeen kortit: admin näkee kaikki
+      predEl.innerHTML=PLAYERS.map(p=>renderPredCard(t,match,p,true)).join('');
+      attachPredListeners(predEl,t,match.id);
     }
-    attachPredListeners(predEl,t,match.id);
   } else {
     // Veikkaaja: näkee vain oman kortin
     if(showResults){
@@ -726,8 +851,9 @@ function renderActuals(){
 // =====================
 function renderTournamentStatus(){
   const t=getTournament();
-  const fa=$('finishTournamentArea'),badge=$('tournamentFinishedBadge');
-  if(!t||currentUser!==ADMIN){ if(fa)fa.style.display='none'; if(badge)badge.style.display='none'; $('statsCard').style.display='none'; return; }
+  const fa=$('finishTournamentArea'),badge=$('tournamentFinishedBadge'),del=$('deleteTournamentArea');
+  if(!t||currentUser!==ADMIN){ if(fa)fa.style.display='none'; if(badge)badge.style.display='none'; if(del)del.style.display='none'; $('statsCard').style.display='none'; return; }
+  if(del) del.style.display=''; // Poista-nappi aina näkyvissä adminille kun turnaus valittu
   if(t.finished){ if(fa)fa.style.display='none'; if(badge)badge.style.display=''; renderStats(); }
   else { if(fa)fa.style.display=''; if(badge)badge.style.display='none'; $('statsCard').style.display='none'; }
 }
@@ -751,11 +877,75 @@ function renderStats(){
 }
 
 // =====================
+// POISTO-NAPIT
+// =====================
+function updateDeleteMatchBtn(){
+  const del=$('deleteMatchArea');
+  if(!del) return;
+  del.style.display=(currentUser===ADMIN&&selectedMatchId)?'':'none';
+}
+
+$('deleteTournament').onclick=()=>{
+  const t=getTournament(); if(!t) return;
+  if(!confirm(`Poistetaanko turnaus "${t.name}" ja kaikki sen ottelut?\n\nTätä ei voi peruuttaa!`)) return;
+  data.tournaments=data.tournaments.filter(x=>String(x.id)!==String(selectedTournamentId));
+  selectedTournamentId=null; selectedMatchId=null;
+  save(); renderAll();
+};
+
+$('deleteMatch').onclick=()=>{
+  const t=getTournament(); if(!t||!selectedMatchId) return;
+  const match=getMatch(); if(!match) return;
+  if(!confirm(`Poistetaanko ottelu "${match.name}" ja kaikki sen veikkaukset?\n\nTätä ei voi peruuttaa!`)) return;
+  t.matches=t.matches.filter(m=>String(m.id)!==String(selectedMatchId));
+  delete t.predictions[selectedMatchId];
+  delete t.actuals[selectedMatchId];
+  selectedMatchId=null;
+  save(); renderAll();
+};
+
+// =====================
+// RENDER: PIN HALLINTA (admin)
+// =====================
+function renderPinManage(){
+  const el=$('pinManageArea'); if(!el) return;
+  el.innerHTML=PLAYERS.map(p=>{
+    const hasPin=pins[p]?'✅ PIN asetettu':'❌ Ei PINiä';
+    const col=pins[p]?'#166534':'#991b1b';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:8px">
+      <div>
+        <div style="font-weight:700">${p==='Tero'?'👑 ':''} ${p}</div>
+        <div style="font-size:12px;color:${col}">${hasPin}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="password" inputmode="numeric" maxlength="4" placeholder="1234"
+          id="pin_${p}" style="width:80px;padding:8px;font-size:16px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)" />
+        <button class="btn small" onclick="window._savePin('${p}')">Tallenna</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window._savePin = async function(player){
+  const input=$(`pin_${player}`);
+  const val=(input?input.value:'').trim();
+  if(!/^\d{4}$/.test(val)){ alert('PIN-koodin pitää olla 4 numeroa!'); return; }
+  pins[player]=val;
+  try{
+    await setDoc(PINS_DOC,{pins});
+    input.value='';
+    renderPinManage();
+    showStatus(`✅ ${player}:n PIN tallennettu`,'#22c55e');
+    hideStatus();
+  }catch(e){ alert('Tallennus epäonnistui: '+e.message); }
+};
+
+// =====================
 // RENDERALL
 // =====================
 function renderAll(){
   renderTournamentSelect(); renderMatchSelect(); renderTopThree(); renderScoreboard();
-  renderMatchView(); renderTournamentStatus();
+  renderMatchView(); renderTournamentStatus(); if(currentUser===ADMIN) renderPinManage();
 }
 
 // =====================
