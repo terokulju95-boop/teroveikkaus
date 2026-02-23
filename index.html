@@ -7,7 +7,7 @@
   <title>🏒 Turnausveikkaus</title>
   <style>
     :root { --bg:#f7f7fb; --card:#ffffff; --text:#111827; --muted:#6b7280; --primary:#f97316; --primary-hover:#ea580c; --border:#e5e7eb; --ok:#22c55e; --dark:#111827; }
-    *{ box-sizing:border-box } html,body{ margin:0; padding:0 }
+    *{ box-sizing:border-box } html,body{ margin:0; padding:0; overflow-x:hidden }
     body{ background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; line-height:1.5; padding:12px }
     @media (prefers-color-scheme: dark) {
       .score-card { background:#ffffff !important; color:#000000 !important; }
@@ -25,7 +25,7 @@
     .card{ background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; box-shadow:0 1px 2px rgba(0,0,0,.04) }
     .field{ margin-bottom:8px }
     label{ font-weight:600; font-size:14px; display:block; margin-bottom:6px }
-    input[type="text"], input[type="number"], input[type="datetime-local"], select{ width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px; background:#fff }
+    input[type="text"], input[type="number"], input[type="datetime-local"], select{ width:100%; max-width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px; background:#fff; min-width:0 }
     input[type="number"]{ -moz-appearance:textfield }
     input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
     .btn{ display:inline-flex; justify-content:center; align-items:center; gap:8px; border:none; border-radius:12px; padding:12px 14px; font-weight:700; cursor:pointer; background:var(--primary); color:#fff; font-size:15px; }
@@ -220,9 +220,9 @@
       <div id="adminMatchTools" style="display:none">
         <div class="field">
           <label>Luo uusi ottelu</label>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-weight:700;font-size:16px;white-space:nowrap">SUOMI vs</span>
-            <input id="newMatchName" type="text" placeholder="RUOTSI" style="text-transform:uppercase;flex:1" />
+          <div style="display:flex;align-items:center;gap:8px;width:100%;min-width:0">
+            <span style="font-weight:700;font-size:16px;white-space:nowrap;flex-shrink:0">SUOMI vs</span>
+            <input id="newMatchName" type="text" placeholder="RUOTSI" style="text-transform:uppercase;flex:1;min-width:0" />
           </div>
         </div>
         <div class="field">
