@@ -25,7 +25,7 @@
     .card{ background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; box-shadow:0 1px 2px rgba(0,0,0,.04) }
     .field{ margin-bottom:8px }
     label{ font-weight:600; font-size:14px; display:block; margin-bottom:6px }
-    input[type="text"], input[type="number"], input[type="datetime-local"], select{ width:100%; max-width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px; background:#fff; min-width:0 }
+    input[type="text"], input[type="number"], input[type="datetime-local"], select{ width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px; background:#fff }
     input[type="number"]{ -moz-appearance:textfield }
     input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
     .btn{ display:inline-flex; justify-content:center; align-items:center; gap:8px; border:none; border-radius:12px; padding:12px 14px; font-weight:700; cursor:pointer; background:var(--primary); color:#fff; font-size:15px; }
@@ -45,8 +45,8 @@
     .person-card{ border:1px solid var(--border); border-radius:12px; padding:10px; background:#fff }
     .person-title{ font-weight:800; margin-bottom:8px }
     .kv{ display:grid; grid-template-columns:1fr; gap:6px }
-    .kv-row{ display:grid; grid-template-columns:180px 1fr; gap:8px; align-items:center }
-    @media(max-width:420px){ .kv-row{ grid-template-columns:140px 1fr } }
+    .kv-row{ display:grid; grid-template-columns:minmax(0,160px) minmax(0,1fr); gap:8px; align-items:center }
+    @media(max-width:380px){ .kv-row{ grid-template-columns:minmax(0,120px) minmax(0,1fr) } }
     .kv-label{ font-weight:600 }
     .kv-row.correct { background-color:#86efac !important; border-radius:8px; padding:4px 6px; }
     .kv-row.incorrect { background-color:#fca5a5 !important; border-radius:8px; padding:4px 6px; }
@@ -78,8 +78,8 @@
     table td.correct{ background-color:#86efac !important; }
     table td.incorrect{ background-color:#fca5a5 !important; }
     .actuals-card.person-card{ padding:14px; }
-    .actuals-card .kv-row{ grid-template-columns:200px 1fr; }
-    @media(max-width:480px){ .actuals-card .kv-row{ grid-template-columns:150px 1fr; } }
+    .actuals-card .kv-row{ grid-template-columns:minmax(0,180px) minmax(0,1fr); }
+    @media(max-width:480px){ .actuals-card .kv-row{ grid-template-columns:minmax(0,140px) minmax(0,1fr); } }
     .actuals-card input, .actuals-card select{ padding:14px 16px; font-size:18px; border-radius:12px; }
     #loginScreen{ max-width:420px; margin:60px auto; text-align:center; }
     .pin-dot{ width:16px; height:16px; border-radius:50%; border:2px solid var(--border); background:transparent; transition:background 0.15s; }
@@ -220,9 +220,9 @@
       <div id="adminMatchTools" style="display:none">
         <div class="field">
           <label>Luo uusi ottelu</label>
-          <div style="display:flex;align-items:center;gap:8px;width:100%;min-width:0">
-            <span style="font-weight:700;font-size:16px;white-space:nowrap;flex-shrink:0">SUOMI vs</span>
-            <input id="newMatchName" type="text" placeholder="RUOTSI" style="text-transform:uppercase;flex:1;min-width:0" />
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;font-size:16px;white-space:nowrap">SUOMI vs</span>
+            <input id="newMatchName" type="text" placeholder="RUOTSI" style="text-transform:uppercase;flex:1" />
           </div>
         </div>
         <div class="field">
