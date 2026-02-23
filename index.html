@@ -99,6 +99,11 @@
     .player-status-card.not-voted{ background:#fee2e2; border-color:#dc2626; color:#991b1b; }
     .player-status-card.done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
     .lock-banner{ background:#dc2626; color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:10px; }
+    .locked-view-header{ background:linear-gradient(135deg,#dc2626,#b91c1c); color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:12px; font-size:14px; }
+    .pred-card-wrapper{ margin-bottom:10px; }
+    .pred-card-me{ position:relative; }
+    .pred-card-me .person-card{ border:2px solid var(--primary) !important; box-shadow:0 0 0 3px rgba(249,115,22,0.2); }
+    .pred-card-you-label{ background:var(--primary); color:#fff; font-size:12px; font-weight:700; padding:4px 12px; border-radius:8px 8px 0 0; display:inline-block; margin-bottom:-2px; }
     .open-banner{ background:#22c55e; color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:10px; }
     #countdown{ margin-bottom:10px; }
     .countdown-box{ background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%); border:2px solid var(--primary); border-radius:14px; padding:12px 16px; text-align:center; }
@@ -683,7 +688,24 @@ function renderPredictions(){
       el.innerHTML=PLAYERS.map(p=>predCardHTML(t,match,p,true)).join('');
     }
   } else {
-    el.innerHTML=predCardHTML(t,match,currentUser,locked);
+    if(locked){
+      // Peli alkoi: näytä kaikkien veikkaukset kortteina
+      // Oma kortti ensin, sitten muut
+      const others = PLAYERS.filter(p=>p!==currentUser);
+      const allPlayers = [currentUser, ...others];
+      el.innerHTML =
+        '<div class="locked-view-header">🔒 Kaikkien veikkaukset – tulokset näkyvissä</div>'+
+        allPlayers.map(p=>{
+          const isMe = p===currentUser;
+          return '<div class="pred-card-wrapper'+(isMe?' pred-card-me':'')+'">'+
+            (isMe ? '<div class="pred-card-you-label">⭐ Sinun veikkauksesi</div>' : '')+
+            predCardHTML(t,match,p,true)+
+          '</div>';
+        }).join('');
+    } else {
+      // Peli ei alkanut: näytä vain oma kortti
+      el.innerHTML=predCardHTML(t,match,currentUser,false);
+    }
   }
   attachPredListeners(el,t,match.id);
 }
