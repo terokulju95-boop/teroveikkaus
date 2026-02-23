@@ -328,6 +328,10 @@ let saveQueued = false;
 let cdInterval = null;
 let pins = {}; // { "Roosa": "1234", ... } – ladataan Firestoresta
 
+// Tallenna ja palauta valinnat localStorage:sta (varmuuskopio)
+function saveSelections(){ try{ localStorage.setItem('tv_sel',JSON.stringify({t:selectedTournamentId,m:selectedMatchId})); }catch(e){} }
+function restoreSelections(){ try{ const s=JSON.parse(localStorage.getItem('tv_sel')||'{}'); if(!selectedTournamentId&&s.t) selectedTournamentId=s.t; if(!selectedMatchId&&s.m) selectedMatchId=s.m; }catch(e){} }
+
 // =====================
 // HELPERS
 // =====================
@@ -352,6 +356,7 @@ function hideStatus(){ setTimeout(()=>{ $('fb-status').style.opacity='0'; },1800
 // =====================
 async function save(){
   data.selectedTournamentId=selectedTournamentId;
+  data.selectedMatchId=selectedMatchId;
   try{ localStorage.setItem('tv_bkp',JSON.stringify(data)); }catch(e){}
   if(isSaving){ saveQueued=true; return; }
   isSaving=true; showStatus('💾 Tallennetaan…','#f97316');
@@ -364,11 +369,11 @@ async function loadData(){
   showStatus('⏳ Ladataan…','#6366f1');
   try{
     const [snap, pinSnap] = await Promise.all([getDoc(DATA_DOC), getDoc(PINS_DOC)]);
-    if(snap.exists()){ data=JSON.parse(snap.data().json); selectedTournamentId=data.selectedTournamentId||null; }
+    if(snap.exists()){ data=JSON.parse(snap.data().json); selectedTournamentId=data.selectedTournamentId||null; selectedMatchId=data.selectedMatchId||null; }
     if(pinSnap.exists()){ pins=pinSnap.data().pins||{}; }
   }catch(e){
     const bkp=localStorage.getItem('tv_bkp');
-    if(bkp) try{data=JSON.parse(bkp);selectedTournamentId=data.selectedTournamentId||null;}catch(e2){}
+    if(bkp) try{data=JSON.parse(bkp);selectedTournamentId=data.selectedTournamentId||null;selectedMatchId=data.selectedMatchId||null;}catch(e2){}
     showStatus('⚠️ Yhteysvirhe – paikallinen data','#f59e0b');
   }
   if(!data.tournaments) data.tournaments=[];
@@ -377,8 +382,20 @@ async function loadData(){
     if(!snap.exists()||isSaving) return;
     try{
       const remote=JSON.parse(snap.data().json);
+      // Säilytä valinnat - älä nollaa niitä snapshot-päivityksessä
+      const prevTid=selectedTournamentId, prevMid=selectedMatchId;
       data=remote; if(!data.tournaments) data.tournaments=[];
-      if(selectedTournamentId&&!data.tournaments.find(t=>String(t.id)===String(selectedTournamentId))) selectedTournamentId=data.selectedTournamentId||null;
+      // Palauta valinnat: käytä aiempia jos ne ovat edelleen valideja
+      const tStillExists=prevTid&&data.tournaments.find(t=>String(t.id)===String(prevTid));
+      if(tStillExists){
+        selectedTournamentId=prevTid;
+        const tObj=data.tournaments.find(t=>String(t.id)===String(prevTid));
+        const mStillExists=prevMid&&(tObj.matches||[]).find(m=>String(m.id)===String(prevMid));
+        selectedMatchId=mStillExists?prevMid:(data.selectedMatchId||null);
+      } else {
+        selectedTournamentId=data.selectedTournamentId||null;
+        selectedMatchId=data.selectedMatchId||null;
+      }
       renderAll();
     }catch(e){}
   });
@@ -579,7 +596,7 @@ function renderTournamentSelect(){
   sel.innerHTML=['<option value="">Valitse turnaus…</option>'].concat(
     (data.tournaments||[]).map(t=>`<option value="${t.id}" ${String(t.id)===String(selectedTournamentId)?'selected':''}>${t.name}${t.finished?' ✅':''}</option>`)
   ).join('');
-  sel.onchange=e=>{ selectedTournamentId=e.target.value||null; selectedMatchId=null; save(); renderAll(); };
+  sel.onchange=e=>{ selectedTournamentId=e.target.value||null; selectedMatchId=null; saveSelections(); save(); renderAll(); };
 }
 
 // =====================
@@ -602,7 +619,7 @@ function renderMatchSelect(){
       return `<option value="${m.id}" ${String(m.id)===String(selectedMatchId)?'selected':''}>${lk}${m.name}${ts}</option>`;
     })
   ).join('');
-  sel.onchange=e=>{ selectedMatchId=e.target.value||null; updateDeleteMatchBtn(); renderMatchView(); };
+  sel.onchange=e=>{ selectedMatchId=e.target.value||null; saveSelections(); updateDeleteMatchBtn(); renderMatchView(); };
   updateDeleteMatchBtn();
 }
 
@@ -976,6 +993,7 @@ window._savePin = async function(player){
 // RENDERALL
 // =====================
 function renderAll(){
+  restoreSelections();
   renderTournamentSelect(); renderMatchSelect(); renderTopThree(); renderScoreboard();
   renderMatchView(); renderTournamentStatus(); if(currentUser===ADMIN) renderPinManage();
 }
@@ -987,7 +1005,7 @@ $('createTournament').onclick=()=>{
   const name=$('newTournamentName').value.trim(); if(!name){alert('Anna nimi');return;}
   const id=Date.now().toString();
   data.tournaments.push({id,name,matches:[],predictions:{},actuals:{},topThreePrediction:{},actualTopThree:[]});
-  selectedTournamentId=id; save(); renderAll(); $('newTournamentName').value='';
+  selectedTournamentId=id; saveSelections(); save(); renderAll(); $('newTournamentName').value='';
 };
 
 $('finishTournament').onclick=()=>{
@@ -1002,7 +1020,7 @@ $('createMatch').onclick=()=>{
   const tv=$('newMatchTime').value; if(!tv){alert('Aseta pelin alkuaika');return;}
   const id=Date.now().toString();
   t.matches.push({id,name,startTime:new Date(tv).toISOString()});
-  selectedMatchId=id; save(); renderAll(); $('newMatchName').value=''; $('newMatchTime').value='';
+  selectedMatchId=id; saveSelections(); save(); renderAll(); $('newMatchName').value=''; $('newMatchTime').value='';
 };
 
 $('tabTable').onclick=()=>{ viewMode='table'; $('tabTable').classList.add('active'); $('tabCards').classList.remove('active'); renderMatchView(); };
