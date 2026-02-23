@@ -587,8 +587,14 @@ function renderTournamentSelect(){
 // =====================
 function renderMatchSelect(){
   const sel=$('matchSelect'),t=getTournament();
-  if(!t){ sel.innerHTML='<option value="">—</option>'; sel.disabled=true; return; }
+  if(!t){ sel.innerHTML='<option value="">—</option>'; sel.disabled=true; selectedMatchId=null; return; }
   sel.disabled=false;
+
+  // Auto-valitse ainoa ottelu tai viimeksi valittu
+  if(!selectedMatchId && t.matches && t.matches.length===1){
+    selectedMatchId=String(t.matches[0].id);
+  }
+
   sel.innerHTML=['<option value="">Valitse ottelu…</option>'].concat(
     (t.matches||[]).map(m=>{
       const lk=isLocked(m)?'🔒 ':'';
@@ -667,14 +673,27 @@ function renderTopThree(){
     html+=`<div class="t3-card"><div class="t3-title">✅ Lisää todellinen järjestys</div>${[0,1,2].map(i=>`<div class="t3-row"><label style="font-size:12px;color:var(--muted);margin-bottom:2px">${i+1}. sija</label><select data-t3a="${i}">${tOpts}</select></div>`).join('')}</div>`;
   }
 
-  // Oma veikkaus – piilotettu jos ei ole luotu otteluita vielä
+  // Veikkauskortit
   if(t.matches&&t.matches.length){
-    const dis=locked?'disabled':'';
     if(showResults){
-      // Näytä oma veikkaus tuloksineen
-      html+=`<div class="t3-card"><div class="t3-title">Oma veikkaus</div>${[0,1,2].map(i=>`<div class="t3-row"><label style="font-size:12px;color:var(--muted);margin-bottom:2px">${i+1}. sija</label><select data-t3m="${i}" ${dis}>${tOpts}</select></div>`).join('')}</div>`;
+      // Turnaus päättynyt: näytä KAIKKIEN veikkaukset
+      PLAYERS.forEach(p=>{
+        const pPred=t.topThreePrediction[p]||['','',''];
+        const act=(t.actualTopThree||[]);
+        const rows=[0,1,2].map(i=>{
+          const v=pPred[i]||'';
+          const av=act[i]||'';
+          const correct=av&&ciEq(v,av);
+          const incorrect=av&&v&&!correct;
+          return `<div class="kv-row ${correct?'correct':''} ${incorrect?'incorrect':''}">
+            <div class="kv-label">${i+1}. sija</div>
+            <div style="padding:8px;font-weight:600">${v||'—'}</div>
+          </div>`;
+        }).join('');
+        html+=`<div class="t3-card"><div class="t3-title">${p===ADMIN?'👑 ':''}${p}</div>${rows}</div>`;
+      });
     } else if(locked){
-      // Lukittu: näytä oma veikkaus lukittuna ilman tuloksia
+      // Lukittu mutta ei vielä päättynyt: oma veikkaus lukittuna
       html+=`<div class="t3-card"><div class="t3-title">Oma veikkaus 🔒</div><p class="muted" style="font-size:13px">Veikkauksesi on tallennettu. Tulokset näkyvät turnauksen jälkeen.</p></div>`;
     } else {
       // Auki: veikkaa
@@ -821,17 +840,18 @@ function renderMatchView(){
     attachPredListeners(predEl,t,match.id);
   }
 
-  renderActuals();
+  renderActuals(selectedMatchId);
 }
 
 // =====================
 // RENDER: FAKTAT
 // =====================
-function renderActuals(){
+function renderActuals(matchIdOverride){
   const el=$('actualsArea'),t=getTournament();
-  if(!t||!selectedMatchId){ el.innerHTML='<p class="muted">Valitse ottelu.</p>'; return; }
-  t.actuals[selectedMatchId]=t.actuals[selectedMatchId]||{};
-  const act=t.actuals[selectedMatchId];
+  const mid=matchIdOverride||selectedMatchId;
+  if(!t||!mid){ el.innerHTML='<p class="muted">Valitse ottelu.</p>'; return; }
+  t.actuals[mid]=t.actuals[mid]||{};
+  const act=t.actuals[mid];
   const isAdmin=currentUser===ADMIN;
   const rows=FIELDS.map(f=>`<div class="kv-row"><div class="kv-label">${f.label}</div>${widget('act',f.key,act[f.key]||'',f.key,!isAdmin)}</div>`).join('');
   el.innerHTML=`<div class="person-card actuals-card"><div class="card-head"><div class="person-title">Faktat</div><div class="pill">${isAdmin?'Muokattavissa':'Vain luku'}</div></div><div class="kv">${rows}</div></div>`;
@@ -840,15 +860,15 @@ function renderActuals(){
     if(e.target.dataset.actHome!=null||e.target.dataset.actAway!=null){
       const par=e.target.closest('.score-combo'); if(!par) return;
       const hi=par.querySelector('[data-act-home]'),ai=par.querySelector('[data-act-away]');
-      t.actuals[selectedMatchId]['lopputulos']=hi.value&&ai.value?`${hi.value}-${ai.value}`:''; renderScoreboard(); save(); return;
+      t.actuals[mid]['lopputulos']=hi.value&&ai.value?`${hi.value}-${ai.value}`:''; renderScoreboard(); save(); return;
     }
     if(e.target.dataset.actMin!=null||e.target.dataset.actSec!=null){
       const par=e.target.closest('.time-combo'); if(!par) return;
       const mi=par.querySelector('[data-act-min]'),si=par.querySelector('[data-act-sec]');
-      t.actuals[selectedMatchId]['ekan_maali_aika']=mi.value&&si.value?`${mi.value}:${si.value}`:''; renderScoreboard(); save(); return;
+      t.actuals[mid]['ekan_maali_aika']=mi.value&&si.value?`${mi.value}:${si.value}`:''; renderScoreboard(); save(); return;
     }
     const key=e.target.dataset.act; if(!key) return;
-    t.actuals[selectedMatchId][key]=e.target.value; renderScoreboard(); save();
+    t.actuals[mid][key]=e.target.value; renderScoreboard(); save();
   }
   el.querySelectorAll('input[data-act],input[data-act-home],input[data-act-away],input[data-act-min],input[data-act-sec]').forEach(inp=>{
     inp.addEventListener('input', handleActualChange);
