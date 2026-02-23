@@ -993,6 +993,15 @@ window._logout=function(){
 };
 
 // ============================
+// EXPOSE TO WINDOW (PDF-skripti tarvitsee)
+// ============================
+window.getTournament = getTournament;
+window.calcTotals = calcTotals;
+window.calcMatchPts = calcMatchPts;
+window.fieldMatch = fieldMatch;
+window.PLAYERS = PLAYERS;
+
+// ============================
 // INIT
 // ============================
 buildLogin();
