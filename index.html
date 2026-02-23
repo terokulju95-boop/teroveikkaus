@@ -227,7 +227,10 @@
       <p class="muted" style="margin-top:6px">☁️ Data tallentuu Firebase-pilveen</p>
       <div id="adminPinTools" style="display:none;margin-top:8px">
         <div class="separator"></div>
-        <h2>🔐 PIN-koodit</h2>
+        <div class="stack" style="justify-content:space-between;align-items:center">
+          <h2 style="margin:0">🔐 PIN-koodit</h2>
+          <button id="togglePins" class="btn small secondary">Piilota</button>
+        </div>
         <div id="pinManageArea"></div>
       </div>
     </div>
@@ -984,6 +987,19 @@ $('importFile').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f)
 let t3v=localStorage.getItem('tv_top3')!=='0';
 function applyT3(){ $('topThreeArea').style.display=t3v?'':'none'; $('saveTop3Row').style.display=t3v?'':'none'; $('toggleTop3').textContent=t3v?'Piilota':'Näytä'; }
 $('toggleTop3').onclick=()=>{ t3v=!t3v; localStorage.setItem('tv_top3',t3v?'1':'0'); applyT3(); };
+
+let pinsVisible=localStorage.getItem('tv_pins')!=='0';
+function applyPinsToggle(){
+  const area=$('pinManageArea'); const btn=$('togglePins');
+  if(!area||!btn) return;
+  area.style.display=pinsVisible?'':'none';
+  btn.textContent=pinsVisible?'Piilota':'Näytä';
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  const btn=$('togglePins');
+  if(btn) btn.addEventListener('click',()=>{ pinsVisible=!pinsVisible; localStorage.setItem('tv_pins',pinsVisible?'1':'0'); applyPinsToggle(); });
+  applyPinsToggle();
+});
 applyT3();
 
 </script>
