@@ -100,7 +100,16 @@
     .player-status-card.done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
     .lock-banner{ background:#dc2626; color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:10px; }
     .open-banner{ background:#22c55e; color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:10px; }
-    #countdown{ font-size:13px; color:var(--muted); text-align:center; margin-bottom:8px; }
+    #countdown{ margin-bottom:10px; }
+    .countdown-box{ background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%); border:2px solid var(--primary); border-radius:14px; padding:12px 16px; text-align:center; }
+    .countdown-label{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+    .countdown-timer{ display:flex; justify-content:center; gap:8px; }
+    .countdown-unit{ display:flex; flex-direction:column; align-items:center; min-width:48px; }
+    .countdown-num{ font-size:32px; font-weight:900; color:var(--primary); line-height:1; font-variant-numeric:tabular-nums; }
+    .countdown-unit-label{ font-size:10px; color:var(--muted); margin-top:2px; text-transform:uppercase; letter-spacing:0.5px; }
+    .countdown-sep{ font-size:28px; font-weight:900; color:var(--primary); line-height:1; padding-top:2px; }
+    @keyframes pulse-num{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+    .countdown-num.tick{ animation:pulse-num 0.3s ease; }
   </style>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
@@ -455,28 +464,53 @@ async function loadData(){
 function stopCountdown(){
   if(cdTimer){ clearInterval(cdTimer); cdTimer=null; }
   cdRunning=false;
-  const el=$('countdown'); if(el) el.textContent='';
+  const el=$('countdown'); if(el) el.innerHTML='';
 }
 
 function startCountdown(match){
   stopCountdown();
   if(!match || !match.startTime) return;
   const target = new Date(match.startTime).getTime();
-  if(Date.now() >= target) return; // Jo lukittu, ei tarvita countdownia
+  if(Date.now() >= target) return;
 
   cdRunning=true;
   const el=$('countdown');
+  let prevS=-1;
+
   const tick = () => {
     const diff = target - Date.now();
     if(diff <= 0){
       stopCountdown();
-      // Päivitä vain banneri ja veikkausalue, EI koko renderAll
       renderMatchBanner(match);
       renderPredictions();
       return;
     }
-    const h=Math.floor(diff/3600000), m=Math.floor((diff%3600000)/60000), s=Math.floor((diff%60000)/1000);
-    if(el) el.textContent = '⏳ Veikkauksia voi muuttaa vielä: '+(h>0?h+'t ':'')+m+'min '+s+'s';
+    const totalS=Math.floor(diff/1000);
+    const h=Math.floor(totalS/3600);
+    const m=Math.floor((totalS%3600)/60);
+    const s=totalS%60;
+
+    // Animate seconds digit when it changes
+    const sChanged = s !== prevS;
+    prevS = s;
+
+    const pad = n => String(n).padStart(2,'0');
+
+    if(el){
+      el.innerHTML =
+        '<div class="countdown-box">'+
+          '<div class="countdown-label">⏳ Veikkauksia voi muuttaa vielä</div>'+
+          '<div class="countdown-timer">'+
+            (h>0 ?
+              '<div class="countdown-unit"><div class="countdown-num">'+pad(h)+'</div><div class="countdown-unit-label">tuntia</div></div>'+
+              '<div class="countdown-sep">:</div>'
+            : '')+
+            '<div class="countdown-unit"><div class="countdown-num">'+pad(m)+'</div><div class="countdown-unit-label">min</div></div>'+
+            '<div class="countdown-sep">:</div>'+
+            '<div class="countdown-unit"><div class="countdown-num'+(sChanged?' tick':'')+'">'+pad(s)+'</div><div class="countdown-unit-label">sek</div></div>'+
+          '</div>'+
+        '</div>';
+    }
   };
   tick();
   cdTimer = setInterval(tick, 1000);
