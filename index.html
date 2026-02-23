@@ -767,15 +767,26 @@ function renderPlayerStatus(){
 // =====================
 // RENDER: COUNTDOWN
 // =====================
+let countdownRenderPending = false;
 function startCountdown(match){
   if(cdInterval) clearInterval(cdInterval);
   const el=$('countdown');
   if(!match||!match.startTime){ el.textContent=''; return; }
   const update=()=>{
     const diff=new Date(match.startTime).getTime()-Date.now();
-    if(diff<=0){ el.textContent=''; clearInterval(cdInterval); renderAll(); return; }
+    if(diff<=0){
+      el.textContent='';
+      clearInterval(cdInterval);
+      cdInterval=null;
+      // Renderöi vain kerran, ei silmukkaa
+      if(!countdownRenderPending){
+        countdownRenderPending=true;
+        setTimeout(()=>{ countdownRenderPending=false; renderAll(); }, 100);
+      }
+      return;
+    }
     const h=Math.floor(diff/3600000),m=Math.floor((diff%3600000)/60000),s=Math.floor((diff%60000)/1000);
-    el.textContent=`⏳ Veikkauksia voi muuttaa vielä: ${h>0?h+'t ':''} ${m}min ${s}s`;
+    el.textContent='⏳ Veikkauksia voi muuttaa vielä: '+(h>0?h+'t ':'')+m+'min '+s+'s';
   };
   update(); cdInterval=setInterval(update,1000);
 }
