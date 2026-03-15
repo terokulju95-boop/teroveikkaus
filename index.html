@@ -376,7 +376,12 @@ function timeMatch(p,a){
 }
 function fieldMatch(key,pv,av){
   if(!av || !pv) return false;
-  if(key==='ekan_maali_aika') return timeMatch(pv,av);
+  if(key==='ekan_maali_aika'){
+    // Värikoodi vain täysin oikealle (ei +-1min)
+    const parse = s => { const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
+    const ps=parse(pv), as=parse(av);
+    return ps!==null && as!==null && ps===as;
+  }
   return ciEq(pv,av);
 }
 function calcMatchPts(t, matchId, player){
@@ -420,36 +425,39 @@ function calcNearestGoalTimePts(t, matchId){
   const acTime = ac['ekan_maali_aika'];
   if(!acTime || acTime==='') return {};
 
-  const parse = s => { const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
-  const acMin = parse(acTime);
+  function parseTime(s){
+    var m=(s||'').match(/^(\d{1,2}):(\d{2})$/);
+    return m ? (+m[1])*60 + (+m[2]) : null;
+  }
+  var acMin = parseTime(acTime);
   if(acMin===null) return {};
 
   // Tarkista onko kukaan täysin oikein – jos on, ei jaeta lähimmän pistettä
-  const exactWinner = PLAYERS.some(p => {
-    const prTime = (((t.predictions||{})[matchId]||{})[p]||{})['ekan_maali_aika']||'';
-    const prMin = parse(prTime);
+  var exactWinner = PLAYERS.some(function(p){
+    var prTime = (((t.predictions||{})[matchId]||{})[p]||{})['ekan_maali_aika']||'';
+    var prMin = parseTime(prTime);
     return prMin!==null && prMin===acMin;
   });
   if(exactWinner) return {};
 
   // Etsi lähin +-1min sisällä
-  let bestDiff = Infinity;
-  const diffs = {};
-  PLAYERS.forEach(p => {
-    const prTime = (((t.predictions||{})[matchId]||{})[p]||{})['ekan_maali_aika']||'';
-    const prMin = parse(prTime);
+  var bestDiff = Infinity;
+  var diffs = {};
+  PLAYERS.forEach(function(p){
+    var prTime = (((t.predictions||{})[matchId]||{})[p]||{})['ekan_maali_aika']||'';
+    var prMin = parseTime(prTime);
     if(prMin===null) return;
-    const diff = Math.abs(prMin - acMin);
-    if(diff <= 1) diffs[p] = diff;
+    var diff = Math.abs(prMin - acMin);
+    if(diff <= 1){ diffs[p] = diff; }
     if(diff < bestDiff) bestDiff = diff;
   });
 
   if(bestDiff > 1) return {}; // Kukaan ei +-1min sisällä
 
   // Kaikki jotka ovat yhtä lähellä kuin paras
-  const result = {};
-  Object.entries(diffs).forEach(([p, d]) => {
-    if(d === bestDiff) result[p] = 1;
+  var result = {};
+  Object.keys(diffs).forEach(function(p){
+    if(diffs[p] === bestDiff) result[p] = 1;
   });
   return result;
 }
