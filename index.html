@@ -630,9 +630,19 @@ function predCardHTML(t, match, player, showColors){
   const locked=isLocked(match);
   const canEdit = (player===currentUser && !locked);
   const pts = calcMatchPts(t, match.id, player) + (calcTimeProximityPts(t, match.id)[player]||0);
+  const proxPts = calcTimeProximityPts(t, match.id);
   const rows = FIELDS.map((f,fi)=>{
     const v=pred[f.key]||'', av=actual[f.key]||'';
-    const ok = showColors && av!=='' && fieldMatch(f.key,v,av);
+    let ok;
+    if(f.key==='ekan_maali_aika'){
+      const _parse = s => { const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
+      const pp=_parse(v), ap=_parse(av);
+      const exactMatch = pp!==null && ap!==null && pp===ap;
+      const proximityPoint = !!(proxPts[player]);
+      ok = showColors && av!=='' && (exactMatch || proximityPoint);
+    } else {
+      ok = showColors && av!=='' && fieldMatch(f.key,v,av);
+    }
     const bad = showColors && av!=='' && v!=='' && !ok;
     const w = widget(f.key, v, player+':'+f.key, !canEdit, false);
     const delay = showColors && (ok||bad) ? `animation-delay:${fi*40}ms` : '';
