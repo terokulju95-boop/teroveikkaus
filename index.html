@@ -383,12 +383,84 @@ function calcMatchPts(t, matchId, player){
   const pr = ((t.predictions||{})[matchId]||{})[player]||{};
   const ac = (t.actuals||{})[matchId]||{};
   let s=0;
-  FIELDS.forEach(f=>{ if(ac[f.key]!=null && ac[f.key]!=='' && fieldMatch(f.key, pr[f.key]||'', ac[f.key])) s++; });
+
+  FIELDS.forEach(f=>{
+    if(ac[f.key]==null || ac[f.key]==='') return;
+    if(f.key==='lopputulos'){
+      // Täysin oikea lopputulos = 2 pistettä, muuten 0
+      if(ciEq(pr[f.key]||'', ac[f.key])) s+=2;
+    } else if(f.key==='ekan_maali_aika'){
+      // Käsitellään erikseen alla
+    } else {
+      if(fieldMatch(f.key, pr[f.key]||'', ac[f.key])) s++;
+    }
+  });
+
+  // Maalinteko aika erikoispisteet
+  const acTime = ac['ekan_maali_aika'];
+  if(acTime && acTime!==''){
+    const parse = s => { const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
+    const acMin = parse(acTime);
+    const prTime = pr['ekan_maali_aika']||'';
+    const prMin = parse(prTime);
+
+    if(acMin!==null && prMin!==null && prMin===acMin){
+      // Täysin oikein = 3 pistettä
+      s+=3;
+    }
+    // Lähimmän veikkaajan piste käsitellään calcTotals:ssa
+  }
+
   return s;
+}
+
+// Laske lähimmän maalinteko ajan pisteet per ottelu
+function calcNearestGoalTimePts(t, matchId){
+  const ac = (t.actuals||{})[matchId]||{};
+  const acTime = ac['ekan_maali_aika'];
+  if(!acTime || acTime==='') return {};
+
+  const parse = s => { const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
+  const acMin = parse(acTime);
+  if(acMin===null) return {};
+
+  // Tarkista onko kukaan täysin oikein – jos on, ei jaeta lähimmän pistettä
+  const exactWinner = PLAYERS.some(p => {
+    const prTime = (((t.predictions||{})[matchId]||{})[p]||{})['ekan_maali_aika']||'';
+    const prMin = parse(prTime);
+    return prMin!==null && prMin===acMin;
+  });
+  if(exactWinner) return {};
+
+  // Etsi lähin +-1min sisällä
+  let bestDiff = Infinity;
+  const diffs = {};
+  PLAYERS.forEach(p => {
+    const prTime = (((t.predictions||{})[matchId]||{})[p]||{})['ekan_maali_aika']||'';
+    const prMin = parse(prTime);
+    if(prMin===null) return;
+    const diff = Math.abs(prMin - acMin);
+    if(diff <= 1) diffs[p] = diff;
+    if(diff < bestDiff) bestDiff = diff;
+  });
+
+  if(bestDiff > 1) return {}; // Kukaan ei +-1min sisällä
+
+  // Kaikki jotka ovat yhtä lähellä kuin paras
+  const result = {};
+  Object.entries(diffs).forEach(([p, d]) => {
+    if(d === bestDiff) result[p] = 1;
+  });
+  return result;
 }
 function calcTotals(t){
   const tot={}; PLAYERS.forEach(p=>tot[p]=0);
-  (t.matches||[]).forEach(m => PLAYERS.forEach(p => { tot[p] += calcMatchPts(t, m.id, p); }));
+  (t.matches||[]).forEach(m => {
+    PLAYERS.forEach(p => { tot[p] += calcMatchPts(t, m.id, p); });
+    // Lisää lähimmän maalinteko ajan pisteet
+    const nearPts = calcNearestGoalTimePts(t, m.id);
+    Object.entries(nearPts).forEach(([p,pts]) => { if(tot[p]!==undefined) tot[p]+=pts; });
+  });
   if(t.topThreePrediction){
     const aT = t.actualTopThree||[];
     PLAYERS.forEach(p => {
