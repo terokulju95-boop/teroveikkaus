@@ -448,11 +448,11 @@ function calcNearestGoalTimePts(t, matchId){
     var prMin = parseTime(prTime);
     if(prMin===null) return;
     var diff = Math.abs(prMin - acMin);
-    if(diff <= 1){ diffs[p] = diff; }
+    if(diff <= 60){ diffs[p] = diff; }
     if(diff < bestDiff) bestDiff = diff;
   });
 
-  if(bestDiff > 1) return {}; // Kukaan ei +-1min sisällä
+  if(bestDiff > 60) return {}; // Kukaan ei +-1min sisällä
 
   // Kaikki jotka ovat yhtä lähellä kuin paras
   var result = {};
