@@ -376,117 +376,19 @@ function timeMatch(p,a){
 }
 function fieldMatch(key,pv,av){
   if(!av || !pv) return false;
-  if(key==='ekan_maali_aika'){
-    // Värikoodi vain täysin oikealle (ei +-1min)
-    const parse = s => {
-      if(!s) return null;
-      const parts = s.split(':');
-      if(parts.length !== 2) return null;
-      const mm = parseInt(parts[0], 10);
-      const ss = parseInt(parts[1], 10);
-      return (!isNaN(mm) && !isNaN(ss)) ? mm*60+ss : null;
-    };
-    const ps=parse(pv), as=parse(av);
-    return ps!==null && as!==null && ps===as;
-  }
+  if(key==='ekan_maali_aika') return timeMatch(pv,av);
   return ciEq(pv,av);
 }
 function calcMatchPts(t, matchId, player){
   const pr = ((t.predictions||{})[matchId]||{})[player]||{};
   const ac = (t.actuals||{})[matchId]||{};
   let s=0;
-
-  FIELDS.forEach(f=>{
-    if(ac[f.key]==null || ac[f.key]==='') return;
-    if(f.key==='lopputulos'){
-      // Täysin oikea lopputulos = 2 pistettä, muuten 0
-      if(ciEq(pr[f.key]||'', ac[f.key])) s+=2;
-    } else if(f.key==='ekan_maali_aika'){
-      // Käsitellään erikseen alla
-    } else {
-      if(fieldMatch(f.key, pr[f.key]||'', ac[f.key])) s++;
-    }
-  });
-
-  // Maalinteko aika erikoispisteet
-  const acTime = ac['ekan_maali_aika'];
-  if(acTime && acTime!==''){
-    const parse = s => {
-      if(!s) return null;
-      const parts = s.split(':');
-      if(parts.length !== 2) return null;
-      const mm = parseInt(parts[0], 10);
-      const ss = parseInt(parts[1], 10);
-      return (!isNaN(mm) && !isNaN(ss)) ? mm*60+ss : null;
-    };
-    const acMin = parse(acTime);
-    const prTime = pr['ekan_maali_aika']||'';
-    const prMin = parse(prTime);
-
-    if(acMin!==null && prMin!==null && prMin===acMin){
-      // Täysin oikein = 3 pistettä
-      s+=3;
-    }
-    // Lähimmän veikkaajan piste käsitellään calcTotals:ssa
-  }
-
+  FIELDS.forEach(f=>{ if(ac[f.key]!=null && ac[f.key]!=='' && fieldMatch(f.key, pr[f.key]||'', ac[f.key])) s++; });
   return s;
-}
-
-// Laske lähimmän maalinteko ajan pisteet per ottelu
-function calcNearestGoalTimePts(t, matchId){
-  const ac = (t.actuals||{})[matchId]||{};
-  const acTime = ac['ekan_maali_aika'];
-  if(!acTime || acTime==='') return {};
-
-  function parseTime(s){
-    if(!s) return null;
-    var parts = s.split(':');
-    if(parts.length !== 2) return null;
-    var mm = parseInt(parts[0], 10);
-    var ss = parseInt(parts[1], 10);
-    return (!isNaN(mm) && !isNaN(ss)) ? mm*60+ss : null;
-  }
-  var acMin = parseTime(acTime);
-  if(acMin===null) return {};
-
-  // Tarkista onko kukaan täysin oikein – jos on, ei jaeta lähimmän pistettä
-  var exactWinner = PLAYERS.some(function(p){
-    var prTime = (((t.predictions||{})[matchId]||{})[p]||{})['ekan_maali_aika']||'';
-    var prMin = parseTime(prTime);
-    return prMin!==null && prMin===acMin;
-  });
-  if(exactWinner) return {};
-
-  // Etsi lähin +-1min sisällä
-  var bestDiff = Infinity;
-  var diffs = {};
-  PLAYERS.forEach(function(p){
-    var prTime = (((t.predictions||{})[matchId]||{})[p]||{})['ekan_maali_aika']||'';
-    var prMin = parseTime(prTime);
-    if(prMin===null) return;
-    var diff = Math.abs(prMin - acMin);
-    if(diff <= 60){ diffs[p] = diff; }
-    if(diff < bestDiff) bestDiff = diff;
-  });
-
-  if(bestDiff > 60) return {}; // Kukaan ei +-1min sisällä
-
-  // Kaikki jotka ovat yhtä lähellä kuin paras
-  var result = {};
-  Object.keys(diffs).forEach(function(p){
-    if(diffs[p] === bestDiff) result[p] = 1;
-  });
-  return result;
 }
 function calcTotals(t){
   const tot={}; PLAYERS.forEach(p=>tot[p]=0);
-  (t.matches||[]).forEach(m => {
-    PLAYERS.forEach(p => { tot[p] += calcMatchPts(t, m.id, p); });
-    // Lisää lähimmän maalinteko ajan pisteet
-    const nearPts = calcNearestGoalTimePts(t, m.id);
-    Object.entries(nearPts).forEach(([p,pts]) => { if(tot[p]!==undefined) tot[p]+=pts; });
-  });
+  (t.matches||[]).forEach(m => PLAYERS.forEach(p => { tot[p] += calcMatchPts(t, m.id, p); }));
   if(t.topThreePrediction){
     const aT = t.actualTopThree||[];
     PLAYERS.forEach(p => {
