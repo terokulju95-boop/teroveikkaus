@@ -383,12 +383,60 @@ function calcMatchPts(t, matchId, player){
   const pr = ((t.predictions||{})[matchId]||{})[player]||{};
   const ac = (t.actuals||{})[matchId]||{};
   let s=0;
-  FIELDS.forEach(f=>{ if(ac[f.key]!=null && ac[f.key]!=='' && fieldMatch(f.key, pr[f.key]||'', ac[f.key])) s++; });
+  FIELDS.forEach(f=>{
+    if(ac[f.key]==null || ac[f.key]==='') return;
+    if(f.key==='lopputulos'){
+      if(ciEq(pr[f.key]||'', ac[f.key])) s+=2;
+    } else if(f.key==='ekan_maali_aika'){
+      // Täysin oikein = 3p; lähimmäksi = lasketaan erikseen calcTotals-tasolla
+      const parse = s => { const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
+      const pp=parse(pr[f.key]||''), ap=parse(ac[f.key]);
+      if(pp!==null && ap!==null && pp===ap) s+=3;
+    } else {
+      if(fieldMatch(f.key, pr[f.key]||'', ac[f.key])) s++;
+    }
+  });
   return s;
+}
+function calcTimeProximityPts(t, matchId){
+  // Lisää 1p lähimmälle maalintekoajan veikkaajalle, jos kukaan ei osunut täysin oikein
+  const ac = (t.actuals||{})[matchId]||{};
+  const actualTime = ac['ekan_maali_aika'];
+  if(!actualTime) return {};
+  const parse = s => { const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
+  const ap = parse(actualTime);
+  if(ap===null) return {};
+  // Tarkista onko kukaan osunut täysin oikein
+  const anyExact = PLAYERS.some(p => {
+    const pr = ((t.predictions||{})[matchId]||{})[p]||{};
+    const pp = parse(pr['ekan_maali_aika']||'');
+    return pp!==null && pp===ap;
+  });
+  if(anyExact) return {}; // täysin oikein saanut → ei lähimmäksi-pistettä kenellekään
+  // Laske etäisyydet ±1 min sisällä oleville
+  let minDiff = Infinity;
+  const diffs = {};
+  PLAYERS.forEach(p => {
+    const pr = ((t.predictions||{})[matchId]||{})[p]||{};
+    const pp = parse(pr['ekan_maali_aika']||'');
+    if(pp!==null && Math.abs(pp-ap)<=60){
+      const diff = Math.abs(pp-ap);
+      diffs[p] = diff;
+      if(diff < minDiff) minDiff = diff;
+    }
+  });
+  if(minDiff===Infinity) return {};
+  const pts = {};
+  PLAYERS.forEach(p => { if(diffs[p]===minDiff) pts[p]=1; });
+  return pts;
 }
 function calcTotals(t){
   const tot={}; PLAYERS.forEach(p=>tot[p]=0);
-  (t.matches||[]).forEach(m => PLAYERS.forEach(p => { tot[p] += calcMatchPts(t, m.id, p); }));
+  (t.matches||[]).forEach(m => {
+    PLAYERS.forEach(p => { tot[p] += calcMatchPts(t, m.id, p); });
+    const prox = calcTimeProximityPts(t, m.id);
+    PLAYERS.forEach(p => { if(prox[p]) tot[p] += prox[p]; });
+  });
   if(t.topThreePrediction){
     const aT = t.actualTopThree||[];
     PLAYERS.forEach(p => {
@@ -581,7 +629,7 @@ function predCardHTML(t, match, player, showColors){
   const actual=(t.actuals||{})[match.id]||{};
   const locked=isLocked(match);
   const canEdit = (player===currentUser && !locked);
-  const pts = calcMatchPts(t, match.id, player);
+  const pts = calcMatchPts(t, match.id, player) + (calcTimeProximityPts(t, match.id)[player]||0);
   const rows = FIELDS.map((f,fi)=>{
     const v=pred[f.key]||'', av=actual[f.key]||'';
     const ok = showColors && av!=='' && fieldMatch(f.key,v,av);
@@ -926,10 +974,10 @@ function renderStats(){
   const totals=calcTotals(t), sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
   const medals=['🥇','🥈','🥉'];
   let best=null;
-  (t.matches||[]).forEach(m=>PLAYERS.forEach(p=>{ const pts=calcMatchPts(t,m.id,p); if(!best||pts>best.pts) best={player:p,matchName:m.name,pts}; }));
+  (t.matches||[]).forEach(m=>PLAYERS.forEach(p=>{ const pts=calcMatchPts(t,m.id,p)+(calcTimeProximityPts(t,m.id)[p]||0); if(!best||pts>best.pts) best={player:p,matchName:m.name,pts}; }));
   const mW=(t.matches||[]).map(m=>{
     let b=null;
-    PLAYERS.forEach(p=>{ const pts=calcMatchPts(t,m.id,p); if(!b||pts>b.pts) b={player:p,pts}; else if(pts===b.pts) b.player+=' & '+p; });
+    PLAYERS.forEach(p=>{ const pts=calcMatchPts(t,m.id,p)+(calcTimeProximityPts(t,m.id)[p]||0); if(!b||pts>b.pts) b={player:p,pts}; else if(pts===b.pts) b.player+=' & '+p; });
     return {matchName:m.name,...b};
   });
   let html='<div style="margin-bottom:14px"><div style="font-weight:700;margin-bottom:8px">🥇 Lopputulokset</div><div class="score-grid">'+
@@ -1102,7 +1150,7 @@ function getPersonalBest(player){
   const allMatches = [];
   (data.tournaments||[]).forEach(t=>{
     (t.matches||[]).forEach(m=>{
-      const pts = calcMatchPts(t, m.id, player);
+      const pts = calcMatchPts(t, m.id, player) + (calcTimeProximityPts(t, m.id)[player]||0);
       allMatches.push({pts, matchName:m.name, tournamentName:t.name});
     });
   });
@@ -1116,6 +1164,7 @@ function getPersonalBest(player){
 window.getTournament = getTournament;
 window.calcTotals = calcTotals;
 window.calcMatchPts = calcMatchPts;
+window.calcTimeProximityPts = calcTimeProximityPts;
 window.fieldMatch = fieldMatch;
 window.PLAYERS = PLAYERS;
 
@@ -1238,6 +1287,7 @@ document.getElementById('downloadPdfBtn').addEventListener('click', function(){
   var tots = window.calcTotals ? window.calcTotals(t) : {};
   var sorted = PLIST.slice().sort(function(a,b){ return (tots[b]||0)-(tots[a]||0); });
   var cmPts = window.calcMatchPts || function(){ return 0; };
+  var cmProx = window.calcTimeProximityPts || function(){ return {}; };
   var fmatch = window.fieldMatch || function(k,p,a){ return (p||'').toLowerCase()===(a||'').toLowerCase(); };
   var today = new Date().toLocaleDateString('fi-FI');
   var aT3 = t.actualTopThree || [];
@@ -1409,7 +1459,7 @@ document.getElementById('downloadPdfBtn').addEventListener('click', function(){
     y+=10;
 
     // Get match points, find max
-    var mp=sorted.map(function(p){ return {p:p, pts:cmPts(t,m.id,p)}; })
+    var mp=sorted.map(function(p){ return {p:p, pts:cmPts(t,m.id,p)+(cmProx(t,m.id)[p]||0)}; })
                  .sort(function(a,b){ return b.pts-a.pts; });
     var maxPts=mp[0]?mp[0].pts:15;
     if(maxPts===0) maxPts=15;
@@ -1451,7 +1501,7 @@ document.getElementById('downloadPdfBtn').addEventListener('click', function(){
   var best=null;
   (t.matches||[]).forEach(function(m){
     sorted.forEach(function(p){
-      var pts=cmPts(t,m.id,p);
+      var pts=cmPts(t,m.id,p)+(cmProx(t,m.id)[p]||0);
       if(!best||pts>best.pts) best={player:p,matchName:m.name,pts:pts};
     });
   });
@@ -1473,7 +1523,7 @@ document.getElementById('downloadPdfBtn').addEventListener('click', function(){
   sorted.forEach(function(p){
     chk(6);
     var b=null;
-    (t.matches||[]).forEach(function(m){ var pts=cmPts(t,m.id,p); if(!b||pts>b.pts) b={matchName:m.name,pts:pts}; });
+    (t.matches||[]).forEach(function(m){ var pts=cmPts(t,m.id,p)+(cmProx(t,m.id)[p]||0); if(!b||pts>b.pts) b={matchName:m.name,pts:pts}; });
     doc.setFontSize(9); doc.setFont('helvetica','bold'); tc(DARK2);
     doc.text(p+':', ML+3, y);
     doc.setFont('helvetica','normal'); tc([100,116,139]);
