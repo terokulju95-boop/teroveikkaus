@@ -378,7 +378,14 @@ function fieldMatch(key,pv,av){
   if(!av || !pv) return false;
   if(key==='ekan_maali_aika'){
     // Värikoodi vain täysin oikealle (ei +-1min)
-    const parse = s => { const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
+    const parse = s => {
+      if(!s) return null;
+      const parts = s.split(':');
+      if(parts.length !== 2) return null;
+      const mm = parseInt(parts[0], 10);
+      const ss = parseInt(parts[1], 10);
+      return (!isNaN(mm) && !isNaN(ss)) ? mm*60+ss : null;
+    };
     const ps=parse(pv), as=parse(av);
     return ps!==null && as!==null && ps===as;
   }
@@ -404,7 +411,14 @@ function calcMatchPts(t, matchId, player){
   // Maalinteko aika erikoispisteet
   const acTime = ac['ekan_maali_aika'];
   if(acTime && acTime!==''){
-    const parse = s => { const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
+    const parse = s => {
+      if(!s) return null;
+      const parts = s.split(':');
+      if(parts.length !== 2) return null;
+      const mm = parseInt(parts[0], 10);
+      const ss = parseInt(parts[1], 10);
+      return (!isNaN(mm) && !isNaN(ss)) ? mm*60+ss : null;
+    };
     const acMin = parse(acTime);
     const prTime = pr['ekan_maali_aika']||'';
     const prMin = parse(prTime);
@@ -426,8 +440,12 @@ function calcNearestGoalTimePts(t, matchId){
   if(!acTime || acTime==='') return {};
 
   function parseTime(s){
-    var m=(s||'').match(/^(\d{1,2}):(\d{2})$/);
-    return m ? (+m[1])*60 + (+m[2]) : null;
+    if(!s) return null;
+    var parts = s.split(':');
+    if(parts.length !== 2) return null;
+    var mm = parseInt(parts[0], 10);
+    var ss = parseInt(parts[1], 10);
+    return (!isNaN(mm) && !isNaN(ss)) ? mm*60+ss : null;
   }
   var acMin = parseTime(acTime);
   if(acMin===null) return {};
