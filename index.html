@@ -413,9 +413,40 @@
 
         <!-- Admin näkymä -->
         <div id="msgAdminArea" style="display:none">
+          <!-- YLEISVIESTILÄHETYS -->
+          <div style="margin-bottom:12px">
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px">📢 Lähetä yleisviesti kaikille</div>
+            <div id="broadcastBlockedNote" style="display:none;background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:8px">
+              ⏳ Edellinen viesti on vielä lukematta. Näkee kenellä lukematta alla.
+            </div>
+            <div id="broadcastSendArea">
+              <!-- Valmisletkautukset -->
+              <div style="margin-bottom:8px">
+                <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Valmiit pohjat:</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px" id="broadcastTemplates">
+                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('🏒 Suomi voittaa tänään 5-0. Tämä on virallinen ennuste!')">🏒 Ennuste</button>
+                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('😴 Herätys! Veikkaukset lukittuu pian!')">😴 Herätys</button>
+                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('🤡 Joku teistä veikkasi tosi huonosti viime kerralla... tiedätte kyllä kuka.')">🤡 Häpeä</button>
+                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('💸 Häviäjä maksaa seuraavan illan juomat. Tämä on nyt virallista.')">💸 Juomat</button>
+                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('🎯 Tänään selviää kuka on todellinen veikkausmestari!')">🎯 Mestari</button>
+                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('😎 Admin tietää jo tuloksen. Tai tietääkö?')">😎 Mysteeri</button>
+                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('🔥 Lämpöä peliin — tänään ei armahdeta ketään!')">🔥 Lämpö</button>
+                </div>
+              </div>
+              <textarea id="broadcastInput" rows="3" placeholder="Kirjoita vapaa viesti…" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:var(--card);color:var(--text);resize:vertical;font-family:inherit;margin-bottom:8px"></textarea>
+              <button class="btn small" style="width:100%;background:#7c3aed" onclick="window._sendBroadcast()">🚀 Lähetä kaikille</button>
+            </div>
+            <!-- Lukijastatukset -->
+            <div id="broadcastReadStatus" style="display:none;margin-top:10px">
+              <div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--muted)">Kuka on lukenut:</div>
+              <div id="broadcastReadList"></div>
+              <button class="btn small danger" style="width:100%;margin-top:8px" onclick="window._clearBroadcast()">🗑️ Poista viesti</button>
+            </div>
+          </div>
+          <div class="separator"></div>
           <!-- Pikarangaistusnapit -->
           <div style="margin-bottom:12px">
-            <div style="font-weight:700;font-size:13px;margin-bottom:8px">⚡ Lähetä ilmoitus kaikille</div>
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px">⚡ Pikarangaistukset</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
               <button class="btn small danger" onclick="window._sendAlert('petkuhuiputus')">🕵️ PETKUHUIPUTUS</button>
               <button class="btn small danger" onclick="window._sendAlert('lahjonta')">💸 LAHJONTAYRITYS</button>
@@ -867,8 +898,113 @@ async function trackLoginEvent(name) {
 // ============================
 // VIESTIJÄRJESTELMÄ
 // ============================
-const MESSAGES_DOC = doc(db, "app", "messages");
-const ALERTS_DOC   = doc(db, "app", "alerts");
+const MESSAGES_DOC  = doc(db, "app", "messages");
+const ALERTS_DOC    = doc(db, "app", "alerts");
+const BROADCAST_DOC = doc(db, "app", "broadcast");
+
+// ============================
+// YLEISVIESTI (broadcast)
+// ============================
+async function checkPendingBroadcast() {
+  try {
+    const snap = await getDoc(BROADCAST_DOC);
+    if (!snap.exists()) return;
+    const bc = snap.data();
+    if (!bc.active || !bc.text) return;
+    const seen = bc.seenBy || [];
+    if (seen.includes(currentUser)) return;
+    // Merkitään nähdyksi
+    seen.push(currentUser);
+    await setDoc(BROADCAST_DOC, { ...bc, seenBy: seen });
+    setTimeout(() => showBroadcastOverlay(bc.text), 900);
+  } catch(e) {}
+}
+
+function showBroadcastOverlay(text) {
+  const overlay = document.createElement('div');
+  overlay.className = 'alert-overlay';
+  overlay.innerHTML = `
+    <div class="alert-box" style="border:2px solid #7c3aed">
+      <span class="alert-emoji">📢</span>
+      <div class="alert-title" style="color:#7c3aed">Viesti Terolta</div>
+      <div class="alert-text" style="font-size:16px;line-height:1.6">${text.replace(/</g,'&lt;')}</div>
+      <button class="alert-btn" style="background:#7c3aed" onclick="this.closest('.alert-overlay').remove()">Selvä! 👍</button>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  spawnConfetti();
+}
+
+async function refreshBroadcastAdminUI() {
+  if (currentUser !== ADMIN) return;
+  const blocked = document.getElementById('broadcastBlockedNote');
+  const sendArea = document.getElementById('broadcastSendArea');
+  const readStatus = document.getElementById('broadcastReadStatus');
+  const readList = document.getElementById('broadcastReadList');
+  if (!blocked || !sendArea || !readStatus) return;
+  try {
+    const snap = await getDoc(BROADCAST_DOC);
+    if (!snap.exists() || !snap.data().active) {
+      // Ei aktiivista viestiä — näytä lähetyskenttä
+      blocked.style.display = 'none';
+      sendArea.style.display = 'block';
+      readStatus.style.display = 'none';
+      return;
+    }
+    const bc = snap.data();
+    const seen = bc.seenBy || [];
+    const others = PLAYERS.filter(p => p !== ADMIN);
+    const allRead = others.every(p => seen.includes(p));
+    if (allRead) {
+      // Kaikki lukenut — saa lähettää uuden
+      blocked.style.display = 'none';
+      sendArea.style.display = 'block';
+      readStatus.style.display = 'none';
+    } else {
+      // Lukematta vielä — näytä status, piilota lähetys
+      blocked.style.display = 'block';
+      sendArea.style.display = 'none';
+      readStatus.style.display = 'block';
+      readList.innerHTML = others.map(p => {
+        const hasRead = seen.includes(p);
+        return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span>${p}</span>
+          <span>${hasRead ? '✅ Luettu' : '⏳ Lukematta'}</span>
+        </div>`;
+      }).join('');
+    }
+  } catch(e) {}
+}
+
+window._setBroadcast = function(text) {
+  const inp = document.getElementById('broadcastInput');
+  if (inp) { inp.value = text; inp.focus(); }
+};
+
+window._sendBroadcast = async function() {
+  const inp = document.getElementById('broadcastInput');
+  const text = (inp?.value || '').trim();
+  if (!text) { showStatus('Kirjoita viesti ensin!', '#f97316'); return; }
+  if (!confirm('Lähetetäänkö viesti kaikille pelaajille?')) return;
+  try {
+    await setDoc(BROADCAST_DOC, {
+      active: true,
+      text,
+      seenBy: [ADMIN],
+      ts: new Date().toISOString()
+    });
+    inp.value = '';
+    showStatus('✅ Viesti lähetetty!', '#22c55e'); hideStatus();
+    refreshBroadcastAdminUI();
+  } catch(e) { showStatus('❌ Lähetys epäonnistui', '#dc2626'); }
+};
+
+window._clearBroadcast = async function() {
+  if (!confirm('Poistetaanko viesti?')) return;
+  await setDoc(BROADCAST_DOC, { active: false, text: '', seenBy: [] });
+  showStatus('✅ Viesti poistettu', '#22c55e'); hideStatus();
+  refreshBroadcastAdminUI();
+};
 
 const ALERT_TYPES = {
   petkuhuiputus: { emoji:'🕵️', title:'PETKUHUIPUTUS!', text:'Petkuhuiputusyritys on havaittu. Häpeä tekijälle! Rehti veikkaaminen on ainoa tie voittoon.' },
@@ -926,9 +1062,9 @@ function renderMessageCard() {
   const aa = document.getElementById('msgAdminArea');
   if (pa) pa.style.display = isAdmin ? 'none' : 'block';
   if (aa) aa.style.display = isAdmin ? 'block' : 'none';
-  if (isAdmin) window._loadMsgs();
-  // Tarkista onko odottava alert
+  if (isAdmin) { window._loadMsgs(); refreshBroadcastAdminUI(); }
   checkPendingAlert();
+  checkPendingBroadcast();
 }
 
 window._sendMsg = async function() {
