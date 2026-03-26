@@ -468,7 +468,8 @@
         <button id="saveTopThree" class="btn small">Tallenna veikkaukset</button>
       </div>
 
-      <div class="separator"></div>
+      <div class="separator" id="dataSeparator"></div>
+      <div id="dataSection">
       <h2>Data</h2>
       <div class="stack">
         <button id="exportBtn" class="btn small secondary" style="display:none">Vie JSON</button>
@@ -499,6 +500,7 @@
         </div>
         <div id="loginStatsArea" style="display:none"></div>
       </div>
+      </div><!-- /dataSection -->
     </div>
 
     <div class="grid">
@@ -2310,12 +2312,9 @@ function doLogin(name){
   // Viesti Terolle -kortti: piilotetaan adminilta
   const msgCard=$('messageCard'); if(msgCard) msgCard.style.display=isAdmin?'none':'';
 
-  // Data-kortti (Kuva + PDF): piilotetaan muilta käyttäjiltä kokonaan
-  document.querySelectorAll('.card').forEach(card => {
-    if (card.querySelector('#screenshotTableBtn')) {
-      card.style.display = isAdmin ? '' : 'none';
-    }
-  });
+  // Data-osio (Kuva + PDF): piilotetaan muilta käyttäjiltä, admilnille näkyy
+  const ds=$('dataSection'); if(ds) ds.style.display=isAdmin?'':'none';
+  const dSep=$('dataSeparator'); if(dSep) dSep.style.display=isAdmin?'':'none';
 
   // Täytä pelaajavalinnat yksityisviestimodaaliin
   const dmSelect = $('dmTargetSelect');
