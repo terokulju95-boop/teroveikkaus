@@ -269,6 +269,11 @@
         ✉️ Viestit
         <span id="msgBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#dc2626;color:#fff;border-radius:999px;font-size:11px;font-weight:900;padding:2px 6px;min-width:18px;text-align:center;line-height:1.4">0</span>
       </button>
+      <!-- Viestit-painike (muut pelaajat) -->
+      <button id="playerMsgBtn" onclick="window._openPlayerMsgPanel()" style="display:none;position:relative;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">
+        ✉️ Viestit
+        <span id="playerMsgBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#dc2626;color:#fff;border-radius:999px;font-size:11px;font-weight:900;padding:2px 6px;min-width:18px;text-align:center;line-height:1.4">0</span>
+      </button>
       <!-- Asetukset-painike (vain admin) -->
       <button id="adminSettingsBtn" onclick="window._openSettingsPanel()" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:14px;cursor:pointer;color:var(--text)" title="Asetukset">⚙️</button>
       <button class="btn small secondary" onclick="window._logout()">Vaihda käyttäjä</button>
@@ -390,6 +395,36 @@
         </div>
       </div>
       <div id="msgList2"><p class="muted" style="font-size:13px">Ladataan…</p></div>
+    </div>
+  </div>
+
+  <!-- PELAAJAN VIESTIT MODAALI -->
+  <div id="playerMsgPanel" style="display:none" class="modal-overlay" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-box" style="max-width:500px">
+      <button class="modal-close" onclick="document.getElementById('playerMsgPanel').style.display='none'">✕</button>
+      <h2 style="margin:0 0 16px">✉️ Viestit</h2>
+
+      <!-- Adminin joukkoviestit -->
+      <div id="playerBroadcastSection" style="margin-bottom:12px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--muted)">📢 Viimeinen yleisviesti</div>
+        <div id="playerBroadcastContent" style="font-size:14px;color:var(--muted)">Ei viestejä.</div>
+      </div>
+
+      <div class="separator"></div>
+
+      <!-- Adminilta tulleet yksityisviestit -->
+      <div style="margin-bottom:12px;margin-top:12px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--muted)">👑 Yksityisviestit Terolta</div>
+        <div id="playerDMList" style="font-size:14px;color:var(--muted)">Ei viestejä.</div>
+      </div>
+
+      <div class="separator"></div>
+
+      <!-- Omat viestit Terolle -->
+      <div style="margin-top:12px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--muted)">📬 Omat viestisi Terolle</div>
+        <div id="playerSentList" style="font-size:14px;color:var(--muted)">Ei viestejä.</div>
+      </div>
     </div>
   </div>
 
@@ -1086,12 +1121,10 @@ async function checkPendingDM() {
     const snap = await getDoc(dmDoc);
     if (!snap.exists()) return;
     const dms = snap.data().messages || [];
-    const lastSeen = parseInt(localStorage.getItem('tv_dm_seen_' + currentUser) || '0');
+    const lastSeen = parseInt(localStorage.getItem('tv_player_msg_last') || '0');
     const newMsgs = dms.filter(m => new Date(m.ts).getTime() > lastSeen);
     if (!newMsgs.length) return;
-    // Merkitään nähdyiksi
-    localStorage.setItem('tv_dm_seen_' + currentUser, Date.now().toString());
-    // Näytä uusimmat viestit
+    // Näytä popup uusista viesteistä (ei merkitä heti luetuksi — badge päivittyy checkPlayerUnread kautta)
     newMsgs.forEach((m, i) => {
       setTimeout(() => {
         const overlay = document.createElement('div');
@@ -1107,6 +1140,8 @@ async function checkPendingDM() {
         document.body.appendChild(overlay);
       }, 1000 + i * 500);
     });
+    // Päivitä badge
+    checkPlayerUnread();
   } catch(e) {}
 }
 
@@ -2196,6 +2231,7 @@ function render(){
   showHintBtn(true);
   checkLoserMessage();
   if(currentUser===ADMIN) checkUnreadMessages();
+  else checkPlayerUnread();
 }
 
 function renderTournamentSelects(){
@@ -2308,6 +2344,8 @@ function doLogin(name){
   // Admin-painikkeet yläpalkissa
   const msgBtn=$('adminMsgBtn'); if(msgBtn) msgBtn.style.display=isAdmin?'':'none';
   const setBtn=$('adminSettingsBtn'); if(setBtn) setBtn.style.display=isAdmin?'':'none';
+  // Pelaajan viesti-nappi yläpalkissa
+  const pMsgBtn=$('playerMsgBtn'); if(pMsgBtn) pMsgBtn.style.display=!isAdmin?'':'none';
 
   // Viesti Terolle -kortti: piilotetaan adminilta
   const msgCard=$('messageCard'); if(msgCard) msgCard.style.display=isAdmin?'none':'';
@@ -2616,6 +2654,111 @@ window._openMsgPanel = async function() {
 window._loadMsgs = window._loadMsgs || async function() {
   await window._loadMsgs2();
 };
+
+// ============================
+// PELAAJAN VIESTIT-PANEELI
+// ============================
+window._openPlayerMsgPanel = async function() {
+  // Merkitään kaikki luetuksi
+  localStorage.setItem('tv_player_msg_last', Date.now().toString());
+  updatePlayerMsgBadge(0);
+
+  const panel = document.getElementById('playerMsgPanel');
+  if (panel) panel.style.display = 'flex';
+
+  // Lataa broadcast (joukkoviesti)
+  try {
+    const snap = await getDoc(BROADCAST_DOC);
+    const bcEl = document.getElementById('playerBroadcastContent');
+    if (bcEl) {
+      if (snap.exists() && snap.data().active && snap.data().text) {
+        const bc = snap.data();
+        const ts = bc.ts ? new Date(bc.ts).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+        bcEl.innerHTML = `<div style="border:1px solid #7c3aed33;border-radius:10px;padding:10px;background:var(--bg)">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-weight:700;font-size:13px;color:#7c3aed">📢 Tero</span>
+            <span style="font-size:11px;color:var(--muted)">${ts}</span>
+          </div>
+          <div style="font-size:14px;line-height:1.5">${bc.text.replace(/</g,'&lt;')}</div>
+        </div>`;
+      } else {
+        bcEl.innerHTML = '<p class="muted" style="font-size:13px">Ei aktiivista yleisviestiä.</p>';
+      }
+    }
+  } catch(e) {}
+
+  // Lataa yksityisviestit adminilta
+  try {
+    const dmDoc = doc(db, 'app', 'dm_' + currentUser);
+    const snap = await getDoc(dmDoc);
+    const dmEl = document.getElementById('playerDMList');
+    if (dmEl) {
+      const dms = snap.exists() ? (snap.data().messages || []) : [];
+      if (!dms.length) {
+        dmEl.innerHTML = '<p class="muted" style="font-size:13px">Ei yksityisviestejä.</p>';
+      } else {
+        dmEl.innerHTML = [...dms].reverse().map(m => `
+          <div style="border:1px solid #0ea5e933;border-radius:10px;padding:10px;margin-bottom:8px;background:var(--bg)">
+            <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+              <span style="font-weight:700;font-size:13px;color:#0ea5e9">👑 Tero</span>
+              <span style="font-size:11px;color:var(--muted)">${new Date(m.ts).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+            </div>
+            <div style="font-size:14px;line-height:1.5">${m.text.replace(/</g,'&lt;')}</div>
+          </div>`).join('');
+      }
+    }
+  } catch(e) {}
+
+  // Lataa omat lähetetyt viestit Terolle
+  try {
+    const snap = await getDoc(MESSAGES_DOC);
+    const msgs = snap.exists() ? (snap.data().messages || []) : [];
+    const myMsgs = msgs.filter(m => m.from === currentUser);
+    const sentEl = document.getElementById('playerSentList');
+    if (sentEl) {
+      if (!myMsgs.length) {
+        sentEl.innerHTML = '<p class="muted" style="font-size:13px">Et ole lähettänyt viestejä.</p>';
+      } else {
+        sentEl.innerHTML = [...myMsgs].reverse().map(m => `
+          <div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--bg)">
+            <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+              <span style="font-weight:700;font-size:13px">${m.from}</span>
+              <span style="font-size:11px;color:var(--muted)">${new Date(m.ts).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+            </div>
+            <div style="font-size:14px;line-height:1.5">${m.text.replace(/</g,'&lt;')}</div>
+          </div>`).join('');
+      }
+    }
+  } catch(e) {}
+};
+
+function updatePlayerMsgBadge(count) {
+  const badge = document.getElementById('playerMsgBadge');
+  if (!badge) return;
+  if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; }
+  else { badge.style.display = 'none'; }
+}
+
+async function checkPlayerUnread() {
+  if (!currentUser || currentUser === ADMIN) return;
+  const lastSeen = parseInt(localStorage.getItem('tv_player_msg_last') || '0');
+  let unread = 0;
+  try {
+    // Tarkista yleisviesti
+    const bcSnap = await getDoc(BROADCAST_DOC);
+    if (bcSnap.exists() && bcSnap.data().active && bcSnap.data().ts) {
+      if (new Date(bcSnap.data().ts).getTime() > lastSeen) unread++;
+    }
+    // Tarkista yksityisviestit
+    const dmDoc = doc(db, 'app', 'dm_' + currentUser);
+    const dmSnap = await getDoc(dmDoc);
+    if (dmSnap.exists()) {
+      const dms = dmSnap.data().messages || [];
+      unread += dms.filter(m => new Date(m.ts).getTime() > lastSeen).length;
+    }
+  } catch(e) {}
+  updatePlayerMsgBadge(unread);
+}
 
 buildLogin();
 document.querySelectorAll('.pin-key').forEach(btn=>btn.addEventListener('click',()=>handlePinKey(btn.dataset.v)));
