@@ -6,22 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>🏒 Turnausveikkaus</title>
   <style>
-    :root { --bg:#0b1020; --card:#111727; --text:#e8eaf0; --muted:#7a8499; --primary:#f97316; --primary-hover:#ea580c; --border:rgba(255,255,255,0.09); --ok:#22c55e; --dark:#e8eaf0; }
+    :root { --bg:#f7f7fb; --card:#ffffff; --text:#111827; --muted:#6b7280; --primary:#f97316; --primary-hover:#ea580c; --border:#e5e7eb; --ok:#22c55e; --dark:#111827; }
     *{ box-sizing:border-box } html,body{ margin:0; padding:0; overflow-x:hidden }
     body{ background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; line-height:1.5; padding:12px }
-    input, select, textarea { color:var(--text); background:#161e30; }
-    input::placeholder, textarea::placeholder { color:var(--muted); }
     @media (prefers-color-scheme: dark) {
-      .score-card { background:var(--card)fff !important; color:#000000 !important; }
+      .score-card { background:#ffffff !important; color:#000000 !important; }
       .score-card .name { color:#000000 !important; font-weight:700; }
-      :root { --bg:#0b1020; --card:#111727; --text:#e8eaf0; --muted:#7a8499; --border:rgba(255,255,255,0.09); --primary:#f97316; --dark:#e8eaf0; }
+      :root { --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --muted:#94a3b8; --border:#334155; --primary:#f97316; --dark:#f8fafc; }
       input, select { background:#1e293b !important; color:#ffffff !important; border-color:#475569 !important; }
       body { background:var(--bg); color:var(--text); }
-      .card, .person-card, .t3-card, table th, table td { background:var(--card) !important; color:var(--text); }
+      .card, .person-card, .t3-card, table th, table td { background:var(--card) !important; }
       .score-card { background:var(--card); border-color:var(--border); }
       .tabs .tab { background:var(--card); color:var(--text); }
-      table { border-collapse:collapse; }
-      table th { color:var(--muted); }
     }
     h1{ text-align:center; margin:0 0 12px; font-size:22px } h2{ margin:0 0 10px; font-size:16px }
     .layout{ max-width:960px; margin:0 auto; display:grid; gap:12px; grid-template-columns:1fr }
@@ -29,24 +25,24 @@
     .card{ background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; box-shadow:0 1px 2px rgba(0,0,0,.04) }
     .field{ margin-bottom:8px }
     label{ font-weight:600; font-size:14px; display:block; margin-bottom:6px }
-    input[type="text"], input[type="number"], input[type="datetime-local"], select{ width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px; background:#161e30; color:var(--text); }
+    input[type="text"], input[type="number"], input[type="datetime-local"], select{ width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px; background:#fff }
     input[type="number"]{ -moz-appearance:textfield }
     input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
     .btn{ display:inline-flex; justify-content:center; align-items:center; gap:8px; border:none; border-radius:12px; padding:12px 14px; font-weight:700; cursor:pointer; background:var(--primary); color:#fff; font-size:15px; }
     .btn.small{ padding:10px; font-size:14px; } .btn:disabled{ opacity:.6; cursor:not-allowed } .btn:hover:not(:disabled){ background:var(--primary-hover) }
-    .btn.secondary{ background:#1a2235; color:var(--text); border:1px solid var(--border); }
+    .btn.secondary{ background:#fff; color:#111; border:1px solid var(--border); }
     .btn.secondary:hover:not(:disabled){ background:#f3f4f6; }
     .btn.danger{ background:#dc2626; } .btn.danger:hover:not(:disabled){ background:#b91c1c; }
     .btn.green{ background:#22c55e; } .btn.green:hover:not(:disabled){ background:#16a34a; }
     .muted{ color:var(--muted); font-size:13px } .grid{ display:grid; gap:10px } .separator{ height:1px; background:var(--border); margin:12px 0 }
     .score-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px }
-    .score-card{ background:var(--card); border:1px solid var(--border); border-radius:10px; padding:8px; text-align:center }
+    .score-card{ background:#fff; border:1px solid var(--border); border-radius:10px; padding:8px; text-align:center }
     .score-card .name{ font-weight:700; font-size:14px } .score-card .pts{ font-size:13px; color:#111 }
     .stack{ display:flex; flex-wrap:wrap; gap:8px; align-items:center }
     .tabs{ display:flex; border:1px solid var(--border); border-radius:10px; overflow:hidden }
-    .tab{ flex:1; text-align:center; padding:10px; background:var(--card); cursor:pointer; font-weight:700; color:var(--text); }
+    .tab{ flex:1; text-align:center; padding:10px; background:#fff; cursor:pointer; font-weight:700; color:var(--text); }
     .tab.active{ background:var(--dark); color:#fff !important; }
-    .person-card{ border:1px solid var(--border); border-radius:12px; padding:10px; background:var(--card) }
+    .person-card{ border:1px solid var(--border); border-radius:12px; padding:10px; background:#fff }
     .person-title{ font-weight:800; margin-bottom:8px }
     .kv{ display:grid; grid-template-columns:1fr; gap:6px }
     .kv-row{ display:grid; grid-template-columns:minmax(0,160px) minmax(0,1fr); gap:8px; align-items:center }
@@ -65,19 +61,19 @@
     .colon{ font-weight:800; }
     .pts-badge{ display:inline-block; background:#111827; color:#fff; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px; }
     .card-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-    .pill{ display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:var(--card); font-size:12px }
+    .pill{ display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#fafafa; font-size:12px }
     .t3-grid{ display:grid; gap:10px; grid-template-columns:1fr; }
     @media(min-width:640px){ .t3-grid{ grid-template-columns:1fr 1fr; } }
-    .t3-card{ border:1px solid var(--border); border-radius:12px; padding:10px; background:var(--card); }
+    .t3-card{ border:1px solid var(--border); border-radius:12px; padding:10px; background:#fff; }
     .t3-title{ font-weight:800; margin-bottom:8px; font-size:15px; }
     .t3-row{ display:grid; grid-template-columns:1fr; gap:8px; align-items:center; margin-bottom:6px; }
     .table-wrap{ width:100%; overflow-x:auto; overflow-y:hidden; border-radius:10px; }
     .table-wrap table{ min-width:1000px; width:max-content; }
     table{ width:100%; border-collapse:separate; border-spacing:0; font-size:14px }
-    th,td{ border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px; text-align:left; vertical-align:top; background:var(--card) }
+    th,td{ border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:6px; text-align:left; vertical-align:top; background:#fff }
     th:first-child,td:first-child{ border-left:1px solid var(--border) } tr:first-child th{ border-top:1px solid var(--border) }
-    .sticky-top{ position:sticky; top:0; z-index:5; background:var(--card) }
-    .sticky-left{ position:sticky; left:0; z-index:4; background:var(--card) }
+    .sticky-top{ position:sticky; top:0; z-index:5; background:#fafafa }
+    .sticky-left{ position:sticky; left:0; z-index:4; background:#fafafa }
     .sticky-corner{ z-index:6 }
     table td.correct{ background-color:#86efac !important; }
     table td.incorrect{ background-color:#fca5a5 !important; }
