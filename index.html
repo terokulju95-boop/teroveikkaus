@@ -738,6 +738,55 @@ async function save(){
 // ============================
 const LOGINS_DOC = doc(db, "app", "logins");
 
+const LOGIN_MILESTONES = {
+  1:   { emoji: '🎉', title: 'Tervetuloa mukaan!', text: 'Ensimmäinen kirjautuminen tehty. Veikkausura alkaa!' },
+  10:  { emoji: '🔟', title: '10 käyntiä!', text: 'Olet selvästi koukussa 😄' },
+  25:  { emoji: '🏒', title: '25 käyntiä!', text: 'Neljännesfinaaliin on selvitty. Ei paha!' },
+  50:  { emoji: '🏆', title: '50 käyntiä!', text: 'Veikkaaminen on selvästi elämäntapa 🏒' },
+  100: { emoji: '💯', title: '100 käyntiä!', text: 'Legenda saapuu paikalle 👑' },
+  250: { emoji: '🚀', title: '250 käyntiä!', text: 'Oletko edes nukkunut? 😂' },
+  500: { emoji: '🌟', title: '500 käyntiä!', text: 'Hall of Fame -taso saavutettu. Kunnioitettavaa! 🌟' },
+};
+
+function showMilestoneCelebration(name, count) {
+  const m = LOGIN_MILESTONES[count];
+  if (!m) return;
+  // Luo modaali
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeInOverlay 0.3s ease';
+  overlay.innerHTML = `
+    <div style="background:var(--card);border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.4);animation:slideUpModal 0.3s ease;border:2px solid var(--primary)">
+      <div style="font-size:72px;line-height:1;margin-bottom:12px">${m.emoji}</div>
+      <div style="font-size:22px;font-weight:900;margin-bottom:8px">${m.title}</div>
+      <div style="font-size:14px;color:var(--muted);margin-bottom:6px">${name}</div>
+      <div style="font-size:16px;margin-bottom:20px">${m.text}</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Käyntikerta numero <strong style="color:var(--primary);font-size:18px">${count}</strong></div>
+      <button style="background:var(--primary);color:#fff;border:none;border-radius:12px;padding:12px 32px;font-size:16px;font-weight:700;cursor:pointer;width:100%" onclick="this.closest('[data-milestone]').remove()">Jee! 🎊</button>
+    </div>`;
+  overlay.setAttribute('data-milestone', '1');
+  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  // Konfetti-efekti
+  spawnConfetti();
+}
+
+function spawnConfetti() {
+  const colors = ['#f97316','#22c55e','#3b82f6','#f59e0b','#ec4899','#8b5cf6'];
+  for (let i = 0; i < 60; i++) {
+    const el = document.createElement('div');
+    const size = Math.random() * 10 + 6;
+    el.style.cssText = `position:fixed;z-index:99999;width:${size}px;height:${size}px;border-radius:${Math.random()>0.5?'50%':'2px'};background:${colors[Math.floor(Math.random()*colors.length)]};left:${Math.random()*100}vw;top:-20px;pointer-events:none`;
+    document.body.appendChild(el);
+    const duration = Math.random() * 2000 + 1500;
+    const drift = (Math.random() - 0.5) * 200;
+    el.animate([
+      { transform: `translateY(0) translateX(0) rotate(0deg)`, opacity: 1 },
+      { transform: `translateY(110vh) translateX(${drift}px) rotate(${Math.random()*720}deg)`, opacity: 0 }
+    ], { duration, easing: 'cubic-bezier(0.25,0.46,0.45,0.94)', fill: 'forwards' })
+      .onfinish = () => el.remove();
+  }
+}
+
 async function trackLoginEvent(name) {
   try {
     const snap = await getDoc(LOGINS_DOC);
@@ -745,11 +794,14 @@ async function trackLoginEvent(name) {
     const now = new Date().toISOString();
     const userEntry = loginData[name] || { count: 0, sessions: [] };
     userEntry.count = (userEntry.count || 0) + 1;
-    // Tallenna viimeiset 20 kirjautumista
     userEntry.sessions = [...(userEntry.sessions || []), now].slice(-20);
     userEntry.lastSeen = now;
     loginData[name] = userEntry;
     await setDoc(LOGINS_DOC, loginData);
+    // Tarkista merkkipaalu
+    if (LOGIN_MILESTONES[userEntry.count]) {
+      setTimeout(() => showMilestoneCelebration(name, userEntry.count), 1200);
+    }
   } catch(e) { /* ei kriittinen */ }
 }
 
