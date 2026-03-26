@@ -1010,8 +1010,8 @@ window._pressPelle = async function() {
     </div>`;
   document.body.appendChild(overlay);
 
-  // Piilota nappi — kortti jää auki mutta nappi piilotetaan
-  btn.style.display = 'none';
+  // Piilota koko kortti heti
+  card.style.display = 'none';
 
   // Tallenna painallus Firebaseen
   try {
@@ -1036,7 +1036,10 @@ async function renderPelleStats(container) {
     const last = d.lastPressed;
     const lastStr = last ? `${last.player} — ${new Date(last.ts).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})}` : '–';
     let html = `<div class="separator" style="margin:10px 0"></div>
-      <div style="font-weight:700;font-size:13px;margin-bottom:6px">🤡 TIMO ON PELLE -tilasto</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-weight:700;font-size:13px">🤡 TIMO ON PELLE -tilasto</div>
+        <button class="btn small danger" onclick="window._resetPelleStats()">Nollaa</button>
+      </div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Yhteensä: <strong style="color:var(--primary);font-size:16px">${total}</strong> painallusta — Viimeksi: ${lastStr}</div>
       <div style="display:grid;gap:4px">`;
     PLAYERS.forEach(p => {
@@ -1048,6 +1051,15 @@ async function renderPelleStats(container) {
     container.innerHTML += html;
   } catch(e) {}
 }
+
+window._resetPelleStats = async function() {
+  if (!confirm('Nollataan TIMO ON PELLE -tilastot?')) return;
+  try {
+    await setDoc(PELLE_DOC, { counts: {}, total: 0, lastPressed: null });
+    showStatus('✅ Pelle-tilastot nollattu', '#22c55e'); hideStatus();
+    window._renderLoginStats();
+  } catch(e) { showStatus('❌ Nollaus epäonnistui', '#dc2626'); }
+};
 
 window._toggleLoginStats = function() {
   const area = document.getElementById('loginStatsArea');
