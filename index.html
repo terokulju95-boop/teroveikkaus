@@ -162,6 +162,8 @@
     .alert-title { font-size:24px;font-weight:900;margin-bottom:10px;color:#dc2626; }
     .alert-text { font-size:15px;line-height:1.6;margin-bottom:22px;color:var(--text); }
     .alert-btn { background:var(--primary);color:#fff;border:none;border-radius:12px;padding:14px 32px;font-size:16px;font-weight:700;cursor:pointer;width:100%; }
+    @keyframes pelleShake { 0%,100%{transform:scale(1) rotate(0deg)} 20%{transform:scale(1.08) rotate(-3deg)} 40%{transform:scale(1.08) rotate(3deg)} 60%{transform:scale(1.05) rotate(-2deg)} 80%{transform:scale(1.05) rotate(2deg)} }
+    #pelleBtn:active { transform:scale(0.95); }
     .countdown-box{ background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%); border:2px solid var(--primary); border-radius:14px; padding:12px 16px; text-align:center; }
     .countdown-label{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
     .countdown-timer{ display:flex; justify-content:center; gap:8px; }
@@ -241,12 +243,23 @@
   <div style="max-width:960px;margin:0 auto 10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
     <h1 style="margin:0;font-size:20px">🏒 Turnausveikkaus</h1>
     <div style="display:flex;align-items:center;gap:10px;">
-      <span id="currentUserBadge" style="font-weight:700;font-size:14px;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:4px 12px;"></span>
+      <span id="currentUserBadge" ondblclick="window._openPelleCard()" style="font-weight:700;font-size:14px;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:4px 12px;cursor:pointer;user-select:none" title="Tuplapaina avataksesi salaisuuden 🤫"></span>
       <button class="btn small secondary" onclick="window._logout()">Vaihda käyttäjä</button>
     </div>
   </div>
 
   <div class="layout">
+
+    <!-- SALAINEN PELLE-KORTTI -->
+    <div id="pelleCard" style="display:none;grid-column:1/-1">
+      <div class="card" style="text-align:center;border:2px solid var(--primary);background:linear-gradient(135deg,#1e293b,#0f172a)">
+        <div style="font-size:40px;margin-bottom:8px">🤡</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Salainen löytö avattu…</div>
+        <button id="pelleBtn" onclick="window._pressPelle()" style="width:100%;padding:20px;font-size:22px;font-weight:900;background:var(--primary);color:#fff;border:none;border-radius:14px;cursor:pointer;letter-spacing:1px">
+          TIMO ON PELLE 🤡
+        </button>
+      </div>
+    </div>
     <div class="card">
       <h2>Turnaus</h2>
       <div class="field">
@@ -782,6 +795,7 @@ async function save(){
 // KÄYTTÖKERTOJEN SEURANTA
 // ============================
 const LOGINS_DOC = doc(db, "app", "logins");
+const PELLE_DOC  = doc(db, "app", "pelle");
 
 const LOGIN_MILESTONES = {
   1:   { emoji: '🎉', title: 'Tervetuloa mukaan!', text: 'Ensimmäinen kirjautuminen tehty. Veikkausura alkaa!' },
@@ -961,6 +975,80 @@ window._clearMsgs = async function() {
   window._loadMsgs();
 };
 
+// ============================
+// PELLE-KORTTI 🤡
+// ============================
+window._openPelleCard = function() {
+  const card = document.getElementById('pelleCard');
+  const btn  = document.getElementById('pelleBtn');
+  if (!card) return;
+  // Näytä kortti ja varmista nappi näkyvillä
+  btn.style.display = 'block';
+  card.style.display = 'block';
+  // Scroll korttiin
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
+
+window._pressPelle = async function() {
+  const btn = document.getElementById('pelleBtn');
+  const card = document.getElementById('pelleCard');
+
+  // Efektit
+  btn.style.animation = 'pelleShake 0.5s ease';
+  setTimeout(() => { btn.style.animation = ''; }, 500);
+  spawnConfetti();
+
+  // Iso pelle-overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'alert-overlay';
+  overlay.innerHTML = `
+    <div class="alert-box" style="border:3px solid var(--primary)">
+      <span class="alert-emoji">🤡</span>
+      <div class="alert-title" style="color:var(--primary)">TIMO ON PELLE!</div>
+      <div class="alert-text">Tämä on nyt virallisesti vahvistettu. <br>Todisteet arkistoitu. 📁</div>
+      <button class="alert-btn" onclick="this.closest('.alert-overlay').remove()">Selvä asia! 👍</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Piilota nappi — kortti jää auki mutta nappi piilotetaan
+  btn.style.display = 'none';
+
+  // Tallenna painallus Firebaseen
+  try {
+    const snap = await getDoc(PELLE_DOC);
+    const d = snap.exists() ? snap.data() : {};
+    const counts = d.counts || {};
+    counts[currentUser] = (counts[currentUser] || 0) + 1;
+    const total = (d.total || 0) + 1;
+    const lastPressed = { player: currentUser, ts: new Date().toISOString() };
+    await setDoc(PELLE_DOC, { counts, total, lastPressed });
+  } catch(e) {}
+};
+
+// Admin: näytä pelle-tilastot käyttökerrat-osiossa
+async function renderPelleStats(container) {
+  try {
+    const snap = await getDoc(PELLE_DOC);
+    if (!snap.exists()) { container.innerHTML += '<p class="muted" style="font-size:12px;margin-top:8px">Ei pelle-painalluksia vielä.</p>'; return; }
+    const d = snap.data();
+    const counts = d.counts || {};
+    const total = d.total || 0;
+    const last = d.lastPressed;
+    const lastStr = last ? `${last.player} — ${new Date(last.ts).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})}` : '–';
+    let html = `<div class="separator" style="margin:10px 0"></div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">🤡 TIMO ON PELLE -tilasto</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:8px">Yhteensä: <strong style="color:var(--primary);font-size:16px">${total}</strong> painallusta — Viimeksi: ${lastStr}</div>
+      <div style="display:grid;gap:4px">`;
+    PLAYERS.forEach(p => {
+      const c = counts[p] || 0;
+      html += `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span>${p}</span><strong style="color:var(--primary)">${c} kertaa</strong></div>`;
+    });
+    html += '</div>';
+    container.innerHTML += html;
+  } catch(e) {}
+}
+
 window._toggleLoginStats = function() {
   const area = document.getElementById('loginStatsArea');
   const btn = event.target;
@@ -1008,6 +1096,8 @@ window._renderLoginStats = async function() {
       </div>`;
     }).join('');
     el.innerHTML = rows + `<div style="margin-top:8px;font-size:11px;color:var(--muted)">🟢 alle 24h • 🟡 alle 3 vrk • 🔴 yli 3 vrk</div>`;
+    // Lisää pelle-tilastot alle
+    await renderPelleStats(el);
   } catch(e) {
     el.innerHTML = '<p class="muted" style="font-size:13px">Virhe ladattaessa.</p>';
   }
@@ -1737,6 +1827,9 @@ window.calcMatchPts = calcMatchPts;
 window.calcTimeProximityPts = calcTimeProximityPts;
 window.fieldMatch = fieldMatch;
 window.PLAYERS = PLAYERS;
+window._getPelleData = async function() {
+  try { const snap = await getDoc(PELLE_DOC); return snap.exists() ? snap.data() : {}; } catch(e){ return {}; }
+};
 
 // ============================
 // INIT
@@ -2227,7 +2320,60 @@ document.getElementById('downloadPdfBtn').addEventListener('click', function(){
   tc(GRAY); doc.setFontSize(8); doc.setFont('helvetica','normal');
   doc.text('Turnausveikkaus - raportti '+today, W/2, cy, {align:'center'});
 
-  doc.save('turnausveikkaus_'+t.name.replace(/\s+/g,'_')+'.pdf');
+  // ---- PELLE-SIVU PDF:ssä ----
+  // Haetaan data asynkronisesti ja tallennetaan PDF sen jälkeen
+  (async function(){
+    try {
+      var {getDoc: gd, doc: dd} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    } catch(e){}
+    // Käytetään globaaleja jotka on jo ladattu
+    var pelleData = {};
+    try {
+      if(window._getPelleData) pelleData = await window._getPelleData();
+    } catch(e){}
+
+    var counts = pelleData.counts || {};
+    var total  = pelleData.total  || 0;
+    if(total > 0){
+      doc.addPage(); pageBg();
+      doc.setFillColor(15,23,42); doc.rect(0,8,W,H-16,'F');
+      doc.setFillColor(249,115,22); doc.rect(0,0,W,8,'F');
+      doc.setFillColor(249,115,22); doc.rect(0,H-8,W,8,'F');
+
+      var py = 50;
+      tc(ORANGE); doc.setFontSize(20); doc.setFont('helvetica','bold');
+      doc.text('🤡 TIMO ON PELLE -tilasto', W/2, py, {align:'center'}); py+=12;
+      tc(WHITE); doc.setFontSize(11); doc.setFont('helvetica','normal');
+      doc.text('Nappia on painettu yhteensä '+total+' kertaa', W/2, py, {align:'center'}); py+=14;
+
+      if(pelleData.lastPressed){
+        var lp = pelleData.lastPressed;
+        var lpStr = new Date(lp.ts).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'});
+        tc(GRAY); doc.setFontSize(9);
+        doc.text('Viimeksi painoi: '+lp.player+' ('+lpStr+')', W/2, py, {align:'center'}); py+=14;
+      }
+
+      // Taulukko pelaajittain
+      var bw = 80;
+      var bx = (W-bw)/2 - 20;
+      PLIST.forEach(function(p){
+        var c = counts[p] || 0;
+        doc.setFillColor(30,41,59); doc.roundedRect(ML, py, CW, 10, 2,2,'F');
+        tc(WHITE); doc.setFontSize(9); doc.setFont('helvetica','bold');
+        doc.text(p, ML+4, py+7);
+        tc(ORANGE); doc.setFont('helvetica','bold');
+        doc.text(c+' kertaa', ML+CW-4, py+7, {align:'right'});
+        // Palkki
+        if(total > 0){
+          var pct = c/total;
+          doc.setFillColor(249,115,22,0.3); doc.roundedRect(bx, py+2, bw, 6, 1,1,'F');
+          if(pct>0){ doc.setFillColor(249,115,22); doc.roundedRect(bx, py+2, Math.max(2,Math.round(pct*bw)), 6, 1,1,'F'); }
+        }
+        py+=13;
+      });
+    }
+    doc.save('turnausveikkaus_'+t.name.replace(/\s+/g,'_')+'.pdf');
+  })();
 });
 </script>
 
