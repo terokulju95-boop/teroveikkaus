@@ -403,8 +403,18 @@
       <button class="modal-close" onclick="document.getElementById('playerMsgPanel').style.display='none'">✕</button>
       <h2 style="margin:0 0 16px">✉️ Viestit</h2>
 
+      <!-- Lähetä viesti Terolle suoraan modaalista -->
+      <div style="margin-bottom:12px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--muted)">📨 Lähetä viesti Terolle</div>
+        <textarea id="playerMsgInput" rows="3" placeholder="Kirjoita viestisi…" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;font-size:15px;background:var(--card);color:var(--text);resize:vertical;font-family:inherit;margin-bottom:8px"></textarea>
+        <button class="btn small" style="width:100%" onclick="window._sendMsgFromPanel()">📨 Lähetä</button>
+        <div id="playerMsgPanelStatus" style="margin-top:6px;font-size:13px;color:var(--muted);min-height:16px"></div>
+      </div>
+
+      <div class="separator"></div>
+
       <!-- Adminin joukkoviestit -->
-      <div id="playerBroadcastSection" style="margin-bottom:12px">
+      <div id="playerBroadcastSection" style="margin:12px 0">
         <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--muted)">📢 Viimeinen yleisviesti</div>
         <div id="playerBroadcastContent" style="font-size:14px;color:var(--muted)">Ei viestejä.</div>
       </div>
@@ -412,7 +422,7 @@
       <div class="separator"></div>
 
       <!-- Adminilta tulleet yksityisviestit -->
-      <div style="margin-bottom:12px;margin-top:12px">
+      <div style="margin:12px 0">
         <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--muted)">👑 Yksityisviestit Terolta</div>
         <div id="playerDMList" style="font-size:14px;color:var(--muted)">Ei viestejä.</div>
       </div>
@@ -2658,14 +2668,15 @@ window._loadMsgs = window._loadMsgs || async function() {
 // PELAAJAN VIESTIT-PANEELI
 // ============================
 window._openPlayerMsgPanel = async function() {
-  // Merkitään kaikki luetuksi
   localStorage.setItem('tv_player_msg_last', Date.now().toString());
   updatePlayerMsgBadge(0);
-
   const panel = document.getElementById('playerMsgPanel');
   if (panel) panel.style.display = 'flex';
+  await _loadPlayerMsgPanel();
+};
 
-  // Lataa broadcast (joukkoviesti)
+async function _loadPlayerMsgPanel() {
+  // Broadcast
   try {
     const snap = await getDoc(BROADCAST_DOC);
     const bcEl = document.getElementById('playerBroadcastContent');
@@ -2686,7 +2697,7 @@ window._openPlayerMsgPanel = async function() {
     }
   } catch(e) {}
 
-  // Lataa yksityisviestit adminilta
+  // Yksityisviestit adminilta — pelaaja voi poistaa
   try {
     const dmDoc = doc(db, 'app', 'dm_' + currentUser);
     const snap = await getDoc(dmDoc);
@@ -2696,19 +2707,24 @@ window._openPlayerMsgPanel = async function() {
       if (!dms.length) {
         dmEl.innerHTML = '<p class="muted" style="font-size:13px">Ei yksityisviestejä.</p>';
       } else {
-        dmEl.innerHTML = [...dms].reverse().map(m => `
-          <div style="border:1px solid #0ea5e933;border-radius:10px;padding:10px;margin-bottom:8px;background:var(--bg)">
-            <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+        dmEl.innerHTML = [...dms].reverse().map((m, i, arr) => {
+          const origIdx = dms.length - 1 - i;
+          return `<div style="border:1px solid #0ea5e933;border-radius:10px;padding:10px;margin-bottom:8px;background:var(--bg)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
               <span style="font-weight:700;font-size:13px;color:#0ea5e9">👑 Tero</span>
-              <span style="font-size:11px;color:var(--muted)">${new Date(m.ts).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:11px;color:var(--muted)">${new Date(m.ts).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+                <button onclick="window._deletePlayerDM(${origIdx})" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--muted);padding:0;line-height:1" title="Poista">🗑️</button>
+              </div>
             </div>
             <div style="font-size:14px;line-height:1.5">${m.text.replace(/</g,'&lt;')}</div>
-          </div>`).join('');
+          </div>`;
+        }).join('');
       }
     }
   } catch(e) {}
 
-  // Lataa omat lähetetyt viestit Terolle
+  // Omat lähetetyt viestit
   try {
     const snap = await getDoc(MESSAGES_DOC);
     const msgs = snap.exists() ? (snap.data().messages || []) : [];
@@ -2729,6 +2745,39 @@ window._openPlayerMsgPanel = async function() {
       }
     }
   } catch(e) {}
+};
+
+// Pelaaja poistaa adminilta tulleen yksityisviestin
+window._deletePlayerDM = async function(idx) {
+  if (!confirm('Poistetaanko viesti?')) return;
+  try {
+    const dmDoc = doc(db, 'app', 'dm_' + currentUser);
+    const snap = await getDoc(dmDoc);
+    if (!snap.exists()) return;
+    const dms = snap.data().messages || [];
+    dms.splice(idx, 1);
+    await setDoc(dmDoc, { messages: dms });
+    await _loadPlayerMsgPanel();
+  } catch(e) { showStatus('❌ Poisto epäonnistui', '#dc2626'); }
+};
+
+// Pelaaja lähettää viestin suoraan viestit-modaalista
+window._sendMsgFromPanel = async function() {
+  const input = document.getElementById('playerMsgInput');
+  const status = document.getElementById('playerMsgPanelStatus');
+  const text = (input?.value || '').trim();
+  if (!text) { if(status) status.textContent = 'Kirjoita viesti ensin.'; return; }
+  if (text.length > 500) { if(status) status.textContent = 'Max 500 merkkiä.'; return; }
+  if(status) status.textContent = '💾 Lähetetään…';
+  try {
+    const snap = await getDoc(MESSAGES_DOC);
+    const msgs = snap.exists() ? (snap.data().messages || []) : [];
+    msgs.push({ from: currentUser, text, ts: new Date().toISOString() });
+    await setDoc(MESSAGES_DOC, { messages: msgs });
+    if(input) input.value = '';
+    if(status) { status.textContent = '✅ Lähetetty!'; setTimeout(() => { if(status) status.textContent = ''; }, 2500); }
+    await _loadPlayerMsgPanel();
+  } catch(e) { if(status) status.textContent = '❌ Lähetys epäonnistui.'; }
 };
 
 function updatePlayerMsgBadge(count) {
