@@ -260,18 +260,22 @@
 
 <!-- PÄÄSOVELLUS -->
 <div id="appScreen" style="display:none">
-  <div style="max-width:960px;margin:0 auto 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
-    <h1 style="margin:0;font-size:18px;white-space:nowrap">🏒 Turnausveikkaus <span id="fi-flag" style="cursor:pointer;user-select:none" title="Klikkaa 7x...">🇫🇮</span></h1>
-    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-      <span id="currentUserBadge" ondblclick="window._openPelleCard()" style="font-weight:700;font-size:13px;color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap" title="Tuplapaina avataksesi salaisuuden 🤫"></span>
-      <button id="adminMsgBtn" onclick="window._openMsgPanel()" style="display:none;position:relative;background:none;border:1px solid var(--border);border-radius:10px;width:36px;height:36px;font-size:16px;cursor:pointer;color:var(--text);padding:0" title="Viestit">
-        ✉️<span id="msgBadge" style="display:none;position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;font-weight:900;padding:1px 5px;min-width:16px;text-align:center;line-height:1.5">0</span>
+  <div style="max-width:960px;margin:0 auto 10px;">
+    <!-- Rivi 1: otsikko -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <h1 style="margin:0;font-size:20px">🏒 Turnausveikkaus <span id="fi-flag" style="cursor:pointer;user-select:none" title="Klikkaa 7x...">🇫🇮</span></h1>
+    </div>
+    <!-- Rivi 2: napit -->
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span id="currentUserBadge" ondblclick="window._openPelleCard()" style="font-weight:700;font-size:14px;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 14px;cursor:pointer;user-select:none" title="Tuplapaina avataksesi salaisuuden 🤫"></span>
+      <button id="adminMsgBtn" onclick="window._openMsgPanel()" style="display:none;position:relative;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">
+        ✉️ Viestit<span id="msgBadge" style="display:none;position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;font-weight:900;padding:1px 5px;min-width:16px;text-align:center;line-height:1.5">0</span>
       </button>
-      <button id="playerMsgBtn" onclick="window._openPlayerMsgPanel()" style="display:none;position:relative;background:none;border:1px solid var(--border);border-radius:10px;width:36px;height:36px;font-size:16px;cursor:pointer;color:var(--text);padding:0" title="Viestit">
-        ✉️<span id="playerMsgBadge" style="display:none;position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;font-weight:900;padding:1px 5px;min-width:16px;text-align:center;line-height:1.5">0</span>
+      <button id="playerMsgBtn" onclick="window._openPlayerMsgPanel()" style="display:none;position:relative;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">
+        ✉️ Viestit<span id="playerMsgBadge" style="display:none;position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;font-weight:900;padding:1px 5px;min-width:16px;text-align:center;line-height:1.5">0</span>
       </button>
-      <button id="adminSettingsBtn" onclick="window._openSettingsPanel()" style="display:none;background:none;border:1px solid var(--border);border-radius:10px;width:36px;height:36px;font-size:16px;cursor:pointer;color:var(--text);padding:0" title="Asetukset">⚙️</button>
-      <button onclick="window._logout()" style="background:none;border:1px solid var(--border);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);white-space:nowrap">Vaihda</button>
+      <button id="adminSettingsBtn" onclick="window._openSettingsPanel()" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:14px;cursor:pointer;color:var(--text)">⚙️ Asetukset</button>
+      <button class="btn small secondary" onclick="window._logout()">Vaihda käyttäjä</button>
     </div>
   </div>
 
