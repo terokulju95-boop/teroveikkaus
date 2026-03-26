@@ -27,8 +27,8 @@
     @media (prefers-color-scheme: dark) {
       .score-card { background:#ffffff !important; color:#000000 !important; }
       .score-card .name { color:#000000 !important; font-weight:700; }
-      :root { --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --muted:#94a3b8; --border:#334155; --primary:#f97316; --dark:#f8fafc; }
-      input, select { background:#1e293b !important; color:#ffffff !important; border-color:#475569 !important; }
+      :root { --bg:#0b1020; --card:#111727; --text:#e5e7eb; --muted:#9aa3b2; --border:#243047; --primary:#fb8a3c; --primary-hover:#ec6f17; --dark:#e5e7eb; }
+      input, select { background:#111727 !important; color:#e5e7eb !important; border-color:#243047 !important; }
       body { background:var(--bg); color:var(--text); }
       .card, .person-card, .t3-card, table th, table td { background:var(--card) !important; }
       .score-card { background:var(--card); border-color:var(--border); }
@@ -262,9 +262,134 @@
 <div id="appScreen" style="display:none">
   <div style="max-width:960px;margin:0 auto 10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
     <h1 style="margin:0;font-size:20px">🏒 Turnausveikkaus <span id="fi-flag" style="cursor:pointer;user-select:none" title="Klikkaa 7x...">🇫🇮</span></h1>
-    <div style="display:flex;align-items:center;gap:10px;">
+    <div style="display:flex;align-items:center;gap:8px;">
       <span id="currentUserBadge" ondblclick="window._openPelleCard()" style="font-weight:700;font-size:14px;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:4px 12px;cursor:pointer;user-select:none" title="Tuplapaina avataksesi salaisuuden 🤫"></span>
+      <!-- Viestit-painike (vain admin) -->
+      <button id="adminMsgBtn" onclick="window._openMsgPanel()" style="display:none;position:relative;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">
+        ✉️ Viestit
+        <span id="msgBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#dc2626;color:#fff;border-radius:999px;font-size:11px;font-weight:900;padding:2px 6px;min-width:18px;text-align:center;line-height:1.4">0</span>
+      </button>
+      <!-- Asetukset-painike (vain admin) -->
+      <button id="adminSettingsBtn" onclick="window._openSettingsPanel()" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:14px;cursor:pointer;color:var(--text)" title="Asetukset">⚙️</button>
       <button class="btn small secondary" onclick="window._logout()">Vaihda käyttäjä</button>
+    </div>
+  </div>
+
+  <!-- ASETUKSET MODAALI (admin) -->
+  <div id="settingsModal" style="display:none" class="modal-overlay" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-box" style="max-width:520px">
+      <button class="modal-close" onclick="document.getElementById('settingsModal').style.display='none'">✕</button>
+      <h2 style="margin:0 0 16px">⚙️ Asetukset</h2>
+
+      <!-- Data-toiminnot -->
+      <div class="separator"></div>
+      <h2 style="margin:8px 0">📁 Data</h2>
+      <div class="stack" style="flex-wrap:wrap;gap:8px">
+        <button id="exportBtn2" class="btn small secondary">Vie JSON</button>
+        <input id="importFile2" type="file" accept="application/json" style="display:none" />
+        <button id="importBtn2" class="btn small secondary">Tuo JSON</button>
+      </div>
+      <p class="muted" style="margin-top:6px">☁️ Data tallentuu Firebase-pilveen</p>
+
+      <!-- PIN-koodit -->
+      <div id="adminPinToolsModal" style="margin-top:12px">
+        <div class="separator"></div>
+        <div class="stack" style="justify-content:space-between;align-items:center">
+          <h2 style="margin:8px 0">🔐 PIN-koodit</h2>
+          <button id="togglePins2" class="btn small secondary">Näytä</button>
+        </div>
+        <div id="pinManageArea2"></div>
+      </div>
+
+      <!-- Käyttökerrat -->
+      <div id="adminLoginStatsModal" style="margin-top:12px">
+        <div class="separator"></div>
+        <div class="stack" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+          <h2 style="margin:8px 0">📊 Käyttökerrat</h2>
+          <div style="display:flex;gap:6px">
+            <button class="btn small secondary" onclick="window._renderLoginStats2()">🔄</button>
+            <button class="btn small danger" onclick="window._resetLoginStats2()">Nollaa</button>
+            <button class="btn small secondary" onclick="window._toggleLoginStats2()">Piilota</button>
+          </div>
+        </div>
+        <div id="loginStatsArea2" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIESTIT MODAALI (admin) -->
+  <div id="msgPanel" style="display:none" class="modal-overlay" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-box" style="max-width:540px">
+      <button class="modal-close" onclick="document.getElementById('msgPanel').style.display='none'">✕</button>
+      <h2 style="margin:0 0 16px">✉️ Viestit</h2>
+
+      <!-- Yleisviesti kaikille -->
+      <div style="margin-bottom:12px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px">📢 Lähetä yleisviesti kaikille</div>
+        <div id="broadcastBlockedNote2" style="display:none;background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:8px">
+          ⏳ Edellinen viesti on vielä lukematta. Näkee kenellä lukematta alla.
+        </div>
+        <div id="broadcastSendArea2">
+          <div style="margin-bottom:8px">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Valmiit pohjat:</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast2('🏒 Suomi voittaa tänään 5-0. Tämä on virallinen ennuste!')">🏒 Ennuste</button>
+              <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast2('😴 Herätys! Veikkaukset lukittuu pian!')">😴 Herätys</button>
+              <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast2('🤡 Joku teistä veikkasi tosi huonosti viime kerralla... tiedätte kyllä kuka.')">🤡 Häpeä</button>
+              <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast2('💸 Häviäjä maksaa seuraavan illan juomat. Tämä on nyt virallista.')">💸 Juomat</button>
+              <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast2('🎯 Tänään selviää kuka on todellinen veikkausmestari!')">🎯 Mestari</button>
+            </div>
+          </div>
+          <textarea id="broadcastInput2" rows="3" placeholder="Kirjoita vapaa viesti…" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:var(--card);color:var(--text);resize:vertical;font-family:inherit;margin-bottom:8px"></textarea>
+          <button class="btn small" style="width:100%;background:#7c3aed" onclick="window._sendBroadcast2()">🚀 Lähetä kaikille</button>
+        </div>
+        <div id="broadcastReadStatus2" style="display:none;margin-top:10px">
+          <div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--muted)">Kuka on lukenut:</div>
+          <div id="broadcastReadList2"></div>
+          <button class="btn small danger" style="width:100%;margin-top:8px" onclick="window._clearBroadcast2()">🗑️ Poista viesti</button>
+        </div>
+      </div>
+
+      <div class="separator"></div>
+
+      <!-- Viesti yksittäiselle pelaajalle -->
+      <div style="margin-bottom:12px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px">👤 Viesti yksittäiselle pelaajalle</div>
+        <div style="margin-bottom:8px">
+          <select id="dmTargetSelect" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;font-size:15px;background:var(--card);color:var(--text);margin-bottom:8px">
+            <option value="">Valitse pelaaja…</option>
+          </select>
+          <textarea id="dmInput" rows="2" placeholder="Kirjoita yksityisviesti…" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:var(--card);color:var(--text);resize:vertical;font-family:inherit;margin-bottom:8px"></textarea>
+          <button class="btn small" style="width:100%;background:#0ea5e9" onclick="window._sendDM()">📩 Lähetä yksityisviesti</button>
+        </div>
+        <div id="dmStatus" style="font-size:13px;color:var(--muted);min-height:18px;margin-top:4px"></div>
+      </div>
+
+      <div class="separator"></div>
+
+      <!-- Pikarangaistukset -->
+      <div style="margin-bottom:12px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px">⚡ Pikarangaistukset</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="btn small danger" onclick="window._sendAlert('petkuhuiputus')">🕵️ PETKUHUIPUTUS</button>
+          <button class="btn small danger" onclick="window._sendAlert('lahjonta')">💸 LAHJONTAYRITYS</button>
+          <button class="btn small danger" onclick="window._sendAlert('huijari')">🚨 HUIJARI PALJASTUNUT</button>
+          <button class="btn small danger" onclick="window._sendAlert('varoitus')">⚠️ VIRALLINEN VAROITUS</button>
+          <button class="btn small danger" onclick="window._sendAlert('haukku')" style="grid-column:span 2">😤 SOPIMATON KÄYTÖS</button>
+        </div>
+      </div>
+
+      <div class="separator"></div>
+
+      <!-- Saapuneet viestit -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 8px">
+        <span style="font-weight:700;font-size:13px">📬 Saapuneet viestit</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn small secondary" onclick="window._loadMsgs2()">🔄</button>
+          <button class="btn small danger" onclick="window._clearMsgs2()">🗑️</button>
+        </div>
+      </div>
+      <div id="msgList2"><p class="muted" style="font-size:13px">Ladataan…</p></div>
     </div>
   </div>
 
@@ -346,7 +471,7 @@
       <div class="separator"></div>
       <h2>Data</h2>
       <div class="stack">
-        <button id="exportBtn" class="btn small secondary">Vie JSON</button>
+        <button id="exportBtn" class="btn small secondary" style="display:none">Vie JSON</button>
         <input id="importFile" type="file" accept="application/json" style="display:none" />
         <button id="importBtn" class="btn small secondary" style="display:none">Tuo JSON</button>
         <button id="screenshotTableBtn" class="btn small green">📷 Kuva</button>
@@ -432,60 +557,9 @@
           <div id="msgSendStatus" style="margin-top:8px;font-size:13px;color:var(--muted);min-height:18px"></div>
         </div>
 
-        <!-- Admin näkymä -->
+        <!-- Admin ei näe tässä mitään – viestit ovat yläpalkin kautta -->
         <div id="msgAdminArea" style="display:none">
-          <!-- YLEISVIESTILÄHETYS -->
-          <div style="margin-bottom:12px">
-            <div style="font-weight:700;font-size:13px;margin-bottom:8px">📢 Lähetä yleisviesti kaikille</div>
-            <div id="broadcastBlockedNote" style="display:none;background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:8px">
-              ⏳ Edellinen viesti on vielä lukematta. Näkee kenellä lukematta alla.
-            </div>
-            <div id="broadcastSendArea">
-              <!-- Valmisletkautukset -->
-              <div style="margin-bottom:8px">
-                <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Valmiit pohjat:</div>
-                <div style="display:flex;flex-wrap:wrap;gap:6px" id="broadcastTemplates">
-                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('🏒 Suomi voittaa tänään 5-0. Tämä on virallinen ennuste!')">🏒 Ennuste</button>
-                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('😴 Herätys! Veikkaukset lukittuu pian!')">😴 Herätys</button>
-                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('🤡 Joku teistä veikkasi tosi huonosti viime kerralla... tiedätte kyllä kuka.')">🤡 Häpeä</button>
-                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('💸 Häviäjä maksaa seuraavan illan juomat. Tämä on nyt virallista.')">💸 Juomat</button>
-                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('🎯 Tänään selviää kuka on todellinen veikkausmestari!')">🎯 Mestari</button>
-                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('😎 Admin tietää jo tuloksen. Tai tietääkö?')">😎 Mysteeri</button>
-                  <button class="btn small secondary" style="font-size:12px" onclick="window._setBroadcast('🔥 Lämpöä peliin — tänään ei armahdeta ketään!')">🔥 Lämpö</button>
-                </div>
-              </div>
-              <textarea id="broadcastInput" rows="3" placeholder="Kirjoita vapaa viesti…" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:var(--card);color:var(--text);resize:vertical;font-family:inherit;margin-bottom:8px"></textarea>
-              <button class="btn small" style="width:100%;background:#7c3aed" onclick="window._sendBroadcast()">🚀 Lähetä kaikille</button>
-            </div>
-            <!-- Lukijastatukset -->
-            <div id="broadcastReadStatus" style="display:none;margin-top:10px">
-              <div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--muted)">Kuka on lukenut:</div>
-              <div id="broadcastReadList"></div>
-              <button class="btn small danger" style="width:100%;margin-top:8px" onclick="window._clearBroadcast()">🗑️ Poista viesti</button>
-            </div>
-          </div>
-          <div class="separator"></div>
-          <!-- Pikarangaistusnapit -->
-          <div style="margin-bottom:12px">
-            <div style="font-weight:700;font-size:13px;margin-bottom:8px">⚡ Pikarangaistukset</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <button class="btn small danger" onclick="window._sendAlert('petkuhuiputus')">🕵️ PETKUHUIPUTUS</button>
-              <button class="btn small danger" onclick="window._sendAlert('lahjonta')">💸 LAHJONTAYRITYS</button>
-              <button class="btn small danger" onclick="window._sendAlert('huijari')">🚨 HUIJARI PALJASTUNUT</button>
-              <button class="btn small danger" onclick="window._sendAlert('varoitus')">⚠️ VIRALLINEN VAROITUS</button>
-              <button class="btn small danger" onclick="window._sendAlert('haukku')" style="grid-column:span 2">😤 SOPIMATON KÄYTÖS</button>
-            </div>
-          </div>
-          <div class="separator"></div>
-          <!-- Viestilista -->
-          <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 8px">
-            <span style="font-weight:700;font-size:13px">📬 Saapuneet viestit</span>
-            <div style="display:flex;gap:6px">
-              <button class="btn small secondary" onclick="window._loadMsgs()">🔄</button>
-              <button class="btn small danger" onclick="window._clearMsgs()">🗑️</button>
-            </div>
-          </div>
-          <div id="msgList"><p class="muted" style="font-size:13px">Ladataan…</p></div>
+          <p class="muted" style="font-size:13px">Hallinnoi viestejä yläpalkin ✉️ Viestit -painikkeesta.</p>
         </div>
       </div>
 
@@ -1002,6 +1076,38 @@ window._setBroadcast = function(text) {
   if (inp) { inp.value = text; inp.focus(); }
 };
 
+// Tarkista yksityisviestit pelaajalle (adminilta)
+async function checkPendingDM() {
+  if (!currentUser || currentUser === ADMIN) return;
+  try {
+    const dmDoc = doc(db, 'app', 'dm_' + currentUser);
+    const snap = await getDoc(dmDoc);
+    if (!snap.exists()) return;
+    const dms = snap.data().messages || [];
+    const lastSeen = parseInt(localStorage.getItem('tv_dm_seen_' + currentUser) || '0');
+    const newMsgs = dms.filter(m => new Date(m.ts).getTime() > lastSeen);
+    if (!newMsgs.length) return;
+    // Merkitään nähdyiksi
+    localStorage.setItem('tv_dm_seen_' + currentUser, Date.now().toString());
+    // Näytä uusimmat viestit
+    newMsgs.forEach((m, i) => {
+      setTimeout(() => {
+        const overlay = document.createElement('div');
+        overlay.className = 'alert-overlay';
+        overlay.innerHTML = `
+          <div class="alert-box" style="border:2px solid #0ea5e9">
+            <span class="alert-emoji">👑</span>
+            <div class="alert-title" style="color:#0ea5e9;font-size:18px">Yksityisviesti Terolta</div>
+            <div class="alert-text" style="font-size:15px;line-height:1.6">${m.text.replace(/</g,'&lt;')}</div>
+            <button class="alert-btn" style="background:#0ea5e9" onclick="this.closest('.alert-overlay').remove()">Selvä! 👍</button>
+          </div>`;
+        overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+        document.body.appendChild(overlay);
+      }, 1000 + i * 500);
+    });
+  } catch(e) {}
+}
+
 window._sendBroadcast = async function() {
   const inp = document.getElementById('broadcastInput');
   const text = (inp?.value || '').trim();
@@ -1083,9 +1189,11 @@ function renderMessageCard() {
   const aa = document.getElementById('msgAdminArea');
   if (pa) pa.style.display = isAdmin ? 'none' : 'block';
   if (aa) aa.style.display = isAdmin ? 'block' : 'none';
-  if (isAdmin) { window._loadMsgs(); refreshBroadcastAdminUI(); }
+  // Admin: badge päivitys taustalla
+  if (isAdmin) checkUnreadMessages();
   checkPendingAlert();
   checkPendingBroadcast();
+  if (!isAdmin) checkPendingDM();
 }
 
 window._sendMsg = async function() {
@@ -2085,6 +2193,7 @@ function render(){
   checkNightMode();
   showHintBtn(true);
   checkLoserMessage();
+  if(currentUser===ADMIN) checkUnreadMessages();
 }
 
 function renderTournamentSelects(){
@@ -2187,6 +2296,39 @@ function doLogin(name){
   });
   const ib=$('importBtn'); if(ib) ib.style.display=isAdmin?'':'none';
   const vt=$('viewTabs'); if(vt) vt.style.display=isAdmin?'':'none';
+
+  // Admin-painikkeet yläpalkissa
+  const msgBtn=$('adminMsgBtn'); if(msgBtn) msgBtn.style.display=isAdmin?'':'none';
+  const setBtn=$('adminSettingsBtn'); if(setBtn) setBtn.style.display=isAdmin?'':'none';
+
+  // Piilota data-osio (Kuva+PDF) ja viestiosio muilta kuin adminilta
+  const dataCard = document.querySelector('.card:has(#screenshotTableBtn)');
+  if (!isAdmin) {
+    // Piilota koko data-kortti muilta käyttäjiltä
+    // Etsitään kortti jossa on screenshotTableBtn
+    const allCards = document.querySelectorAll('.card');
+    allCards.forEach(card => {
+      if (card.querySelector('#screenshotTableBtn')) {
+        card.style.display = 'none';
+      }
+    });
+  } else {
+    // Admin: näytä data-kortti
+    const allCards = document.querySelectorAll('.card');
+    allCards.forEach(card => {
+      if (card.querySelector('#screenshotTableBtn')) {
+        card.style.display = '';
+      }
+    });
+  }
+
+  // Täytä pelaajavalinnat yksityisviestimodaaliin
+  const dmSelect = $('dmTargetSelect');
+  if (dmSelect) {
+    dmSelect.innerHTML = '<option value="">Valitse pelaaja…</option>' +
+      PLAYERS.filter(p => p !== ADMIN).map(p => `<option value="${p}">${p}</option>`).join('');
+  }
+
   // Tallenna käyttökerta
   trackLoginEvent(name);
   loadData();
@@ -2231,6 +2373,256 @@ window._getPelleData = async function() {
 // ============================
 // INIT
 // ============================
+// ASETUKSET-PANEELI (admin)
+// ============================
+function renderPinManage2() {
+  const area = $('pinManageArea2');
+  if (!area) return;
+  area.innerHTML = PLAYERS.map(p => {
+    const hasPin = pins[p] ? '✅ PIN asetettu' : '❌ Ei PINiä';
+    const col = pins[p] ? '#22c55e' : '#dc2626';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div><div style="font-weight:700">${p === ADMIN ? '👑 ' : ''}${p}</div><div style="font-size:12px;color:${col}">${hasPin}</div></div>
+      <input type="text" maxlength="6" placeholder="Uusi PIN" style="width:90px;padding:8px;font-size:15px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)"
+        onchange="window._setPin2('${p}', this.value.trim()); this.value=''" />
+    </div>`;
+  }).join('');
+}
+
+window._openSettingsPanel = function() {
+  $('settingsModal').style.display = 'flex';
+  renderPinManage2();
+  const btn2 = $('togglePins2');
+  if (btn2 && !btn2._hooked) {
+    btn2._hooked = true;
+    let pinManageVisible2 = false;
+    btn2.onclick = function() {
+      pinManageVisible2 = !pinManageVisible2;
+      const area = $('pinManageArea2');
+      if (area) area.style.display = pinManageVisible2 ? '' : 'none';
+      this.textContent = pinManageVisible2 ? 'Piilota' : 'Näytä';
+      if (pinManageVisible2) renderPinManage2();
+    };
+  }
+};
+
+window._setPin2 = async function(player, pin) {
+  if (!pin) return;
+  pins[player] = pin;
+  try { await setDoc(PINS_DOC, {pins}); showStatus('✅ PIN tallennettu', '#22c55e'); hideStatus(); } catch(e) {}
+  renderPinManage2();
+};
+
+window._renderLoginStats2 = async function() {
+  const el = $('loginStatsArea2'); if (!el) return;
+  el.style.display = 'block';
+  el.innerHTML = '<p class="muted" style="font-size:13px">Ladataan…</p>';
+  try {
+    const snap = await getDoc(LOGINS_DOC);
+    if (!snap.exists()) { el.innerHTML = '<p class="muted" style="font-size:13px">Ei dataa vielä.</p>'; return; }
+    const loginData = snap.data();
+    const rows = PLAYERS.map(p => {
+      const d = loginData[p] || { count: 0, lastSeen: null };
+      const lastStr = d.lastSeen ? new Date(d.lastSeen).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}) : '–';
+      const daysSince = d.lastSeen ? (Date.now() - new Date(d.lastSeen)) / 86400000 : 999;
+      const dot = daysSince < 1 ? '🟢' : daysSince < 3 ? '🟡' : '🔴';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:8px">
+        <div><div style="font-weight:700;font-size:14px">${dot} ${p === ADMIN ? '👑 ' : ''}${p}</div><div style="font-size:11px;color:var(--muted)">Viimeksi: ${lastStr}</div></div>
+        <div style="text-align:right"><div style="font-size:18px;font-weight:900;color:var(--primary)">${d.count || 0}</div><div style="font-size:11px;color:var(--muted)">käyntiä</div></div>
+      </div>`;
+    }).join('');
+    el.innerHTML = rows || '<p class="muted">Ei dataa.</p>';
+  } catch(e) { el.innerHTML = '<p class="muted">Virhe.</p>'; }
+};
+
+window._resetLoginStats2 = async function() {
+  if (!confirm('Nollataan kaikkien käyttökerrat? Tätä ei voi peruuttaa.')) return;
+  try {
+    await setDoc(LOGINS_DOC, {});
+    showStatus('✅ Käyttökerrat nollattu', '#22c55e'); hideStatus();
+    window._renderLoginStats2();
+  } catch(e) { showStatus('❌ Nollaus epäonnistui', '#dc2626'); }
+};
+
+window._toggleLoginStats2 = function() {
+  const area = $('loginStatsArea2'); if (!area) return;
+  const hidden = area.style.display === 'none' || area.style.display === '';
+  area.style.display = hidden ? 'block' : 'none';
+  if (hidden) window._renderLoginStats2();
+};
+
+// Import/export from settings modal
+$('exportBtn2') && ($('exportBtn2').onclick = () => { window._doExport && window._doExport(); });
+$('importBtn2') && ($('importBtn2').onclick = () => $('importFile2') && $('importFile2').click());
+$('importFile2') && ($('importFile2').onchange = function() {
+  const file = this.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      data = JSON.parse(e.target.result);
+      save(); render();
+      showStatus('✅ Tuonti onnistui!', '#22c55e'); hideStatus();
+    } catch(err) { showStatus('❌ Virheellinen JSON', '#dc2626'); }
+  };
+  reader.readAsText(file);
+  this.value = '';
+});
+
+// ============================
+// VIESTIT-PANEELI (admin)
+// ============================
+const DM_DOC_PREFIX = 'dm_'; // DM-viestit tallennetaan Firebaseen omaan dokumenttiin
+
+window._openMsgPanel = async function() {
+  $('msgPanel').style.display = 'flex';
+  await window._loadMsgs2();
+  await refreshBroadcastAdminUI2();
+};
+
+window._loadMsgs2 = async function() {
+  const el = $('msgList2'); if (!el) return;
+  el.innerHTML = '<p class="muted" style="font-size:13px">Ladataan…</p>';
+  try {
+    const snap = await getDoc(MESSAGES_DOC);
+    const msgs = snap.exists() ? (snap.data().messages || []) : [];
+    // Nollaa badge
+    updateMsgBadge(0);
+    if (!msgs.length) { el.innerHTML = '<p class="muted" style="font-size:13px">Ei viestejä.</p>'; return; }
+    el.innerHTML = [...msgs].reverse().map(m => `
+      <div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--bg)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <span style="font-weight:700;font-size:14px">${m.from}</span>
+          <span style="font-size:11px;color:var(--muted)">${new Date(m.ts).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+        </div>
+        <div style="font-size:14px;line-height:1.5">${m.text.replace(/</g,'&lt;')}</div>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = '<p class="muted">Virhe.</p>'; }
+};
+
+window._clearMsgs2 = async function() {
+  if (!confirm('Poistetaanko kaikki viestit?')) return;
+  await setDoc(MESSAGES_DOC, { messages: [] });
+  window._loadMsgs2();
+  updateMsgBadge(0);
+};
+
+// Yksityisviesti yksittäiselle pelaajalle
+window._sendDM = async function() {
+  const target = $('dmTargetSelect')?.value;
+  const text = ($('dmInput')?.value || '').trim();
+  const status = $('dmStatus');
+  if (!target) { if(status) status.textContent = 'Valitse pelaaja ensin.'; return; }
+  if (!text) { if(status) status.textContent = 'Kirjoita viesti ensin.'; return; }
+  if (status) status.textContent = '💾 Lähetetään…';
+  try {
+    const dmDoc = doc(db, 'app', 'dm_' + target);
+    const snap = await getDoc(dmDoc);
+    const dms = snap.exists() ? (snap.data().messages || []) : [];
+    dms.push({ from: ADMIN, text, ts: new Date().toISOString() });
+    await setDoc(dmDoc, { messages: dms });
+    if ($('dmInput')) $('dmInput').value = '';
+    if (status) { status.textContent = `✅ Viesti lähetetty ${target}:lle!`; setTimeout(() => { if(status) status.textContent = ''; }, 3000); }
+  } catch(e) { if (status) status.textContent = '❌ Lähetys epäonnistui.'; }
+};
+
+// Broadcast-toiminnot modaalille
+async function refreshBroadcastAdminUI2() {
+  const blocked = $('broadcastBlockedNote2');
+  const sendArea = $('broadcastSendArea2');
+  const readStatus = $('broadcastReadStatus2');
+  const readList = $('broadcastReadList2');
+  if (!blocked || !sendArea || !readStatus) return;
+  try {
+    const snap = await getDoc(BROADCAST_DOC);
+    if (!snap.exists() || !snap.data().active) {
+      blocked.style.display = 'none';
+      sendArea.style.display = 'block';
+      readStatus.style.display = 'none';
+      return;
+    }
+    const bc = snap.data();
+    const seen = bc.seenBy || [];
+    const others = PLAYERS.filter(p => p !== ADMIN);
+    const allRead = others.every(p => seen.includes(p));
+    if (allRead) {
+      blocked.style.display = 'none';
+      sendArea.style.display = 'block';
+      readStatus.style.display = 'none';
+    } else {
+      blocked.style.display = 'block';
+      sendArea.style.display = 'none';
+      readStatus.style.display = 'block';
+      if (readList) readList.innerHTML = others.map(p => {
+        const hasRead = seen.includes(p);
+        return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px"><span>${p}</span><span>${hasRead ? '✅ Luettu' : '⏳ Lukematta'}</span></div>`;
+      }).join('');
+    }
+  } catch(e) {}
+}
+
+window._setBroadcast2 = function(text) {
+  const inp = $('broadcastInput2');
+  if (inp) { inp.value = text; inp.focus(); }
+};
+
+window._sendBroadcast2 = async function() {
+  const inp = $('broadcastInput2');
+  const text = (inp?.value || '').trim();
+  if (!text) { showStatus('Kirjoita viesti ensin!', '#f97316'); return; }
+  if (!confirm('Lähetetäänkö viesti kaikille pelaajille?')) return;
+  try {
+    await setDoc(BROADCAST_DOC, { active: true, text, seenBy: [ADMIN], ts: new Date().toISOString() });
+    inp.value = '';
+    showStatus('✅ Viesti lähetetty!', '#22c55e'); hideStatus();
+    refreshBroadcastAdminUI2();
+    refreshBroadcastAdminUI(); // myös alkuperäinen
+  } catch(e) { showStatus('❌ Lähetys epäonnistui', '#dc2626'); }
+};
+
+window._clearBroadcast2 = async function() {
+  if (!confirm('Poistetaanko viesti?')) return;
+  await setDoc(BROADCAST_DOC, { active: false, text: '', seenBy: [] });
+  showStatus('✅ Viesti poistettu', '#22c55e'); hideStatus();
+  refreshBroadcastAdminUI2();
+};
+
+// Badge: laske lukemattomat viestit adminille
+function updateMsgBadge(count) {
+  const badge = $('msgBadge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+async function checkUnreadMessages() {
+  if (currentUser !== ADMIN) return;
+  try {
+    const snap = await getDoc(MESSAGES_DOC);
+    const msgs = snap.exists() ? (snap.data().messages || []) : [];
+    // Laske kuinka monta on tullut viimeisen tarkistuksen jälkeen
+    const lastCheck = parseInt(localStorage.getItem('tv_msg_last') || '0');
+    const unread = msgs.filter(m => new Date(m.ts).getTime() > lastCheck).length;
+    updateMsgBadge(unread);
+  } catch(e) {}
+}
+
+// Tarkista lukemattomat viestit kun paneeli avataan (nollaa badge)
+const origOpenMsgPanel = window._openMsgPanel;
+window._openMsgPanel = async function() {
+  localStorage.setItem('tv_msg_last', Date.now().toString());
+  updateMsgBadge(0);
+  await origOpenMsgPanel();
+};
+
+// Myös vanha _loadMsgs pysyy toimivana (käytetään muualta)
+window._loadMsgs = window._loadMsgs || async function() {
+  await window._loadMsgs2();
+};
+
 buildLogin();
 document.querySelectorAll('.pin-key').forEach(btn=>btn.addEventListener('click',()=>handlePinKey(btn.dataset.v)));
 
@@ -2279,19 +2671,27 @@ $('tabTable').onclick=()=>{ viewMode='table'; $('tabTable').classList.add('activ
 $('tabCards').onclick=()=>{ viewMode='cards'; $('tabCards').classList.add('active'); $('tabTable').classList.remove('active'); renderPredictions(); };
 $('refreshCheck').onclick=()=>{ save(); renderScoreboard(); renderPredictions(); };
 $('saveTopThree').onclick=()=>save();
-$('exportBtn').onclick=()=>{
+// Export-funktio (käytetään myös asetusmodaalista)
+window._doExport = function() {
   const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download='turnausveikkaus_data.json';
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u);
 };
-$('importBtn').onclick=()=>$('importFile').click();
-$('importFile').addEventListener('change',e=>{
-  const f=e.target.files[0]; if(!f) return;
+$('exportBtn').onclick = window._doExport;
+$('exportBtn2') && ($('exportBtn2').onclick = window._doExport);
+
+function doImportFile(file) {
+  if (!file) return;
   const r=new FileReader(); r.onload=async()=>{
     try{ const obj=JSON.parse(r.result); data=obj; tid=data.selectedTournamentId||null; mid=null; await save(); render(); alert('Tuotu!'); }
     catch(er){ alert('Virhe: '+er.message); }
-  }; r.readAsText(f,'utf-8');
-});
+  }; r.readAsText(file,'utf-8');
+}
+$('importBtn').onclick=()=>$('importFile').click();
+$('importFile').addEventListener('change',e=>{ doImportFile(e.target.files[0]); });
+// Asetusmodaalin import
+const ib2=$('importBtn2'); if(ib2) ib2.onclick=()=>{ const f=$('importFile2'); if(f) f.click(); };
+const if2=$('importFile2'); if(if2) if2.addEventListener('change',e=>{ doImportFile(e.target.files[0]); });
 
 let t3v=localStorage.getItem('tv_top3')!=='0';
 function applyT3(){ $('topThreeArea').style.display=t3v?'':'none'; $('saveTop3Row').style.display=t3v?'':'none'; $('toggleTop3').textContent=t3v?'Piilota':'Näytä'; }
