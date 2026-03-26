@@ -2291,36 +2291,31 @@ function doLogin(name){
   $('loginScreen').style.display='none'; $('appScreen').style.display='';
   $('currentUserBadge').textContent=(name===ADMIN?'👑 ':'')+name;
   const isAdmin=name===ADMIN;
-  ['adminTournamentTools','adminMatchTools','adminStatusCard','adminPinTools','adminLoginStats'].forEach(id=>{
+  // Turnaus/ottelu/status-työkalut vain adminille
+  ['adminTournamentTools','adminMatchTools','adminStatusCard'].forEach(id=>{
     const el=$(id); if(el) el.style.display=isAdmin?'':'none';
   });
-  const ib=$('importBtn'); if(ib) ib.style.display=isAdmin?'':'none';
+  // PIN-koodit ja Käyttökerrat piilotetaan aina — ne ovat Asetukset-modaalissa
+  ['adminPinTools','adminLoginStats'].forEach(id=>{
+    const el=$(id); if(el) el.style.display='none';
+  });
+  // Vie/Tuo JSON piilotetaan aina — ne ovat Asetukset-modaalissa
+  const ib=$('importBtn'); if(ib) ib.style.display='none';
   const vt=$('viewTabs'); if(vt) vt.style.display=isAdmin?'':'none';
 
   // Admin-painikkeet yläpalkissa
   const msgBtn=$('adminMsgBtn'); if(msgBtn) msgBtn.style.display=isAdmin?'':'none';
   const setBtn=$('adminSettingsBtn'); if(setBtn) setBtn.style.display=isAdmin?'':'none';
 
-  // Piilota data-osio (Kuva+PDF) ja viestiosio muilta kuin adminilta
-  const dataCard = document.querySelector('.card:has(#screenshotTableBtn)');
-  if (!isAdmin) {
-    // Piilota koko data-kortti muilta käyttäjiltä
-    // Etsitään kortti jossa on screenshotTableBtn
-    const allCards = document.querySelectorAll('.card');
-    allCards.forEach(card => {
-      if (card.querySelector('#screenshotTableBtn')) {
-        card.style.display = 'none';
-      }
-    });
-  } else {
-    // Admin: näytä data-kortti
-    const allCards = document.querySelectorAll('.card');
-    allCards.forEach(card => {
-      if (card.querySelector('#screenshotTableBtn')) {
-        card.style.display = '';
-      }
-    });
-  }
+  // Viesti Terolle -kortti: piilotetaan adminilta
+  const msgCard=$('messageCard'); if(msgCard) msgCard.style.display=isAdmin?'none':'';
+
+  // Data-kortti (Kuva + PDF): piilotetaan muilta käyttäjiltä kokonaan
+  document.querySelectorAll('.card').forEach(card => {
+    if (card.querySelector('#screenshotTableBtn')) {
+      card.style.display = isAdmin ? '' : 'none';
+    }
+  });
 
   // Täytä pelaajavalinnat yksityisviestimodaaliin
   const dmSelect = $('dmTargetSelect');
