@@ -40,8 +40,8 @@
     .score-card .name{ font-weight:700; font-size:14px } .score-card .pts{ font-size:13px; color:#111 }
     .stack{ display:flex; flex-wrap:wrap; gap:8px; align-items:center }
     .tabs{ display:flex; border:1px solid var(--border); border-radius:10px; overflow:hidden }
-    .tab{ flex:1; text-align:center; padding:10px; background:#fff; cursor:pointer; font-weight:700; color:var(--text); }
-    .tab.active{ background:var(--dark); color:#fff !important; }
+    .tab{ flex:1; text-align:center; padding:10px; background:var(--card); cursor:pointer; font-weight:700; color:var(--muted); transition:all 0.15s; }
+    .tab.active{ background:var(--primary); color:#fff !important; }
     .person-card{ border:1px solid var(--border); border-radius:12px; padding:10px; background:#fff }
     .person-title{ font-weight:800; margin-bottom:8px }
     .kv{ display:grid; grid-template-columns:1fr; gap:6px }
@@ -319,6 +319,15 @@
           <button id="togglePins" class="btn small secondary">Piilota</button>
         </div>
         <div id="pinManageArea"></div>
+      </div>
+
+      <div id="adminLoginStats" style="display:none;margin-top:8px">
+        <div class="separator"></div>
+        <div class="stack" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+          <h2 style="margin:0">📊 Käyttökerrat</h2>
+          <button class="btn small secondary" onclick="renderLoginStats()">🔄 Päivitä</button>
+        </div>
+        <div id="loginStatsArea"><p class="muted" style="font-size:13px">Lataa painamalla 🔄 Päivitä</p></div>
       </div>
     </div>
 
@@ -718,6 +727,58 @@ async function save(){
   }catch(e){ showStatus('❌ Tallennus epäonnistui','#dc2626'); }
   isSaving=false;
   if(saveQueued){ saveQueued=false; save(); }
+}
+
+// ============================
+// KÄYTTÖKERTOJEN SEURANTA
+// ============================
+const LOGINS_DOC = doc(db, "app", "logins");
+
+async function trackLoginEvent(name) {
+  try {
+    const snap = await getDoc(LOGINS_DOC);
+    const loginData = snap.exists() ? snap.data() : {};
+    const now = new Date().toISOString();
+    const userEntry = loginData[name] || { count: 0, sessions: [] };
+    userEntry.count = (userEntry.count || 0) + 1;
+    // Tallenna viimeiset 20 kirjautumista
+    userEntry.sessions = [...(userEntry.sessions || []), now].slice(-20);
+    userEntry.lastSeen = now;
+    loginData[name] = userEntry;
+    await setDoc(LOGINS_DOC, loginData);
+  } catch(e) { /* ei kriittinen */ }
+}
+
+async function renderLoginStats() {
+  const el = $('loginStatsArea'); if (!el) return;
+  el.innerHTML = '<p class="muted" style="font-size:13px">Ladataan…</p>';
+  try {
+    const snap = await getDoc(LOGINS_DOC);
+    if (!snap.exists()) { el.innerHTML = '<p class="muted" style="font-size:13px">Ei dataa vielä.</p>'; return; }
+    const loginData = snap.data();
+    const rows = PLAYERS.map(p => {
+      const d = loginData[p] || { count: 0, lastSeen: null };
+      const lastStr = d.lastSeen
+        ? new Date(d.lastSeen).toLocaleString('fi-FI', {day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})
+        : '–';
+      // Aktiivisuusväri
+      const daysSince = d.lastSeen ? (Date.now() - new Date(d.lastSeen)) / 86400000 : 999;
+      const dot = daysSince < 1 ? '🟢' : daysSince < 3 ? '🟡' : '🔴';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:8px">
+        <div>
+          <div style="font-weight:700;font-size:14px">${dot} ${p === ADMIN ? '👑 ' : ''}${p}</div>
+          <div style="font-size:11px;color:var(--muted)">Viimeksi: ${lastStr}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:18px;font-weight:900;color:var(--primary)">${d.count || 0}</div>
+          <div style="font-size:11px;color:var(--muted)">käyntiä</div>
+        </div>
+      </div>`;
+    }).join('');
+    el.innerHTML = rows + `<div style="margin-top:8px;font-size:11px;color:var(--muted)">🟢 alle 24h • 🟡 alle 3 vrk • 🔴 yli 3 vrk</div>`;
+  } catch(e) {
+    el.innerHTML = '<p class="muted" style="font-size:13px">Virhe ladattaessa.</p>';
+  }
 }
 
 async function loadData(){
@@ -1401,11 +1462,13 @@ function doLogin(name){
   $('loginScreen').style.display='none'; $('appScreen').style.display='';
   $('currentUserBadge').textContent=(name===ADMIN?'👑 ':'')+name;
   const isAdmin=name===ADMIN;
-  ['adminTournamentTools','adminMatchTools','adminStatusCard','adminPinTools'].forEach(id=>{
+  ['adminTournamentTools','adminMatchTools','adminStatusCard','adminPinTools','adminLoginStats'].forEach(id=>{
     const el=$(id); if(el) el.style.display=isAdmin?'':'none';
   });
   const ib=$('importBtn'); if(ib) ib.style.display=isAdmin?'':'none';
   const vt=$('viewTabs'); if(vt) vt.style.display=isAdmin?'':'none';
+  // Tallenna käyttökerta
+  trackLoginEvent(name);
   loadData();
 }
 
