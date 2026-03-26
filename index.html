@@ -325,9 +325,13 @@
         <div class="separator"></div>
         <div class="stack" style="justify-content:space-between;align-items:center;margin-bottom:8px">
           <h2 style="margin:0">📊 Käyttökerrat</h2>
-          <button class="btn small secondary" onclick="window._renderLoginStats()">🔄 Päivitä</button>
+          <div style="display:flex;gap:6px">
+            <button class="btn small secondary" onclick="window._renderLoginStats()">🔄</button>
+            <button class="btn small danger" onclick="window._resetLoginStats()">Nollaa</button>
+            <button class="btn small secondary" onclick="window._toggleLoginStats()">Piilota</button>
+          </div>
         </div>
-        <div id="loginStatsArea"><p class="muted" style="font-size:13px">Lataa painamalla 🔄 Päivitä</p></div>
+        <div id="loginStatsArea" style="display:none"></div>
       </div>
     </div>
 
@@ -748,6 +752,26 @@ async function trackLoginEvent(name) {
     await setDoc(LOGINS_DOC, loginData);
   } catch(e) { /* ei kriittinen */ }
 }
+
+window._toggleLoginStats = function() {
+  const area = document.getElementById('loginStatsArea');
+  const btn = event.target;
+  const isHidden = area.style.display === 'none';
+  area.style.display = isHidden ? 'block' : 'none';
+  btn.textContent = isHidden ? 'Piilota' : 'Näytä';
+  if (isHidden) window._renderLoginStats();
+};
+
+window._resetLoginStats = async function() {
+  if (!confirm('Nollataan kaikkien käyttökerrat? Tätä ei voi peruuttaa.')) return;
+  try {
+    await setDoc(LOGINS_DOC, {});
+    showStatus('✅ Käyttökerrat nollattu', '#22c55e'); hideStatus();
+    window._renderLoginStats();
+  } catch(e) {
+    showStatus('❌ Nollaus epäonnistui', '#dc2626');
+  }
+};
 
 window._renderLoginStats = async function() {
   const el = $('loginStatsArea'); if (!el) return;
@@ -1470,8 +1494,6 @@ function doLogin(name){
   // Tallenna käyttökerta
   trackLoginEvent(name);
   loadData();
-  // Admin: lataa käyttökerrat automaattisesti
-  if(name === ADMIN) setTimeout(() => window._renderLoginStats(), 2000);
 }
 
 window._logout=function(){
