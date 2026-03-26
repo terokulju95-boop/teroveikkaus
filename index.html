@@ -121,6 +121,40 @@
     .edit-history span{ background:var(--border); border-radius:4px; padding:2px 6px; }
     .open-banner{ background:#22c55e; color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:10px; }
     #countdown{ margin-bottom:10px; }
+    /* Modaalit */
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; display:flex; align-items:center; justify-content:center; padding:16px; animation:fadeInOverlay 0.2s ease; }
+    @keyframes fadeInOverlay { from{opacity:0} to{opacity:1} }
+    .modal-box { background:var(--card); border-radius:18px; padding:20px; max-width:480px; width:100%; max-height:85vh; overflow-y:auto; box-shadow:0 8px 40px rgba(0,0,0,0.3); animation:slideUpModal 0.25s ease; }
+    @keyframes slideUpModal { from{transform:translateY(30px);opacity:0} to{transform:translateY(0);opacity:1} }
+    .modal-close { float:right; background:var(--border); border:none; border-radius:999px; width:32px; height:32px; font-size:18px; cursor:pointer; line-height:32px; text-align:center; color:var(--text); }
+    .profile-header { text-align:center; padding:16px 0 10px; }
+    .profile-avatar { font-size:48px; margin-bottom:6px; }
+    .profile-name { font-size:22px; font-weight:900; }
+    .profile-pts { font-size:32px; font-weight:900; color:var(--primary); }
+    .profile-stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0; }
+    .profile-stat-box { background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:10px; text-align:center; }
+    .profile-stat-val { font-size:20px; font-weight:800; }
+    .profile-stat-lbl { font-size:11px; color:var(--muted); margin-top:2px; }
+    .profile-match-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:14px; }
+    .profile-match-row:last-child { border-bottom:none; }
+    .loser-overlay { position:fixed; inset:0; z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,0,0,0.85); animation:fadeInOverlay 0.3s ease; }
+    .loser-trophy { font-size:90px; animation:trophyBounce 0.6s ease infinite alternate; }
+    @keyframes trophyBounce { from{transform:scale(1) rotate(-6deg)} to{transform:scale(1.12) rotate(6deg)} }
+    .loser-title { font-size:28px; font-weight:900; color:#fbbf24; margin:16px 0 8px; text-align:center; }
+    .loser-sub { font-size:16px; color:#94a3b8; text-align:center; max-width:260px; }
+    .loser-close { margin-top:24px; background:#f97316; color:#fff; border:none; border-radius:12px; padding:12px 28px; font-size:16px; font-weight:700; cursor:pointer; }
+    #puck-canvas { position:fixed; inset:0; z-index:99998; background:rgba(0,0,20,0.93); display:none; cursor:pointer; overflow:hidden; }
+    .puck-emoji { position:absolute; font-size:42px; user-select:none; pointer-events:none; }
+    .puck-exit-hint { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); color:#94a3b8; font-size:14px; z-index:99999; pointer-events:none; background:rgba(0,0,0,0.5); padding:6px 14px; border-radius:999px; }
+    .faq-section { margin-bottom:8px; }
+    .faq-toggle { width:100%; text-align:left; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:12px 14px; font-weight:700; font-size:14px; cursor:pointer; color:var(--text); display:flex; justify-content:space-between; align-items:center; transition:border-color 0.15s; }
+    .faq-toggle:hover { border-color:var(--primary); }
+    .faq-body { display:none; background:var(--bg); border:1px solid var(--border); border-top:none; border-radius:0 0 10px 10px; padding:12px 14px; font-size:13px; }
+    .faq-body.open { display:block; }
+    .faq-rule { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border); }
+    .faq-rule:last-child { border-bottom:none; }
+    .score-card { transition:transform 0.15s, box-shadow 0.15s; cursor:pointer; }
+    .score-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.13); }
     .countdown-box{ background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%); border:2px solid var(--primary); border-radius:14px; padding:12px 16px; text-align:center; }
     .countdown-label{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
     .countdown-timer{ display:flex; justify-content:center; gap:8px; }
@@ -138,6 +172,27 @@
 <body>
 
 <div id="fb-status"></div>
+
+<!-- PELAAJAN PROFIILI MODAALI -->
+<div id="playerProfileModal" style="display:none" class="modal-overlay" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal-box">
+    <button class="modal-close" onclick="document.getElementById('playerProfileModal').style.display='none'">✕</button>
+    <div id="playerProfileContent"></div>
+  </div>
+</div>
+
+<!-- HÄVIÄJÄ EASTER EGG -->
+<div id="loserEasterEgg" style="display:none" class="loser-overlay" onclick="document.getElementById('loserEasterEgg').style.display='none'">
+  <div class="loser-trophy">🏅</div>
+  <div class="loser-title">Paras häviäjä!</div>
+  <div class="loser-sub">Kolmannella kertaa katsomassa pohjaa… olet todellinen legenda omalla tavallasi 😂</div>
+  <button class="loser-close" onclick="document.getElementById('loserEasterEgg').style.display='none'">Kiitos tunnustuksesta 🙏</button>
+</div>
+
+<!-- KIEKKO SCREENSAVER -->
+<div id="puck-canvas" onclick="window._stopPuckScreensaver()">
+  <div class="puck-exit-hint">🏒 Klikkaa sulkeaksesi</div>
+</div>
 
 <!-- KIRJAUTUMINEN -->
 <div id="loginScreen">
@@ -270,6 +325,21 @@
     <div class="grid">
       <div class="card">
         <h2>Yhteispisteet</h2>
+        <!-- FAQ -->
+        <div class="faq-section" style="margin-bottom:12px">
+          <button class="faq-toggle" onclick="window._toggleFaq(this)">
+            <span>❓ Miten pisteet lasketaan?</span>
+            <span id="faqArrow">▼</span>
+          </button>
+          <div class="faq-body" id="faqBody">
+            <div class="faq-rule"><span>🎯 Lopputulos oikein</span><strong>2 p</strong></div>
+            <div class="faq-rule"><span>⏱ Ekan maalin aika täsmälleen</span><strong>3 p</strong></div>
+            <div class="faq-rule"><span>⏱ Lähimpänä ekan maalin aikaa (±1 min)</span><strong>1 p</strong></div>
+            <div class="faq-rule"><span>✅ Muu kenttä oikein</span><strong>1 p</strong></div>
+            <div class="faq-rule"><span>🏆 Kolmen kärki – oikea joukkue oikealla sijalla</span><strong>2 p/sija</strong></div>
+            <div style="margin-top:8px;font-size:12px;color:var(--muted)">💡 Ekan maalin aika: täsmälleen oikein → 3p. Jos kukaan ei osu täsmälleen, lähimmälle ±1 min sisällä → 1p.</div>
+          </div>
+        </div>
         <div id="scoreboard"></div>
       </div>
 
@@ -447,6 +517,163 @@ function calcTotals(t){
   }
   return tot;
 }
+
+// ============================
+// FAQ TOGGLE
+// ============================
+window._toggleFaq = function(btn) {
+  const body = document.getElementById('faqBody');
+  const arrow = document.getElementById('faqArrow');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  if(arrow) arrow.textContent = isOpen ? '▼' : '▲';
+};
+
+// ============================
+// PELAAJAN PROFIILISIVU
+// ============================
+window.showPlayerProfile = function(player) {
+  const t = getTournament();
+  if (!t) return;
+  const totals = calcTotals(t);
+  const totalPts = totals[player] || 0;
+  const sorted = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+  const rank = sorted.findIndex(([n])=>n===player) + 1;
+  const medals = ['🥇','🥈','🥉'];
+  const rankIcon = rank<=3 ? medals[rank-1] : (rank===sorted.length ? '💩' : rank+'.');
+
+  // Ottelukohtaiset pisteet
+  const matchRows = (t.matches||[]).map(m => {
+    const pts = calcMatchPts(t, m.id, player) + (calcTimeProximityPts(t, m.id)[player]||0);
+    const maxPts = FIELDS.length + 2; // karkea max
+    const pct = Math.round((pts/maxPts)*100);
+    const bar = `<div style="display:inline-block;width:${Math.min(pct,100)}%;background:var(--primary);height:4px;border-radius:2px;margin-top:3px;min-width:2px"></div>`;
+    return `<div class="profile-match-row">
+      <div><div style="font-weight:600">${m.name}</div><div style="background:var(--border);border-radius:2px;height:4px;margin-top:3px;width:80px">${bar}</div></div>
+      <div class="pts-badge">${pts} p</div>
+    </div>`;
+  }).join('');
+
+  // Laskenta: oikeiden vastausten % kaikista kentistä joihin on vastattu
+  let correctCount = 0, totalAnswered = 0;
+  (t.matches||[]).forEach(m => {
+    const pr = ((t.predictions||{})[m.id]||{})[player]||{};
+    const ac = (t.actuals||{})[m.id]||{};
+    FIELDS.forEach(f => {
+      if(ac[f.key] && ac[f.key]!=='' && pr[f.key] && pr[f.key]!=='') {
+        totalAnswered++;
+        if(fieldMatch(f.key, pr[f.key], ac[f.key])) correctCount++;
+      }
+    });
+  });
+  const accuracy = totalAnswered > 0 ? Math.round((correctCount/totalAnswered)*100) : 0;
+  const best = getPersonalBest(player);
+  const lastEdit = getLastEditedTime(t, player);
+  const lastEditStr = lastEdit
+    ? new Date(lastEdit).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})
+    : '–';
+
+  const avatarMap = {'Roosa':'🌸','Timo':'🧔','Tero':'👑','Tiina':'💁','Tepa':'🤘','Äiti':'👩','Iskä':'👨'};
+  const avatar = avatarMap[player] || '🏒';
+
+  const html = `
+    <div class="profile-header">
+      <div class="profile-avatar">${avatar}</div>
+      <div class="profile-name">${player===ADMIN?'👑 ':''}${player}</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px">${rankIcon} Sijalla ${rank}/${sorted.length}</div>
+      <div class="profile-pts">${totalPts} p</div>
+    </div>
+    <div class="profile-stat-grid">
+      <div class="profile-stat-box">
+        <div class="profile-stat-val">${accuracy}%</div>
+        <div class="profile-stat-lbl">Osumis-%</div>
+      </div>
+      <div class="profile-stat-box">
+        <div class="profile-stat-val">${best&&best.pts>0?best.pts+' p':'–'}</div>
+        <div class="profile-stat-lbl">Oma ennätys</div>
+      </div>
+      <div class="profile-stat-box">
+        <div class="profile-stat-val">${correctCount}</div>
+        <div class="profile-stat-lbl">Oikeita vastauksia</div>
+      </div>
+      <div class="profile-stat-box">
+        <div class="profile-stat-val" style="font-size:13px">${lastEditStr}</div>
+        <div class="profile-stat-lbl">Viimeksi veikannut</div>
+      </div>
+    </div>
+    ${matchRows ? `<div style="font-weight:700;margin-bottom:6px;font-size:14px">📊 Ottelukohtaiset pisteet</div>${matchRows}` : '<p class="muted" style="font-size:13px">Ei otteluita vielä.</p>'}
+  `;
+
+  document.getElementById('playerProfileContent').innerHTML = html;
+  document.getElementById('playerProfileModal').style.display = 'flex';
+};
+
+// ============================
+// HÄVIÄJÄ EASTER EGG
+// ============================
+window.showLoserEasterEgg = function() {
+  document.getElementById('loserEasterEgg').style.display = 'flex';
+};
+
+// ============================
+// KIEKKO SCREENSAVER
+// ============================
+let puckAnimFrame = null;
+let puckClickCount = 0;
+let puckClickTimer = null;
+
+// Emoji-klikki otsikossa
+document.addEventListener('click', e => {
+  const h1 = e.target.closest('h1');
+  if (!h1 || !h1.textContent.includes('🏒')) return;
+  puckClickCount++;
+  if (puckClickTimer) clearTimeout(puckClickTimer);
+  puckClickTimer = setTimeout(() => { puckClickCount = 0; }, 1500);
+  if (puckClickCount >= 5) {
+    puckClickCount = 0;
+    window._startPuckScreensaver();
+  }
+});
+
+window._startPuckScreensaver = function() {
+  const canvas = document.getElementById('puck-canvas');
+  canvas.style.display = 'block';
+  canvas.innerHTML = '<div class="puck-exit-hint">🏒 Klikkaa sulkeaksesi</div>';
+
+  const pucks = Array.from({length:5}, (_, i) => {
+    const el = document.createElement('div');
+    el.className = 'puck-emoji';
+    el.textContent = ['🏒','🥅','🏒','⛸️','🏒'][i];
+    canvas.appendChild(el);
+    return {
+      el,
+      x: Math.random() * (window.innerWidth - 60),
+      y: Math.random() * (window.innerHeight - 60),
+      vx: (Math.random() * 4 + 2) * (Math.random()<0.5?1:-1),
+      vy: (Math.random() * 4 + 2) * (Math.random()<0.5?1:-1),
+      size: 42
+    };
+  });
+
+  const tick = () => {
+    pucks.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x <= 0 || p.x >= window.innerWidth - p.size) { p.vx *= -1; p.x = Math.max(0, Math.min(p.x, window.innerWidth - p.size)); }
+      if (p.y <= 0 || p.y >= window.innerHeight - p.size) { p.vy *= -1; p.y = Math.max(0, Math.min(p.y, window.innerHeight - p.size)); }
+      p.el.style.left = p.x + 'px';
+      p.el.style.top = p.y + 'px';
+    });
+    puckAnimFrame = requestAnimationFrame(tick);
+  };
+  puckAnimFrame = requestAnimationFrame(tick);
+};
+
+window._stopPuckScreensaver = function() {
+  if (puckAnimFrame) { cancelAnimationFrame(puckAnimFrame); puckAnimFrame = null; }
+  const canvas = document.getElementById('puck-canvas');
+  canvas.style.display = 'none';
+  canvas.innerHTML = '<div class="puck-exit-hint">🏒 Klikkaa sulkeaksesi</div>';
+};
 
 // Tallenna/palauta valinnat
 function saveSelections(){ try{ localStorage.setItem('tv_sel', JSON.stringify({t:tid,m:mid})); }catch(e){} }
@@ -831,6 +1058,19 @@ function renderActuals(){
 // ============================
 // RENDER: SCOREBOARD
 // ============================
+let lastPlaceClickCount = 0;
+let lastPlaceClickTimer = null;
+
+function getLastEditedTime(t, player) {
+  // Etsi viimeisin muokkausaika kaikista otteluista
+  let latest = null;
+  Object.values(t.editHistory || {}).forEach(matchHist => {
+    const ts = matchHist[player];
+    if (ts && (!latest || new Date(ts) > new Date(latest))) latest = ts;
+  });
+  return latest;
+}
+
 function renderScoreboard(){
   const el=$('scoreboard'); if(!el) return;
   const t=getTournament();
@@ -839,10 +1079,34 @@ function renderScoreboard(){
   const sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
   const uPts=[...new Set(sorted.map(x=>x[1]))].sort((a,b)=>b-a);
   const icon=pts=>{ const r=uPts.indexOf(pts)+1; return r===1?'🥇':r===2?'🥈':r===3?'🥉':'💩'; };
-  el.innerHTML='<div class="score-grid">'+sorted.map(([n,pts])=>
-    `<div class="score-card"><div class="name">${icon(pts)} ${n}</div><div class="pts">${pts} p</div></div>`
-  ).join('')+'</div>';
+  const lastIdx = sorted.length - 1;
+  el.innerHTML='<div class="score-grid">'+sorted.map(([n,pts], i)=>{
+    const lastEdit = getLastEditedTime(t, n);
+    const timeStr = lastEdit
+      ? new Date(lastEdit).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})
+      : null;
+    const isLast = i === lastIdx;
+    return `<div class="score-card${isLast?' score-card-last':''}" style="cursor:${isLast?'pointer':'default'}" data-player="${n}" onclick="window._scoreCardClick(this,'${n}',${isLast})">
+      <div class="name">${icon(pts)} ${n}</div>
+      <div class="pts">${pts} p</div>
+      ${timeStr ? `<div style="font-size:10px;color:var(--muted);margin-top:3px">⏱ ${timeStr}</div>` : ''}
+    </div>`;
+  }).join('')+'</div>';
 }
+
+window._scoreCardClick = function(el, player, isLast) {
+  if (isLast) {
+    lastPlaceClickCount++;
+    if (lastPlaceClickTimer) clearTimeout(lastPlaceClickTimer);
+    lastPlaceClickTimer = setTimeout(() => { lastPlaceClickCount = 0; }, 1200);
+    if (lastPlaceClickCount >= 3) {
+      lastPlaceClickCount = 0;
+      showLoserEasterEgg();
+      return;
+    }
+  }
+  showPlayerProfile(player);
+};
 
 // ============================
 // RENDER: PLAYER STATUS (admin)
