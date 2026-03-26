@@ -325,7 +325,7 @@
         <div class="separator"></div>
         <div class="stack" style="justify-content:space-between;align-items:center;margin-bottom:8px">
           <h2 style="margin:0">📊 Käyttökerrat</h2>
-          <button class="btn small secondary" onclick="renderLoginStats()">🔄 Päivitä</button>
+          <button class="btn small secondary" onclick="window._renderLoginStats()">🔄 Päivitä</button>
         </div>
         <div id="loginStatsArea"><p class="muted" style="font-size:13px">Lataa painamalla 🔄 Päivitä</p></div>
       </div>
@@ -749,7 +749,7 @@ async function trackLoginEvent(name) {
   } catch(e) { /* ei kriittinen */ }
 }
 
-async function renderLoginStats() {
+window._renderLoginStats = async function() {
   const el = $('loginStatsArea'); if (!el) return;
   el.innerHTML = '<p class="muted" style="font-size:13px">Ladataan…</p>';
   try {
@@ -1470,6 +1470,8 @@ function doLogin(name){
   // Tallenna käyttökerta
   trackLoginEvent(name);
   loadData();
+  // Admin: lataa käyttökerrat automaattisesti
+  if(name === ADMIN) setTimeout(() => window._renderLoginStats(), 2000);
 }
 
 window._logout=function(){
