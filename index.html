@@ -9,6 +9,21 @@
     :root { --bg:#f7f7fb; --card:#ffffff; --text:#111827; --muted:#6b7280; --primary:#f97316; --primary-hover:#ea580c; --border:#e5e7eb; --ok:#22c55e; --dark:#111827; }
     *{ box-sizing:border-box } html,body{ margin:0; padding:0; overflow-x:hidden }
     body{ background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; line-height:1.5; padding:12px }
+
+    /* Elävä jäätausta */
+    #ice-canvas{ position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.18; }
+    #appScreen, #loginScreen { position:relative; z-index:1; }
+    #fb-status { z-index:9999; }
+
+    /* Latauspalkki */
+    #loader-bar{ position:fixed; top:0; left:0; height:3px; width:0%; background:linear-gradient(90deg,#f97316,#fbbf24,#f97316); z-index:99999; transition:width 0.4s ease; border-radius:0 2px 2px 0; box-shadow:0 0 8px #f97316; }
+
+    /* Yöbanneri */
+    #night-banner{ display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1e293b; border:1px solid #334155; border-radius:14px; padding:12px 20px; font-size:14px; font-weight:700; color:#94a3b8; z-index:9998; box-shadow:0 4px 20px rgba(0,0,0,0.4); white-space:nowrap; animation:slideUpModal 0.4s ease; }
+
+    /* Vihjaustila-nappi */
+    #hint-btn{ position:fixed; bottom:24px; right:16px; width:48px; height:48px; border-radius:50%; background:#1e293b; border:2px solid #334155; font-size:22px; cursor:pointer; z-index:9000; display:none; box-shadow:0 2px 10px rgba(0,0,0,0.3); transition:transform 0.15s; }
+    #hint-btn:active{ transform:scale(0.9); }
     @media (prefers-color-scheme: dark) {
       .score-card { background:#ffffff !important; color:#000000 !important; }
       .score-card .name { color:#000000 !important; font-weight:700; }
@@ -180,6 +195,11 @@
 </head>
 <body>
 
+<div id="loader-bar"></div>
+<canvas id="ice-canvas"></canvas>
+<div id="night-banner">🌙 Eikö ole jo nukkumaanmeno? 😴</div>
+<button id="hint-btn" title="Lähetä vihje adminille" onclick="window._sendHint()">👀</button>
+
 <div id="fb-status"></div>
 
 <!-- PELAAJAN PROFIILI MODAALI -->
@@ -241,7 +261,7 @@
 <!-- PÄÄSOVELLUS -->
 <div id="appScreen" style="display:none">
   <div style="max-width:960px;margin:0 auto 10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-    <h1 style="margin:0;font-size:20px">🏒 Turnausveikkaus</h1>
+    <h1 style="margin:0;font-size:20px">🏒 Turnausveikkaus <span id="fi-flag" style="cursor:pointer;user-select:none" title="Klikkaa 7x...">🇫🇮</span></h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <span id="currentUserBadge" ondblclick="window._openPelleCard()" style="font-weight:700;font-size:14px;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:4px 12px;cursor:pointer;user-select:none" title="Tuplapaina avataksesi salaisuuden 🤫"></span>
       <button class="btn small secondary" onclick="window._logout()">Vaihda käyttäjä</button>
@@ -1197,6 +1217,223 @@ window._resetPelleStats = async function() {
   } catch(e) { showStatus('❌ Nollaus epäonnistui', '#dc2626'); }
 };
 
+// ============================
+// 1. LATAUSPALKKI
+// ============================
+function loaderStart() {
+  const b = document.getElementById('loader-bar');
+  if (!b) return;
+  b.style.width = '0%';
+  b.style.opacity = '1';
+  // Simuloi etenemistä
+  let w = 0;
+  const iv = setInterval(() => {
+    w += Math.random() * 15;
+    if (w > 85) { clearInterval(iv); w = 85; }
+    b.style.width = w + '%';
+  }, 200);
+  b._iv = iv;
+}
+function loaderDone() {
+  const b = document.getElementById('loader-bar');
+  if (!b) return;
+  if (b._iv) clearInterval(b._iv);
+  b.style.width = '100%';
+  setTimeout(() => { b.style.opacity = '0'; setTimeout(() => { b.style.width = '0%'; }, 400); }, 300);
+}
+
+// ============================
+// 2. ELÄVÄ JÄÄTAUSTA
+// ============================
+function initIceCanvas() {
+  const canvas = document.getElementById('ice-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let W, H, flakes;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  function makeFlake() {
+    return {
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 2.5 + 0.5,
+      dx: (Math.random() - 0.5) * 0.3,
+      dy: Math.random() * 0.4 + 0.1,
+      o: Math.random() * 0.6 + 0.2
+    };
+  }
+
+  resize();
+  window.addEventListener('resize', resize);
+  flakes = Array.from({ length: 60 }, makeFlake);
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    flakes.forEach(f => {
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(148,210,255,${f.o})`;
+      ctx.fill();
+      f.x += f.dx; f.y += f.dy;
+      if (f.y > H) { f.y = -5; f.x = Math.random() * W; }
+      if (f.x < 0 || f.x > W) f.dx *= -1;
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+initIceCanvas();
+
+// ============================
+// 3. YÖMOODI-BANNERI
+// ============================
+function checkNightMode() {
+  const h = new Date().getHours();
+  const banner = document.getElementById('night-banner');
+  if (!banner) return;
+  if (h >= 0 && h < 5) {
+    banner.style.display = 'block';
+    setTimeout(() => { banner.style.display = 'none'; }, 6000);
+  }
+}
+
+// ============================
+// 4. SUOMEN LIPPU → RUOTSI
+// ============================
+let flagClicks = 0, flagTimer = null;
+document.addEventListener('click', e => {
+  if (!e.target.closest('#fi-flag')) return;
+  flagClicks++;
+  if (flagTimer) clearTimeout(flagTimer);
+  flagTimer = setTimeout(() => { flagClicks = 0; }, 2000);
+  if (flagClicks >= 7) {
+    flagClicks = 0;
+    activateSwedishMode();
+  }
+});
+
+const SWEDISH_MAP = {
+  'Turnausveikkaus': 'Turneringstipping',
+  'Valitse turnaus': 'Välj turnering',
+  'Valitse ottelu': 'Välj match',
+  'Yhteispisteet': 'Totalpoäng',
+  'Ottelun veikkaukset': 'Matchbetting',
+  'Ottelun tulos': 'Matchresultat',
+  'Tallenna veikkaukset': 'Spara tips',
+  'Luo turnaus': 'Skapa turnering',
+  'Luo ottelu': 'Skapa match',
+  'Vaihda käyttäjä': 'Byt användare',
+  'Kolmen kärki': 'Topp tre',
+  'Lopputulos': 'Slutresultat',
+  'Viesti Terolle': 'Meddelande till Tero',
+  'Päivitä & tarkasta': 'Uppdatera & kontrollera',
+  'Miten pisteet lasketaan': 'Hur räknas poäng',
+};
+
+function activateSwedishMode() {
+  const flag = document.getElementById('fi-flag');
+  if (flag) flag.textContent = '🇸🇪';
+
+  // Vaihda tekstit
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  const originals = nodes.map(n => ({ node: n, text: n.textContent }));
+
+  nodes.forEach(node => {
+    let t = node.textContent;
+    Object.entries(SWEDISH_MAP).forEach(([fi, sv]) => { t = t.replace(fi, sv); });
+    node.textContent = t;
+  });
+
+  showStatus('🇸🇪 Välkommen till svenska läget!', '#006AA7');
+
+  // Palautetaan 4 sekunnin kuluttua
+  setTimeout(() => {
+    originals.forEach(({ node, text }) => { node.textContent = text; });
+    if (flag) flag.textContent = '🇫🇮';
+    showStatus('🇫🇮 Palataan suomeen!', '#003580');
+    hideStatus();
+  }, 4000);
+}
+
+// ============================
+// 5. VIHJAUSTILA 👀
+// ============================
+window._sendHint = async function() {
+  const btn = document.getElementById('hint-btn');
+  if (!btn) return;
+  btn.textContent = '✅';
+  btn.style.borderColor = '#22c55e';
+  try {
+    const snap = await getDoc(MESSAGES_DOC);
+    const msgs = snap.exists() ? (snap.data().messages || []) : [];
+    msgs.push({ from: currentUser, text: '👀', ts: new Date().toISOString(), hint: true });
+    await setDoc(MESSAGES_DOC, { messages: msgs });
+  } catch(e) {}
+  setTimeout(() => { btn.textContent = '👀'; btn.style.borderColor = '#334155'; }, 2000);
+};
+
+function showHintBtn(show) {
+  const btn = document.getElementById('hint-btn');
+  if (btn) btn.style.display = (show && currentUser && currentUser !== ADMIN) ? 'flex' : 'none';
+}
+
+// ============================
+// 6. MOTIVAATIOVIESTI HÄVIÄJÄLLE
+// ============================
+const LOSER_MSGS = [
+  { emoji:'💪', text:'Tänään pohja, huomenna huippu. Älä anna periksi!' },
+  { emoji:'🎯', text:'Häviäminen on vain voittamista harjoittelua. Ensi kerralla paremmin!' },
+  { emoji:'🧊', text:'Jääkiekossa pudotuspelit ovat vasta alku. Sinulle tulee uusi mahdollisuus!' },
+  { emoji:'😅', text:'No nyt meni pieleen... mutta ainakin olet rehellinen veikkaaja!' },
+  { emoji:'🏒', text:'Parhaat pelaajat häviävät ennen kuin voittavat. Jatka veikkaamista!' },
+  { emoji:'🔥', text:'Viimeinen sija on vain väliaikainen asema. Nouse takaisin!' },
+];
+
+function checkLoserMessage() {
+  if (!currentUser || currentUser === ADMIN) return;
+  const t = getTournament();
+  if (!t || !(t.matches||[]).length) return;
+  // Tarkista onko tuloksia syötetty vähintään yhteen otteluun
+  const hasResults = (t.matches||[]).some(m => {
+    const ac = (t.actuals||{})[m.id]||{};
+    return Object.values(ac).some(v => v && v !== '');
+  });
+  if (!hasResults) return;
+  // Tarkista onko viimeisenä
+  const totals = calcTotals(t);
+  const sorted = Object.entries(totals).sort((a,b) => b[1]-a[1]);
+  if (!sorted.length) return;
+  const last = sorted[sorted.length - 1];
+  if (last[0] !== currentUser) return;
+  // Näytä vain kerran per sessio
+  const key = 'tv_loser_shown_' + t.id;
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, '1');
+  const msg = LOSER_MSGS[Math.floor(Math.random() * LOSER_MSGS.length)];
+  setTimeout(() => showLoserMessage(msg), 1500);
+}
+
+function showLoserMessage(msg) {
+  const overlay = document.createElement('div');
+  overlay.className = 'alert-overlay';
+  overlay.innerHTML = `
+    <div class="alert-box" style="border:2px solid #6366f1">
+      <span class="alert-emoji">${msg.emoji}</span>
+      <div class="alert-title" style="color:#6366f1;font-size:18px">Hei ${currentUser}!</div>
+      <div class="alert-text">${msg.text}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Olet tällä hetkellä viimeisenä — mutta peli ei ole vielä ohi! 💪</div>
+      <button class="alert-btn" style="background:#6366f1" onclick="this.closest('.alert-overlay').remove()">Mennään! 🚀</button>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
 window._toggleLoginStats = function() {
   const area = document.getElementById('loginStatsArea');
   const btn = event.target;
@@ -1252,6 +1489,7 @@ window._renderLoginStats = async function() {
 }
 
 async function loadData(){
+  loaderStart();
   showStatus('⏳ Ladataan…','#6366f1');
   try{
     const [snap, pinSnap] = await Promise.all([getDoc(DATA_DOC), getDoc(PINS_DOC)]);
@@ -1267,6 +1505,7 @@ async function loadData(){
   if(!tid) tid = data.selectedTournamentId||null;
   if(!mid) mid = data.selectedMatchId||null;
   restoreSelections();
+  loaderDone();
   hideStatus();
   render();
 
@@ -1836,6 +2075,9 @@ function render(){
   renderTournamentStatus();
   if(currentUser===ADMIN) renderPinManage();
   renderMessageCard();
+  checkNightMode();
+  showHintBtn(true);
+  checkLoserMessage();
 }
 
 function renderTournamentSelects(){
