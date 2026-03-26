@@ -155,6 +155,13 @@
     .faq-rule:last-child { border-bottom:none; }
     .score-card { transition:transform 0.15s, box-shadow 0.15s; cursor:pointer; }
     .score-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.13); }
+    /* Admin alert overlay */
+    .alert-overlay { position:fixed;inset:0;z-index:99997;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeInOverlay 0.3s ease; }
+    .alert-box { background:var(--card);border-radius:20px;padding:28px 24px;max-width:360px;width:100%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.5);animation:slideUpModal 0.3s ease; }
+    .alert-emoji { font-size:80px;line-height:1;margin-bottom:12px;display:block; }
+    .alert-title { font-size:24px;font-weight:900;margin-bottom:10px;color:#dc2626; }
+    .alert-text { font-size:15px;line-height:1.6;margin-bottom:22px;color:var(--text); }
+    .alert-btn { background:var(--primary);color:#fff;border:none;border-radius:12px;padding:14px 32px;font-size:16px;font-weight:700;cursor:pointer;width:100%; }
     .countdown-box{ background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%); border:2px solid var(--primary); border-radius:14px; padding:12px 16px; text-align:center; }
     .countdown-label{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
     .countdown-timer{ display:flex; justify-content:center; gap:8px; }
@@ -377,6 +384,44 @@
         <div id="matchLockBanner"></div>
         <div id="countdown"></div>
         <div id="predictionsArea"><p class="muted">Valitse turnaus ja ottelu.</p></div>
+      </div>
+
+      <!-- VIESTI TEROLLE -->
+      <div class="card" id="messageCard">
+        <h2>✉️ Viesti Terolle</h2>
+
+        <!-- Pelaajan näkymä -->
+        <div id="msgPlayerArea">
+          <p class="muted" style="font-size:13px;margin-bottom:8px">Yksityinen viesti — vain Tero näkee sen.</p>
+          <textarea id="msgInput" rows="3" placeholder="Kirjoita viestisi tähän…" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;font-size:15px;background:var(--card);color:var(--text);resize:vertical;font-family:inherit;margin-bottom:8px"></textarea>
+          <button class="btn small" style="width:100%" onclick="window._sendMsg()">📨 Lähetä</button>
+          <div id="msgSendStatus" style="margin-top:8px;font-size:13px;color:var(--muted);min-height:18px"></div>
+        </div>
+
+        <!-- Admin näkymä -->
+        <div id="msgAdminArea" style="display:none">
+          <!-- Pikarangaistusnapit -->
+          <div style="margin-bottom:12px">
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px">⚡ Lähetä ilmoitus kaikille</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <button class="btn small danger" onclick="window._sendAlert('petkuhuiputus')">🕵️ PETKUHUIPUTUS</button>
+              <button class="btn small danger" onclick="window._sendAlert('lahjonta')">💸 LAHJONTAYRITYS</button>
+              <button class="btn small danger" onclick="window._sendAlert('huijari')">🚨 HUIJARI PALJASTUNUT</button>
+              <button class="btn small danger" onclick="window._sendAlert('varoitus')">⚠️ VIRALLINEN VAROITUS</button>
+              <button class="btn small danger" onclick="window._sendAlert('haukku')" style="grid-column:span 2">😤 SOPIMATON KÄYTÖS</button>
+            </div>
+          </div>
+          <div class="separator"></div>
+          <!-- Viestilista -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 8px">
+            <span style="font-weight:700;font-size:13px">📬 Saapuneet viestit</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn small secondary" onclick="window._loadMsgs()">🔄</button>
+              <button class="btn small danger" onclick="window._clearMsgs()">🗑️</button>
+            </div>
+          </div>
+          <div id="msgList"><p class="muted" style="font-size:13px">Ladataan…</p></div>
+        </div>
       </div>
 
       <div class="card">
@@ -804,6 +849,117 @@ async function trackLoginEvent(name) {
     }
   } catch(e) { /* ei kriittinen */ }
 }
+
+// ============================
+// VIESTIJÄRJESTELMÄ
+// ============================
+const MESSAGES_DOC = doc(db, "app", "messages");
+const ALERTS_DOC   = doc(db, "app", "alerts");
+
+const ALERT_TYPES = {
+  petkuhuiputus: { emoji:'🕵️', title:'PETKUHUIPUTUS!', text:'Petkuhuiputusyritys on havaittu. Häpeä tekijälle! Rehti veikkaaminen on ainoa tie voittoon.' },
+  lahjonta:      { emoji:'💸', title:'LAHJONTAYRITYS PALJASTUNUT!', text:'Joku on yrittänyt ostaa pisteitä. Pisteet eivät ole myytävänä — ei nyt, ei koskaan!' },
+  huijari:       { emoji:'🚨', title:'HUIJARI PALJASTUNUT!', text:'Huijausyritys on havaittu ja kirjattu ylös. Admin on valppaana!' },
+  varoitus:      { emoji:'⚠️', title:'VIRALLINEN VAROITUS', text:'Virallinen varoitus on annettu. Käytös korjattava välittömästi!' },
+  haukku:        { emoji:'😤', title:'SOPIMATON KÄYTÖS', text:'Sopimatonta käytöstä on havaittu. Muistakaa — tämä on hauska veikkauspeli. Käyttäydytään sen mukaisesti!' },
+};
+
+// Näytetään alert jos sellainen on merkitty seenby:lle
+async function checkPendingAlert() {
+  try {
+    const snap = await getDoc(ALERTS_DOC);
+    if (!snap.exists()) return;
+    const alert = snap.data();
+    if (!alert.active) return;
+    const seen = alert.seenBy || [];
+    if (seen.includes(currentUser)) return;
+    // Merkitään nähdyksi
+    seen.push(currentUser);
+    await setDoc(ALERTS_DOC, { ...alert, seenBy: seen });
+    // Pieni viive jotta sivu ehtii renderöityä
+    setTimeout(() => showAlertOverlay(alert.type), 800);
+  } catch(e) {}
+}
+
+function showAlertOverlay(type) {
+  const a = ALERT_TYPES[type]; if (!a) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'alert-overlay';
+  overlay.innerHTML = `
+    <div class="alert-box">
+      <span class="alert-emoji">${a.emoji}</span>
+      <div class="alert-title">${a.title}</div>
+      <div class="alert-text">${a.text}</div>
+      <button class="alert-btn" onclick="this.closest('.alert-overlay').remove()">Selvä! 👍</button>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  spawnConfetti();
+}
+
+window._sendAlert = async function(type) {
+  const a = ALERT_TYPES[type]; if (!a) return;
+  if (!confirm(`Lähetetäänkö "${a.title}" -ilmoitus kaikille?`)) return;
+  try {
+    await setDoc(ALERTS_DOC, { type, active: true, seenBy: [ADMIN], ts: new Date().toISOString() });
+    showStatus('✅ Ilmoitus lähetetty!', '#22c55e'); hideStatus();
+  } catch(e) { showStatus('❌ Lähetys epäonnistui', '#dc2626'); }
+};
+
+function renderMessageCard() {
+  const isAdmin = currentUser === ADMIN;
+  const pa = document.getElementById('msgPlayerArea');
+  const aa = document.getElementById('msgAdminArea');
+  if (pa) pa.style.display = isAdmin ? 'none' : 'block';
+  if (aa) aa.style.display = isAdmin ? 'block' : 'none';
+  if (isAdmin) window._loadMsgs();
+  // Tarkista onko odottava alert
+  checkPendingAlert();
+}
+
+window._sendMsg = async function() {
+  const input = document.getElementById('msgInput');
+  const status = document.getElementById('msgSendStatus');
+  const text = (input.value || '').trim();
+  if (!text) { status.textContent = 'Kirjoita viesti ensin.'; return; }
+  if (text.length > 500) { status.textContent = 'Max 500 merkkiä.'; return; }
+  const btn = document.querySelector('#msgPlayerArea button');
+  btn.disabled = true; status.textContent = '💾 Lähetetään…';
+  try {
+    const snap = await getDoc(MESSAGES_DOC);
+    const msgs = snap.exists() ? (snap.data().messages || []) : [];
+    msgs.push({ from: currentUser, text, ts: new Date().toISOString() });
+    await setDoc(MESSAGES_DOC, { messages: msgs });
+    input.value = '';
+    status.textContent = '✅ Viesti lähetetty Terolle!';
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  } catch(e) { status.textContent = '❌ Lähetys epäonnistui.'; }
+  btn.disabled = false;
+};
+
+window._loadMsgs = async function() {
+  const el = document.getElementById('msgList'); if (!el) return;
+  el.innerHTML = '<p class="muted" style="font-size:13px">Ladataan…</p>';
+  try {
+    const snap = await getDoc(MESSAGES_DOC);
+    const msgs = snap.exists() ? (snap.data().messages || []) : [];
+    if (!msgs.length) { el.innerHTML = '<p class="muted" style="font-size:13px">Ei viestejä.</p>'; return; }
+    el.innerHTML = [...msgs].reverse().map(m => `
+      <div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--bg)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <span style="font-weight:700;font-size:14px">${m.from}</span>
+          <span style="font-size:11px;color:var(--muted)">${new Date(m.ts).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+        </div>
+        <div style="font-size:14px;line-height:1.5">${m.text.replace(/</g,'&lt;')}</div>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = '<p class="muted">Virhe.</p>'; }
+};
+
+window._clearMsgs = async function() {
+  if (!confirm('Poistetaanko kaikki viestit?')) return;
+  await setDoc(MESSAGES_DOC, { messages: [] });
+  window._loadMsgs();
+};
 
 window._toggleLoginStats = function() {
   const area = document.getElementById('loginStatsArea');
@@ -1441,6 +1597,7 @@ function render(){
   renderMatchArea();
   renderTournamentStatus();
   if(currentUser===ADMIN) renderPinManage();
+  renderMessageCard();
 }
 
 function renderTournamentSelects(){
