@@ -847,6 +847,7 @@ const firebaseConfig = {
 
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
+window._firebaseDb = db; // Expose globally for non-module scripts
 const DATA_DOC = doc(db, "app", "data");
 const PINS_DOC = doc(db, "app", "pins");
 
@@ -3619,37 +3620,43 @@ document.getElementById('downloadPdfBtn').addEventListener('click', function(){
   // Piilotetaan intro heti - naytetaan VAIN jos Firebase-lippu on asetettu
   document.getElementById('introScreen').style.display='none';
 
-  (async function checkIntroBroadcast(){
-    try{
-      var {getDoc:gd2,doc:d2,setDoc:sd2}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-      var {getFirestore:gfs2,getApps:ga2}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
-      var fdb2=gfs2(ga2()[0]);
-      var introDoc=d2(fdb2,'app','intro_broadcast');
-      var snap=await gd2(introDoc);
-      if(!snap.exists()) return;
-      var data=snap.data();
-      if(!data.active) return;
+  // Odotetaan että Firebase on valmis, sitten tarkistetaan lippu
+  (function waitForFirebase(){
+    if(!window._firebaseDb){
+      setTimeout(waitForFirebase, 100);
+      return;
+    }
+    (async function checkIntroBroadcast(){
+      try{
+        var {getDoc:gd2,doc:d2,setDoc:sd2}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+        var fdb2=window._firebaseDb;
+        var introDoc=d2(fdb2,'app','intro_broadcast');
+        var snap=await gd2(introDoc);
+        if(!snap.exists()) return;
+        var data=snap.data();
+        if(!data.active) return;
 
-      // Kaytetaan laitteen uniikkia id:ta (ei currentUser, se voi puuttua)
-      var deviceKey='';
-      try{ deviceKey=localStorage.getItem('tv_device_id'); }catch(e){}
-      if(!deviceKey){
-        deviceKey='dev_'+Math.random().toString(36).substr(2,9);
-        try{ localStorage.setItem('tv_device_id',deviceKey); }catch(e){}
-      }
+        // Laitteen uniikki id
+        var deviceKey='';
+        try{ deviceKey=localStorage.getItem('tv_device_id'); }catch(e){}
+        if(!deviceKey){
+          deviceKey='dev_'+Math.random().toString(36).substr(2,9);
+          try{ localStorage.setItem('tv_device_id',deviceKey); }catch(e){}
+        }
 
-      var seenBy=data.seenBy||[];
-      if(seenBy.includes(deviceKey)) return;
+        var seenBy=data.seenBy||[];
+        if(seenBy.includes(deviceKey)) return;
 
-      // Merkitaan nahdyksi
-      seenBy=seenBy.concat([deviceKey]);
-      await sd2(introDoc,Object.assign({},data,{seenBy:seenBy}));
+        // Merkitaan nahdyksi heti
+        seenBy=seenBy.concat([deviceKey]);
+        await sd2(introDoc,Object.assign({},data,{seenBy:seenBy}));
 
-      // Naytetaan intro
-      var el=document.getElementById('introScreen');
-      el.style.display='flex'; el.style.opacity='1';
-      setTimeout(function(){ window._introPlay(0); },300);
-    }catch(e){}
+        // Naytetaan intro
+        var el=document.getElementById('introScreen');
+        el.style.display='flex'; el.style.opacity='1';
+        setTimeout(function(){ window._introPlay(0); },300);
+      }catch(e){ console.error('Intro broadcast error:',e); }
+    })();
   })();
 })();
 
@@ -3722,12 +3729,10 @@ window._adminSendIntro = async function(){
   var status=document.getElementById('introSendStatus');
   status.textContent='Lähetetään...';
   try {
-    var {getFirestore, doc: fd, setDoc: fsd} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-    var {initializeApp, getApps} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
-    var app = getApps()[0];
-    var fdb = getFirestore(app);
-    var introDoc = fd(fdb, 'app', 'intro_broadcast');
-    await fsd(introDoc, {active:true, sentAt:Date.now(), seenBy:[]});
+    if(!window._firebaseDb) throw new Error('Firebase ei ole valmis, yritä uudelleen');
+    var {doc:fd2, setDoc:fsd2} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    var introDoc = fd2(window._firebaseDb, 'app', 'intro_broadcast');
+    await fsd2(introDoc, {active:true, sentAt:Date.now(), seenBy:[]});
     status.textContent='✅ Lähetetty! Kaikki näkevät intron seuraavalla kirjautumisella.';
     setTimeout(function(){ status.textContent=''; }, 5000);
   } catch(e) {
