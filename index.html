@@ -1375,6 +1375,7 @@ window._resetPelleStats = async function() {
     await setDoc(PELLE_DOC, { counts: {}, total: 0, lastPressed: null });
     showStatus('✅ Pelle-tilastot nollattu', '#22c55e'); hideStatus();
     window._renderLoginStats();
+    window._renderLoginStats2(); // päivitä myös modaali
   } catch(e) { showStatus('❌ Nollaus epäonnistui', '#dc2626'); }
 };
 
@@ -2473,6 +2474,8 @@ window._renderLoginStats2 = async function() {
       </div>`;
     }).join('');
     el.innerHTML = rows || '<p class="muted">Ei dataa.</p>';
+    // Lisää myös TIMO ON PELLE -tilastot
+    await renderPelleStats(el);
   } catch(e) { el.innerHTML = '<p class="muted">Virhe.</p>'; }
 };
 
