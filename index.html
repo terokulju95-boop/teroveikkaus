@@ -3326,16 +3326,16 @@ document.getElementById('downloadPdfBtn').addEventListener('click', function(){
       doc.setFillColor(249,115,22); doc.rect(0,H-8,W,8,'F');
 
       var py = 50;
-      tc(ORANGE); doc.setFontSize(20); doc.setFont('helvetica','bold');
-      doc.text('🤡 TIMO ON PELLE -tilasto', W/2, py, {align:'center'}); py+=12;
-      tc(WHITE); doc.setFontSize(11); doc.setFont('helvetica','normal');
-      doc.text('Nappia on painettu yhteensä '+total+' kertaa', W/2, py, {align:'center'}); py+=14;
+      tc(ORANGE); doc.setFontSize(22); doc.setFont('helvetica','bold');
+      doc.text('TIMO ON PELLE -tilasto', W/2, py, {align:'center'}); py+=16;
+      tc(WHITE); doc.setFontSize(12); doc.setFont('helvetica','normal');
+      doc.text('Nappia on painettu yhteensä '+total+' kertaa', W/2, py, {align:'center'}); py+=16;
 
       if(pelleData.lastPressed){
         var lp = pelleData.lastPressed;
         var lpStr = new Date(lp.ts).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'});
-        tc(GRAY); doc.setFontSize(9);
-        doc.text('Viimeksi painoi: '+lp.player+' ('+lpStr+')', W/2, py, {align:'center'}); py+=14;
+        tc(GRAY); doc.setFontSize(10);
+        doc.text('Viimeksi painoi: '+lp.player+' ('+lpStr+')', W/2, py, {align:'center'}); py+=18;
       }
 
       // Taulukko pelaajittain
