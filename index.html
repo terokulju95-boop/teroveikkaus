@@ -3624,7 +3624,9 @@ document.getElementById('downloadPdfBtn').addEventListener('click', function(){
     // Check Firebase intro_broadcast
     try{
       var {getDoc:gd2,doc:d2,setDoc:sd2}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-      var introDoc=d2(db,'app','intro_broadcast');
+      var {getFirestore:gfs2,getApps:ga2}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+      var fdb2=gfs2(ga2()[0]);
+      var introDoc=d2(fdb2,'app','intro_broadcast');
       var snap=await gd2(introDoc);
       if(snap.exists()){
         var data=snap.data();
@@ -3728,22 +3730,21 @@ window._adminWatchIntro = function(){
   setTimeout(function(){ window._introPlay(0); },300);
 };
 
-window._adminSendIntro = function(){
+window._adminSendIntro = async function(){
   var status=document.getElementById('introSendStatus');
   status.textContent='Lähetetään...';
-  // Store flag in Firebase: intro_broadcast with timestamp
-  import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js')
-    .then(function(m){
-      var introDoc=m.doc(db,'app','intro_broadcast');
-      return m.setDoc(introDoc,{active:true,sentAt:Date.now(),seenBy:[]});
-    })
-    .then(function(){
-      status.textContent='✅ Lähetetty! Kaikki näkevät intron seuraavalla kirjautumisella.';
-      setTimeout(function(){ status.textContent=''; },5000);
-    })
-    .catch(function(e){
-      status.textContent='❌ Virhe: '+e.message;
-    });
+  try {
+    var {getFirestore, doc: fd, setDoc: fsd} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    var {initializeApp, getApps} = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
+    var app = getApps()[0];
+    var fdb = getFirestore(app);
+    var introDoc = fd(fdb, 'app', 'intro_broadcast');
+    await fsd(introDoc, {active:true, sentAt:Date.now(), seenBy:[]});
+    status.textContent='✅ Lähetetty! Kaikki näkevät intron seuraavalla kirjautumisella.';
+    setTimeout(function(){ status.textContent=''; }, 5000);
+  } catch(e) {
+    status.textContent='❌ Virhe: '+e.message;
+  }
 };
 
 // Refactor intro player to be restartable
