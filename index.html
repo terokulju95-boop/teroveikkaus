@@ -3781,7 +3781,7 @@ function getScores(){
   try{ return JSON.parse(localStorage.getItem(SCORES_KEY)||'{}'); }catch(e){ return {}; }
 }
 function saveScore(game, pts){
-  var player = window.currentUser || '?';
+  var player = window.currentUser || (function(){ try{ return localStorage.getItem('tv_user')||'?'; }catch(e){ return '?'; } })();
   var all = getScores();
   all[game] = all[game] || [];
   all[game].push({player:player, pts:pts, ts:new Date().toISOString()});
