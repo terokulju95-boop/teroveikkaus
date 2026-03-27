@@ -3612,56 +3612,45 @@ document.getElementById('downloadPdfBtn').addEventListener('click', function(){
     var el=document.getElementById('introScreen');
     el.style.transition='opacity 1.5s'; el.style.opacity='0';
     setTimeout(function(){ el.style.display='none'; },1500);
-    try{ localStorage.setItem('tv_intro_seen','1'); }catch(e){}
   }
 
   window._skipIntro = function(){ clearTimeout(timer); endIntro(); };
 
-  // Näytä vain kerran (tai jos Firebase sanoo näyttää)
-  async function checkIntroFlag(){
-    var seen=false;
-    try{ seen=localStorage.getItem('tv_intro_seen')==='1'; }catch(e){}
-    // Check Firebase intro_broadcast
+  // Piilotetaan intro heti - naytetaan VAIN jos Firebase-lippu on asetettu
+  document.getElementById('introScreen').style.display='none';
+
+  (async function checkIntroBroadcast(){
     try{
       var {getDoc:gd2,doc:d2,setDoc:sd2}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
       var {getFirestore:gfs2,getApps:ga2}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js');
       var fdb2=gfs2(ga2()[0]);
       var introDoc=d2(fdb2,'app','intro_broadcast');
       var snap=await gd2(introDoc);
-      if(snap.exists()){
-        var data=snap.data();
-        if(data.active && !(data.seenBy||[]).includes(currentUser)){
-          // Mark seen
-          var seenBy=(data.seenBy||[]).concat([currentUser]);
-          await sd2(introDoc,{...data,seenBy:seenBy});
-          seen=false; // Force show
-          try{ localStorage.removeItem('tv_intro_seen'); }catch(e){}
-        }
+      if(!snap.exists()) return;
+      var data=snap.data();
+      if(!data.active) return;
+
+      // Kaytetaan laitteen uniikkia id:ta (ei currentUser, se voi puuttua)
+      var deviceKey='';
+      try{ deviceKey=localStorage.getItem('tv_device_id'); }catch(e){}
+      if(!deviceKey){
+        deviceKey='dev_'+Math.random().toString(36).substr(2,9);
+        try{ localStorage.setItem('tv_device_id',deviceKey); }catch(e){}
       }
-    }catch(e){}
-    if(seen){
-      document.getElementById('introScreen').style.display='none';
-    } else {
+
+      var seenBy=data.seenBy||[];
+      if(seenBy.includes(deviceKey)) return;
+
+      // Merkitaan nahdyksi
+      seenBy=seenBy.concat([deviceKey]);
+      await sd2(introDoc,Object.assign({},data,{seenBy:seenBy}));
+
+      // Naytetaan intro
+      var el=document.getElementById('introScreen');
+      el.style.display='flex'; el.style.opacity='1';
       setTimeout(function(){ window._introPlay(0); },300);
-    }
-  }
-  // Wait for currentUser to be set (app loads async)
-  var _introCheckInterval=setInterval(function(){
-    if(typeof currentUser!=='undefined'&&currentUser){
-      clearInterval(_introCheckInterval);
-      checkIntroFlag();
-    }
-    // If no login needed yet, just check localStorage
-  },500);
-  // Fallback: if not logged in, show based on localStorage only
-  setTimeout(function(){
-    clearInterval(_introCheckInterval);
-    var seen=false;
-    try{ seen=localStorage.getItem('tv_intro_seen')==='1'; }catch(e){}
-    var el=document.getElementById('introScreen');
-    if(el.style.display!=='none'&&seen) el.style.display='none';
-    else if(el.style.display!=='none'&&!seen) window._introPlay(0);
-  },2000);
+    }catch(e){}
+  })();
 })();
 
 // ── WANTED EASTER EGG ──
@@ -3723,7 +3712,6 @@ window._adminWatchIntro = function(){
   el.classList.remove('expand');
   // reset all scenes
   document.querySelectorAll('.iscene').forEach(function(s){ s.style.opacity=''; s.style.transition=''; });
-  try{ localStorage.removeItem('tv_intro_seen'); }catch(e){}
   // restart
   clearTimeout(window._introTimer);
   window._introCurrentScene=-1;
@@ -3759,7 +3747,6 @@ window._introPlay=function(idx){
     var el=document.getElementById('introScreen');
     el.style.transition='opacity 1.5s'; el.style.opacity='0';
     setTimeout(function(){ el.style.display='none'; },1500);
-    try{ localStorage.setItem('tv_intro_seen','1'); }catch(e){}
     return; 
   }
   var cur=window._introCurrentScene;
@@ -3779,7 +3766,7 @@ window._introPlay=function(idx){
   window._introCurrentScene=idx;
   window._introTimer=setTimeout(function(){ window._introPlay(idx+1); },SCENES[idx][1]);
 };
-window._skipIntro=function(){ clearTimeout(window._introTimer); var el=document.getElementById('introScreen'); el.style.transition='opacity 1.5s'; el.style.opacity='0'; setTimeout(function(){ el.style.display='none'; },1500); try{ localStorage.setItem('tv_intro_seen','1'); }catch(e){} };
+window._skipIntro=function(){ clearTimeout(window._introTimer); var el=document.getElementById('introScreen'); el.style.transition='opacity 1.5s'; el.style.opacity='0'; setTimeout(function(){ el.style.display='none'; },1500); };
 </script>
 
 </body>
