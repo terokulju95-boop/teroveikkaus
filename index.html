@@ -254,8 +254,8 @@
     #introScreen .tag-line:nth-child(1){animation-delay:0.4s}
     #introScreen .tag-line:nth-child(2){animation-delay:1.7s}
     #introScreen .tag-line:nth-child(3){animation-delay:3.0s;color:#fb8a3c;font-style:normal;font-size:clamp(16px,4vw,24px);letter-spacing:5px;font-weight:800}
-    #introScreen .main-title { font-size:clamp(26px,7.5vw,58px); font-weight:900; letter-spacing:10px; color:#fff; text-transform:uppercase; text-align:center; line-height:1.2; opacity:0; animation: introTitleBlur 2s ease 0.3s forwards; }
-    #introScreen .main-title em { display:block; font-style:normal; color:#fb8a3c; font-size:0.42em; letter-spacing:14px; margin-top:10px; font-weight:700; }
+    #introScreen .main-title { font-size:clamp(20px,6vw,58px); font-weight:900; letter-spacing:clamp(2px,2vw,10px); color:#fff; text-transform:uppercase; text-align:center; line-height:1.2; opacity:0; animation: introTitleBlur 2s ease 0.3s forwards; padding:0 12px; }
+    #introScreen .main-title em { display:block; font-style:normal; color:#fb8a3c; font-size:0.42em; letter-spacing:clamp(2px,2vw,14px); margin-top:10px; font-weight:700; }
     @keyframes introTitleBlur { 0%{opacity:0;filter:blur(20px);transform:scale(1.15)} 50%{opacity:1;filter:blur(0)} 100%{opacity:1;transform:scale(1)} }
     #introScreen .enter-btn { font-size:clamp(12px,2.8vw,16px); letter-spacing:10px; color:#fb8a3c; text-transform:uppercase; border:1px solid #fb8a3c44; padding:14px 32px; border-radius:2px; opacity:0; animation: introLineUp 0.8s ease 0.6s forwards, introPulsate 2s ease-in-out 1.4s infinite; cursor:pointer; background:transparent; }
     @keyframes introPulsate { 0%,100%{opacity:0.4;border-color:#fb8a3c33} 50%{opacity:1;border-color:#fb8a3c99} }
@@ -495,6 +495,17 @@
         <button id="importBtn2" class="btn small secondary">Tuo JSON</button>
       </div>
       <p class="muted" style="margin-top:6px">☁️ Data tallentuu Firebase-pilveen</p>
+
+      <!-- Intro-asetukset -->
+      <div style="margin-top:12px">
+        <div class="separator"></div>
+        <h2 style="margin:8px 0">🎬 Intro-video</h2>
+        <div class="stack" style="flex-wrap:wrap;gap:8px;margin-top:8px">
+          <button class="btn small secondary" onclick="window._adminWatchIntro()">▶ Katso intro</button>
+          <button class="btn small" onclick="window._adminSendIntro()">📤 Lähetä kaikille</button>
+        </div>
+        <p class="muted" style="margin-top:6px" id="introSendStatus"></p>
+      </div>
 
       <!-- PIN-koodit -->
       <div id="adminPinToolsModal" style="margin-top:12px">
@@ -3606,14 +3617,49 @@ document.getElementById('downloadPdfBtn').addEventListener('click', function(){
 
   window._skipIntro = function(){ clearTimeout(timer); endIntro(); };
 
-  // Näytä vain kerran
-  var seen = false;
-  try{ seen = localStorage.getItem('tv_intro_seen')==='1'; }catch(e){}
-  if(seen){
-    document.getElementById('introScreen').style.display='none';
-  } else {
-    setTimeout(function(){ showScene(0); }, 300);
+  // Näytä vain kerran (tai jos Firebase sanoo näyttää)
+  async function checkIntroFlag(){
+    var seen=false;
+    try{ seen=localStorage.getItem('tv_intro_seen')==='1'; }catch(e){}
+    // Check Firebase intro_broadcast
+    try{
+      var {getDoc:gd2,doc:d2,setDoc:sd2}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+      var introDoc=d2(db,'app','intro_broadcast');
+      var snap=await gd2(introDoc);
+      if(snap.exists()){
+        var data=snap.data();
+        if(data.active && !(data.seenBy||[]).includes(currentUser)){
+          // Mark seen
+          var seenBy=(data.seenBy||[]).concat([currentUser]);
+          await sd2(introDoc,{...data,seenBy:seenBy});
+          seen=false; // Force show
+          try{ localStorage.removeItem('tv_intro_seen'); }catch(e){}
+        }
+      }
+    }catch(e){}
+    if(seen){
+      document.getElementById('introScreen').style.display='none';
+    } else {
+      setTimeout(function(){ window._introPlay(0); },300);
+    }
   }
+  // Wait for currentUser to be set (app loads async)
+  var _introCheckInterval=setInterval(function(){
+    if(typeof currentUser!=='undefined'&&currentUser){
+      clearInterval(_introCheckInterval);
+      checkIntroFlag();
+    }
+    // If no login needed yet, just check localStorage
+  },500);
+  // Fallback: if not logged in, show based on localStorage only
+  setTimeout(function(){
+    clearInterval(_introCheckInterval);
+    var seen=false;
+    try{ seen=localStorage.getItem('tv_intro_seen')==='1'; }catch(e){}
+    var el=document.getElementById('introScreen');
+    if(el.style.display!=='none'&&seen) el.style.display='none';
+    else if(el.style.display!=='none'&&!seen) window._introPlay(0);
+  },2000);
 })();
 
 // ── WANTED EASTER EGG ──
@@ -3640,14 +3686,21 @@ document.getElementById('downloadPdfBtn').addEventListener('click', function(){
     });
     obs.observe(grid,{childList:true,subtree:true});
     // Myös pistekortit sovelluksessa
-    document.addEventListener('mousedown', function(e){
+    // Score-card long press (delegated to document)
+    function handleScorePress(e){
       var el=e.target.closest('.score-card');
-      if(el && el.querySelector('.name') && el.querySelector('.name').textContent.trim().startsWith(TIMO)){
+      if(!el) return;
+      var nameEl=el.querySelector('.name');
+      if(nameEl && nameEl.textContent.replace(/[^a-zA-ZäöåÄÖÅ]/g,'').toLowerCase().indexOf('timo')!==-1){
         startPress();
       }
-    });
+    }
+    document.addEventListener('mousedown', handleScorePress);
+    document.addEventListener('touchstart', function(e){ handleScorePress(e); }, {passive:true});
     document.addEventListener('mouseup', cancelPress);
+    document.addEventListener('mouseleave', cancelPress);
     document.addEventListener('touchend', cancelPress);
+    document.addEventListener('touchcancel', cancelPress);
   }
 
   function startPress(){
@@ -3659,6 +3712,73 @@ document.getElementById('downloadPdfBtn').addEventListener('click', function(){
 
   attachLongPress();
 })();
+
+// ── ADMIN INTRO FUNCTIONS ──
+window._adminWatchIntro = function(){
+  document.getElementById('settingsModal').style.display='none';
+  var el=document.getElementById('introScreen');
+  el.style.display='flex'; el.style.opacity='1'; el.style.transition='';
+  el.classList.remove('expand');
+  // reset all scenes
+  document.querySelectorAll('.iscene').forEach(function(s){ s.style.opacity=''; s.style.transition=''; });
+  try{ localStorage.removeItem('tv_intro_seen'); }catch(e){}
+  // restart
+  clearTimeout(window._introTimer);
+  window._introCurrentScene=-1;
+  setTimeout(function(){ window._introPlay(0); },300);
+};
+
+window._adminSendIntro = function(){
+  var status=document.getElementById('introSendStatus');
+  status.textContent='Lähetetään...';
+  // Store flag in Firebase: intro_broadcast with timestamp
+  import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js')
+    .then(function(m){
+      var introDoc=m.doc(db,'app','intro_broadcast');
+      return m.setDoc(introDoc,{active:true,sentAt:Date.now(),seenBy:[]});
+    })
+    .then(function(){
+      status.textContent='✅ Lähetetty! Kaikki näkevät intron seuraavalla kirjautumisella.';
+      setTimeout(function(){ status.textContent=''; },5000);
+    })
+    .catch(function(e){
+      status.textContent='❌ Virhe: '+e.message;
+    });
+};
+
+// Refactor intro player to be restartable
+window._introTimer=null;
+window._introCurrentScene=-1;
+window._introPlay=function(idx){
+  var SCENES=[
+    ['is1',3000],['is2',6200],['is3',4200],['is4',3600],
+    ['is5',6500],['is6',6200],['is7',5600],['is8',4600],['is9',3500]
+  ];
+  if(idx>=SCENES.length){ 
+    var el=document.getElementById('introScreen');
+    el.style.transition='opacity 1.5s'; el.style.opacity='0';
+    setTimeout(function(){ el.style.display='none'; },1500);
+    try{ localStorage.setItem('tv_intro_seen','1'); }catch(e){}
+    return; 
+  }
+  var cur=window._introCurrentScene;
+  if(cur>=0){
+    var prev=document.getElementById(SCENES[cur][0]);
+    prev.style.transition='opacity 0.7s ease'; prev.style.opacity='0';
+    setTimeout(function(){ prev.style.opacity=''; },750);
+  }
+  if(idx===1) document.getElementById('introScreen').classList.add('expand');
+  if(idx===3||idx===7){
+    var f=document.getElementById('introFlash');
+    f.style.animation='none'; void f.offsetWidth;
+    f.style.animation='introDoFlash 0.2s ease forwards';
+  }
+  var el2=document.getElementById(SCENES[idx][0]);
+  el2.style.transition='opacity 0.9s ease'; el2.style.opacity='1';
+  window._introCurrentScene=idx;
+  window._introTimer=setTimeout(function(){ window._introPlay(idx+1); },SCENES[idx][1]);
+};
+window._skipIntro=function(){ clearTimeout(window._introTimer); var el=document.getElementById('introScreen'); el.style.transition='opacity 1.5s'; el.style.opacity='0'; setTimeout(function(){ el.style.display='none'; },1500); try{ localStorage.setItem('tv_intro_seen','1'); }catch(e){} };
 </script>
 
 </body>
