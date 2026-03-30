@@ -22,7 +22,8 @@
     #night-banner{ display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1e293b; border:1px solid #334155; border-radius:14px; padding:12px 20px; font-size:14px; font-weight:700; color:#94a3b8; z-index:9998; box-shadow:0 4px 20px rgba(0,0,0,0.4); white-space:nowrap; animation:slideUpModal 0.4s ease; }
 
     /* Vihjaustila-nappi */
-
+    #hint-btn{ position:fixed; bottom:24px; right:16px; width:48px; height:48px; border-radius:50%; background:#1e293b; border:2px solid #334155; font-size:22px; cursor:pointer; z-index:9000; display:none; box-shadow:0 2px 10px rgba(0,0,0,0.3); transition:transform 0.15s; }
+    #hint-btn:active{ transform:scale(0.9); }
     @media (prefers-color-scheme: dark) {
       .score-card { background:#ffffff !important; color:#000000 !important; }
       .score-card .name { color:#000000 !important; font-weight:700; }
@@ -398,7 +399,7 @@
 <div id="loader-bar"></div>
 <canvas id="ice-canvas"></canvas>
 <div id="night-banner">🌙 Eikö ole jo nukkumaanmeno? 😴</div>
-
+<button id="hint-btn" title="Lähetä vihje adminille" onclick="window._sendHint()">👀</button>
 
 <div id="fb-status"></div>
 
@@ -786,7 +787,9 @@
             <div class="faq-rule"><span>⏱ Lähimpänä ekan maalin aikaa (±1 min)</span><strong>1 p</strong></div>
             <div class="faq-rule"><span>✅ Muu kenttä oikein</span><strong>1 p</strong></div>
             <div class="faq-rule"><span>🏆 Kolmen kärki – oikea joukkue oikealla sijalla</span><strong>2 p/sija</strong></div>
+            <div class="faq-rule"><span>⭐ Kaikki kortin kentät oikein (bonuspiste)</span><strong>+1 p</strong></div>
             <div style="margin-top:8px;font-size:12px;color:var(--muted)">💡 Ekan maalin aika: täsmälleen oikein → 3p. Jos kukaan ei osu täsmälleen, lähimmälle ±1 min sisällä → 1p.</div>
+            <div style="margin-top:4px;font-size:12px;color:var(--muted)">⭐ Bonuspiste vaatii että kaikki kentät on täytetty ja kaikki ovat oikein — ei yhtään tyhjää tai väärää.</div>
           </div>
         </div>
         <div id="scoreboard"></div>
@@ -873,15 +876,17 @@ const GOAL_SCORERS = ['Juuse Saros (MV)','Joonas Korpisalo (MV)','Kevin Lankinen
 const PENALTY_TAKERS = [...GOAL_SCORERS.slice(0,-1),'Ei jäähyä','Joukkue rangaistus'];
 const FIELDS = [
   {key:'lopputulos',label:'Lopputulos'},{key:'ekan_maalintekija',label:'Ekan maalintekijä'},
-  {key:'ekan_maali_aika',label:'Ekan maalin tekoaika'},{key:'ekan_jahyn_saaja',label:'Ekan jäähyn saaja'},
+  {key:'ekan_maali_aika',label:'Ekan maalin tekoaika'},{key:'kumpi_tekee_ekan_maalin',label:'Kumpi tekee ekan maalin'},
+  {key:'ekan_jahyn_saaja',label:'Ekan jäähyn saaja'},
   {key:'ekan_jahyn_syy',label:'Ekan jäähyn syy'},{key:'montako_jahyja',label:'Montako jäähydä'},
   {key:'parempi_laukasu',label:'Kummalla parempi laukaus%'},{key:'parempi_alotus',label:'Kummalla parempi aloitus%'},
   {key:'parempi_torjunta',label:'Kummalla parempi torjunta%'},{key:'parempi_alivoima',label:'Kummalla parempi alivoima%'},
   {key:'parempi_ylivoima',label:'Kummalla parempi ylivoima%'},{key:'era1',label:'1. erä tulos'},
-  {key:'era2',label:'2. erä tulos'},{key:'valmentaja_haasto',label:'Valmentaja haasto'},{key:'maali_tyhjiin',label:'Maali tyhjiin'}
+  {key:'era2',label:'2. erä tulos'},{key:'valmentaja_haasto',label:'Valmentaja haasto'},{key:'maali_tyhjiin',label:'Maali tyhjiin'},
+  {key:'jatkoaika_tai_rankkarit',label:'JA tai VL (jatkoaika/rankkarit)'}
 ];
-const ONE_X_TWO = new Set(['parempi_laukasu','parempi_alotus','parempi_torjunta','parempi_alivoima','parempi_ylivoima','era1','era2']);
-const KYLLA_EI = new Set(['valmentaja_haasto','maali_tyhjiin']);
+const ONE_X_TWO = new Set(['parempi_laukasu','parempi_alotus','parempi_torjunta','parempi_alivoima','parempi_ylivoima','era1','era2','kumpi_tekee_ekan_maalin']);
+const KYLLA_EI = new Set(['valmentaja_haasto','maali_tyhjiin','jatkoaika_tai_rankkarit']);
 const NUMBER_K = new Set(['montako_jahyja']);
 
 // ============================
@@ -921,19 +926,24 @@ function calcMatchPts(t, matchId, player){
   const pr = ((t.predictions||{})[matchId]||{})[player]||{};
   const ac = (t.actuals||{})[matchId]||{};
   let s=0;
+  let correctCount=0, scorableCount=0;
   FIELDS.forEach(f=>{
     if(ac[f.key]==null || ac[f.key]==='') return;
+    scorableCount++;
     if(f.key==='lopputulos'){
-      if(ciEq(pr[f.key]||'', ac[f.key])) s+=2;
+      if(ciEq(pr[f.key]||'', ac[f.key])){ s+=2; correctCount++; }
     } else if(f.key==='ekan_maali_aika'){
       // Täysin oikein = 3p; lähimmäksi = lasketaan erikseen calcTotals-tasolla
       const parse = s => { const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
       const pp=parse(pr[f.key]||''), ap=parse(ac[f.key]);
-      if(pp!==null && ap!==null && pp===ap) s+=3;
+      if(pp!==null && ap!==null && pp===ap){ s+=3; correctCount++; }
     } else {
-      if(fieldMatch(f.key, pr[f.key]||'', ac[f.key])) s++;
+      if(fieldMatch(f.key, pr[f.key]||'', ac[f.key])){ s++; correctCount++; }
     }
   });
+  // Bonuspiste: KAIKKI kentät täytetty ja oikein — ei yhtään tyhjää
+  const allFieldsAnswered = FIELDS.every(f => (pr[f.key]!=null && pr[f.key]!==''));
+  if(allFieldsAnswered && scorableCount === FIELDS.length && correctCount === FIELDS.length) s+=1;
   return s;
 }
 function calcTimeProximityPts(t, matchId){
@@ -1749,6 +1759,28 @@ function activateSwedishMode() {
 }
 
 // ============================
+// 5. VIHJAUSTILA 👀
+// ============================
+window._sendHint = async function() {
+  const btn = document.getElementById('hint-btn');
+  if (!btn) return;
+  btn.textContent = '✅';
+  btn.style.borderColor = '#22c55e';
+  try {
+    const snap = await getDoc(MESSAGES_DOC);
+    const msgs = snap.exists() ? (snap.data().messages || []) : [];
+    msgs.push({ from: currentUser, text: '👀', ts: new Date().toISOString(), hint: true });
+    await setDoc(MESSAGES_DOC, { messages: msgs });
+  } catch(e) {}
+  setTimeout(() => { btn.textContent = '👀'; btn.style.borderColor = '#334155'; }, 2000);
+};
+
+function showHintBtn(show) {
+  const btn = document.getElementById('hint-btn');
+  if (btn) btn.style.display = (show && currentUser && currentUser !== ADMIN) ? 'flex' : 'none';
+}
+
+// ============================
 // 6. MOTIVAATIOVIESTI HÄVIÄJÄLLE
 // ============================
 const LOSER_MSGS = [
@@ -2441,6 +2473,7 @@ function render(){
   if(currentUser===ADMIN) renderPinManage();
   renderMessageCard();
   checkNightMode();
+  showHintBtn(true);
   checkLoserMessage();
   if(currentUser===ADMIN) checkUnreadMessages();
   else checkPlayerUnread();
