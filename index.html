@@ -158,9 +158,7 @@
     .loser-title { font-size:28px; font-weight:900; color:#fbbf24; margin:16px 0 8px; text-align:center; }
     .loser-sub { font-size:16px; color:#94a3b8; text-align:center; max-width:260px; }
     .loser-close { margin-top:24px; background:#f97316; color:#fff; border:none; border-radius:12px; padding:12px 28px; font-size:16px; font-weight:700; cursor:pointer; }
-    #puck-canvas { position:fixed; inset:0; z-index:99998; background:rgba(0,0,20,0.93); display:none; cursor:pointer; overflow:hidden; }
-    .puck-emoji { position:absolute; font-size:42px; user-select:none; pointer-events:none; }
-    .puck-exit-hint { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); color:#94a3b8; font-size:14px; z-index:99999; pointer-events:none; background:rgba(0,0,0,0.5); padding:6px 14px; border-radius:999px; }
+    /* puck screensaver poistettu */
     .faq-section { margin-bottom:8px; }
     .faq-toggle { width:100%; text-align:left; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:12px 14px; font-weight:700; font-size:14px; cursor:pointer; color:var(--text); display:flex; justify-content:space-between; align-items:center; transition:border-color 0.15s; }
     .faq-toggle:hover { border-color:var(--primary); }
@@ -420,9 +418,7 @@
 </div>
 
 <!-- KIEKKO SCREENSAVER -->
-<div id="puck-canvas" onclick="window._stopPuckScreensaver()">
-  <div class="puck-exit-hint">🏒 Klikkaa sulkeaksesi</div>
-</div>
+
 
 <!-- KIRJAUTUMINEN -->
 <div id="loginScreen">
@@ -790,7 +786,36 @@
             <div style="margin-top:8px;font-size:12px;color:var(--muted)">💡 Ekan maalin aika: täsmälleen oikein → 3p. Jos kukaan ei osu täsmälleen, lähimmälle ±1 min sisällä → 1p.</div>
           </div>
         </div>
+        <div class="faq-section" style="margin-bottom:12px">
+          <button class="faq-toggle" onclick="window._toggleFaq2(this)">
+            <span>🏅 Miten sijoitukset määräytyvät?</span>
+            <span id="faqArrow2">▼</span>
+          </button>
+          <div class="faq-body" id="faqBody2">
+            <div class="faq-rule"><span>1️⃣ Kokonaispisteet</span><strong>Ensin</strong></div>
+            <div class="faq-rule"><span>2️⃣ Otteluvoitot turnauksessa</span><strong>Jos tasan</strong></div>
+            <div class="faq-rule"><span>3️⃣ Paras yksittäinen ottelutulos</span><strong>Jos tasan</strong></div>
+            <div class="faq-rule"><span>4️⃣ Lopputulos-osumat yhteensä</span><strong>Jos tasan</strong></div>
+            <div class="faq-rule"><span>5️⃣ Maalintekijä-osumat yhteensä</span><strong>Jos tasan</strong></div>
+            <div class="faq-rule"><span>6️⃣ Viimeisin ottelu pisteet</span><strong>Jos tasan</strong></div>
+          </div>
+        </div>
         <div id="scoreboard"></div>
+        <div id="tiebreakerBtnWrap" style="display:none;margin-top:8px">
+          <button class="btn small secondary" style="width:100%" onclick="window._openTiebreakerModal()">🔍 Tarkastele sijoitusten tiebreaker</button>
+        </div>
+      </div>
+
+      <!-- TIEBREAKER MODAALI (vain admin) -->
+      <div id="tiebreakerModal" style="display:none" class="modal-overlay" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-box" style="max-width:560px">
+          <button class="modal-close" onclick="document.getElementById('tiebreakerModal').style.display='none'">✕</button>
+          <div class="stack" style="justify-content:space-between;align-items:center;margin-bottom:14px">
+            <h2 style="margin:0">🔍 Sijoitusten tiebreaker</h2>
+            <button class="btn small secondary" onclick="window._renderTiebreaker()">🔄</button>
+          </div>
+          <div id="tiebreakerArea"><p class="muted" style="font-size:13px">Ladataan...</p></div>
+        </div>
       </div>
 
       <div class="card" id="statsCard" style="display:none">
@@ -924,19 +949,23 @@ function calcMatchPts(t, matchId, player){
   const pr = ((t.predictions||{})[matchId]||{})[player]||{};
   const ac = (t.actuals||{})[matchId]||{};
   let s=0;
+  let correctCount=0, scorableCount=0;
   FIELDS.forEach(f=>{
     if(ac[f.key]==null || ac[f.key]==='') return;
+    scorableCount++;
     if(f.key==='lopputulos'){
-      if(ciEq(pr[f.key]||'', ac[f.key])) s+=2;
+      if(ciEq(pr[f.key]||'', ac[f.key])){ s+=2; correctCount++; }
     } else if(f.key==='ekan_maali_aika'){
-      // Täysin oikein = 3p; lähimmäksi = lasketaan erikseen calcTotals-tasolla
       const parse = s => { const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? +m[1]*60 + +m[2] : null; };
       const pp=parse(pr[f.key]||''), ap=parse(ac[f.key]);
-      if(pp!==null && ap!==null && pp===ap) s+=3;
+      if(pp!==null && ap!==null && pp===ap){ s+=3; correctCount++; }
     } else {
-      if(fieldMatch(f.key, pr[f.key]||'', ac[f.key])) s++;
+      if(fieldMatch(f.key, pr[f.key]||'', ac[f.key])){ s++; correctCount++; }
     }
   });
+  // Bonuspiste: KAIKKI kentät täytetty ja oikein
+  const allFieldsAnswered = FIELDS.every(f => (pr[f.key]!=null && pr[f.key]!==''));
+  if(allFieldsAnswered && scorableCount===FIELDS.length && correctCount===FIELDS.length) s+=1;
   return s;
 }
 function calcTimeProximityPts(t, matchId){
@@ -990,11 +1019,169 @@ function calcTotals(t){
 }
 
 // ============================
+// TIEBREAKER-LOGIIKKA
+// ============================
+function calcTiebreakerStats(t, player){
+  const matches = (t.matches||[]).filter(m => {
+    const ac = (t.actuals||{})[m.id]||{};
+    return Object.values(ac).some(v => v && v!=='');
+  });
+  // 2. Otteluvoitot
+  let matchWins = 0;
+  matches.forEach(m => {
+    const myPts = calcMatchPts(t,m.id,player)+(calcTimeProximityPts(t,m.id)[player]||0);
+    const maxPts = Math.max(...PLAYERS.map(p => calcMatchPts(t,m.id,p)+(calcTimeProximityPts(t,m.id)[p]||0)));
+    if(myPts===maxPts && myPts>0) matchWins++;
+  });
+  // 3. Paras yksittäinen ottelutulos
+  let bestMatch = 0;
+  matches.forEach(m => {
+    const pts = calcMatchPts(t,m.id,player)+(calcTimeProximityPts(t,m.id)[player]||0);
+    if(pts>bestMatch) bestMatch=pts;
+  });
+  // 4. Lopputulos-osumat
+  let correctResults = 0;
+  matches.forEach(m => {
+    const pr=((t.predictions||{})[m.id]||{})[player]||{};
+    const ac=(t.actuals||{})[m.id]||{};
+    if(ac['lopputulos']&&ciEq(pr['lopputulos']||'',ac['lopputulos'])) correctResults++;
+  });
+  // 5. Maalintekijä-osumat
+  let correctScorers = 0;
+  matches.forEach(m => {
+    const pr=((t.predictions||{})[m.id]||{})[player]||{};
+    const ac=(t.actuals||{})[m.id]||{};
+    if(ac['ekan_maalintekija']&&ciEq(pr['ekan_maalintekija']||'',ac['ekan_maalintekija'])) correctScorers++;
+  });
+  // 6. Viimeisin ottelu
+  let lastMatchPts = 0;
+  if(matches.length>0){
+    const last=matches[matches.length-1];
+    lastMatchPts=calcMatchPts(t,last.id,player)+(calcTimeProximityPts(t,last.id)[player]||0);
+  }
+  return {matchWins,bestMatch,correctResults,correctScorers,lastMatchPts};
+}
+
+function sortedStandings(t){
+  const totals=calcTotals(t);
+  const entries=Object.entries(totals);
+  entries.sort((a,b)=>{
+    if(b[1]!==a[1]) return b[1]-a[1];
+    const sa=calcTiebreakerStats(t,a[0]);
+    const sb=calcTiebreakerStats(t,b[0]);
+    if(sb.matchWins!==sa.matchWins) return sb.matchWins-sa.matchWins;
+    if(sb.bestMatch!==sa.bestMatch) return sb.bestMatch-sa.bestMatch;
+    if(sb.correctResults!==sa.correctResults) return sb.correctResults-sa.correctResults;
+    if(sb.correctScorers!==sa.correctScorers) return sb.correctScorers-sa.correctScorers;
+    return sb.lastMatchPts-sa.lastMatchPts;
+  });
+  return entries;
+}
+
+window._openTiebreakerModal = function(){
+  const modal=document.getElementById('tiebreakerModal');
+  if(!modal) return;
+  modal.style.display='flex';
+  window._renderTiebreaker();
+};
+
+window._renderTiebreaker = function(){
+  const el=document.getElementById('tiebreakerArea');
+  if(!el) return;
+  const t=getTournament();
+  if(!t){ el.innerHTML='<p class="muted" style="font-size:13px">Valitse ensin turnaus.</p>'; return; }
+  const totals=calcTotals(t);
+  const sorted=sortedStandings(t);
+  const CRITERIA=['matchWins','bestMatch','correctResults','correctScorers','lastMatchPts'];
+  const LABELS={'matchWins':'2️⃣ Otteluvoitot','bestMatch':'3️⃣ Paras ottelutulos','correctResults':'4️⃣ Lopputulos-osumat','correctScorers':'5️⃣ Maalintekijä-osumat','lastMatchPts':'6️⃣ Viimeisin ottelu'};
+  const UNITS={'matchWins':'voittoa','bestMatch':'p','correctResults':'kpl','correctScorers':'kpl','lastMatchPts':'p'};
+  const stats={};
+  sorted.forEach(([p])=>{ stats[p]=calcTiebreakerStats(t,p); });
+  const tiedPairs=[];
+  for(let i=0;i<sorted.length-1;i++)
+    for(let j=i+1;j<sorted.length;j++)
+      if(sorted[i][1]===sorted[j][1]) tiedPairs.push([sorted[i][0],sorted[j][0]]);
+
+  let html='';
+  // Yhteenvetokortit
+  html+='<div style="display:grid;gap:6px;margin-bottom:16px;">';
+  sorted.forEach(([p,pts],i)=>{
+    const s=stats[p];
+    const inTie=tiedPairs.some(pair=>pair.includes(p));
+    const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'💩';
+    const bg=inTie?'background:rgba(251,191,36,0.07);border-color:rgba(251,191,36,0.3)':'background:var(--bg);border-color:var(--border)';
+    html+=`<div style="${bg};border:1px solid;border-radius:10px;padding:10px 12px;">`;
+    html+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">`;
+    html+=`<div style="font-weight:800;font-size:14px">${medal} ${inTie?'⚠️ ':''} ${p}</div>`;
+    html+=`<div style="font-weight:900;font-size:16px;color:var(--primary)">${pts} p</div></div>`;
+    html+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:11px;color:var(--muted)">`;
+    html+=`<div>Otteluvoitot: <strong>${s.matchWins}</strong></div>`;
+    html+=`<div>Paras ottelu: <strong>${s.bestMatch} p</strong></div>`;
+    html+=`<div>Lopputulokset: <strong>${s.correctResults} kpl</strong></div>`;
+    html+=`<div>Maalintekijät: <strong>${s.correctScorers} kpl</strong></div>`;
+    html+=`<div>Viimeisin: <strong>${s.lastMatchPts} p</strong></div>`;
+    html+=`</div></div>`;
+  });
+  html+='</div>';
+
+  if(tiedPairs.length===0){
+    html+='<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px 14px;font-size:13px;font-weight:700;color:#22c55e">✅ Ei tasatilanteita — kaikki sijoitukset määräytyvät suoraan pisteiden mukaan.</div>';
+  } else {
+    html+='<div style="font-weight:800;font-size:14px;margin-bottom:10px">⚠️ Tasatilanteiden läpikäynti:</div>';
+    tiedPairs.forEach(([a,b])=>{
+      const sa=stats[a],sb=stats[b];
+      const posA=sorted.findIndex(([p])=>p===a)+1;
+      const posB=sorted.findIndex(([p])=>p===b)+1;
+      html+=`<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:13px">`;
+      html+=`<div style="font-weight:900;font-size:14px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)">${a} (${posA}. sija) vs ${b} (${posB}. sija)</div>`;
+      // Kriteeri 1
+      html+=`<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;padding:8px;border-radius:8px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2)">`;
+      html+=`<div style="font-size:18px;flex-shrink:0">➖</div><div><div style="font-weight:800">1️⃣ Kokonaispisteet — ei ratkaissut</div>`;
+      html+=`<div style="color:var(--muted);margin-top:2px">${a}: <strong>${totals[a]} p</strong> · ${b}: <strong>${totals[b]} p</strong> — Tasan, siirrytään seuraavaan.</div></div></div>`;
+      // Kriteerit 2–6
+      let resolved=false;
+      CRITERIA.forEach((c)=>{
+        if(resolved) return;
+        const va=sa[c],vb=sb[c];
+        if(va!==vb){
+          const winner=va>vb?a:b, loser=winner===a?b:a;
+          const wVal=winner===a?va:vb, lVal=winner===a?vb:va;
+          html+=`<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;padding:8px;border-radius:8px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3)">`;
+          html+=`<div style="font-size:18px;flex-shrink:0">✅</div><div><div style="font-weight:800;color:#22c55e">${LABELS[c]} — RATKAISI</div>`;
+          html+=`<div style="color:var(--muted);margin-top:2px">${a}: <strong>${va} ${UNITS[c]}</strong> · ${b}: <strong>${vb} ${UNITS[c]}</strong></div>`;
+          html+=`<div style="margin-top:4px;font-weight:700">🏆 ${winner} voittaa (${wVal} vs ${lVal} ${UNITS[c]})</div></div></div>`;
+          resolved=true;
+        } else {
+          html+=`<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;padding:8px;border-radius:8px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2)">`;
+          html+=`<div style="font-size:18px;flex-shrink:0">➖</div><div><div style="font-weight:800">${LABELS[c]} — ei ratkaissut</div>`;
+          html+=`<div style="color:var(--muted);margin-top:2px">${a}: <strong>${va} ${UNITS[c]}</strong> · ${b}: <strong>${vb} ${UNITS[c]}</strong> — Tasan, siirrytään seuraavaan.</div></div></div>`;
+        }
+      });
+      if(!resolved){
+        html+=`<div style="display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3)">`;
+        html+=`<div style="font-size:18px;flex-shrink:0">❌</div><div><div style="font-weight:800;color:#dc2626">Kaikki 6 kriteeriä tasan</div>`;
+        html+=`<div style="color:var(--muted);margin-top:2px">Järjestys säilyy nykyisellään.</div></div></div>`;
+      }
+      html+=`</div>`;
+    });
+  }
+  el.innerHTML=html;
+};
+
+// ============================
 // FAQ TOGGLE
 // ============================
 window._toggleFaq = function(btn) {
   const body = document.getElementById('faqBody');
   const arrow = document.getElementById('faqArrow');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  if(arrow) arrow.textContent = isOpen ? '▼' : '▲';
+};
+
+window._toggleFaq2 = function(btn) {
+  const body = document.getElementById('faqBody2');
+  const arrow = document.getElementById('faqArrow2');
   const isOpen = body.classList.contains('open');
   body.classList.toggle('open', !isOpen);
   if(arrow) arrow.textContent = isOpen ? '▼' : '▲';
@@ -1008,7 +1195,7 @@ window.showPlayerProfile = function(player) {
   if (!t) return;
   const totals = calcTotals(t);
   const totalPts = totals[player] || 0;
-  const sorted = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+  const sorted = sortedStandings(t);
   const rank = sorted.findIndex(([n])=>n===player) + 1;
   const medals = ['🥇','🥈','🥉'];
   const rankIcon = rank<=3 ? medals[rank-1] : (rank===sorted.length ? '💩' : rank+'.');
@@ -1084,66 +1271,6 @@ window.showPlayerProfile = function(player) {
 // ============================
 window.showLoserEasterEgg = function() {
   document.getElementById('loserEasterEgg').style.display = 'flex';
-};
-
-// ============================
-// KIEKKO SCREENSAVER
-// ============================
-let puckAnimFrame = null;
-let puckClickCount = 0;
-let puckClickTimer = null;
-
-// Emoji-klikki otsikossa
-document.addEventListener('click', e => {
-  const h1 = e.target.closest('h1');
-  if (!h1 || !h1.textContent.includes('🏒')) return;
-  puckClickCount++;
-  if (puckClickTimer) clearTimeout(puckClickTimer);
-  puckClickTimer = setTimeout(() => { puckClickCount = 0; }, 1500);
-  if (puckClickCount >= 5) {
-    puckClickCount = 0;
-    window._startPuckScreensaver();
-  }
-});
-
-window._startPuckScreensaver = function() {
-  const canvas = document.getElementById('puck-canvas');
-  canvas.style.display = 'block';
-  canvas.innerHTML = '<div class="puck-exit-hint">🏒 Klikkaa sulkeaksesi</div>';
-
-  const pucks = Array.from({length:5}, (_, i) => {
-    const el = document.createElement('div');
-    el.className = 'puck-emoji';
-    el.textContent = ['🏒','🥅','🏒','⛸️','🏒'][i];
-    canvas.appendChild(el);
-    return {
-      el,
-      x: Math.random() * (window.innerWidth - 60),
-      y: Math.random() * (window.innerHeight - 60),
-      vx: (Math.random() * 4 + 2) * (Math.random()<0.5?1:-1),
-      vy: (Math.random() * 4 + 2) * (Math.random()<0.5?1:-1),
-      size: 42
-    };
-  });
-
-  const tick = () => {
-    pucks.forEach(p => {
-      p.x += p.vx; p.y += p.vy;
-      if (p.x <= 0 || p.x >= window.innerWidth - p.size) { p.vx *= -1; p.x = Math.max(0, Math.min(p.x, window.innerWidth - p.size)); }
-      if (p.y <= 0 || p.y >= window.innerHeight - p.size) { p.vy *= -1; p.y = Math.max(0, Math.min(p.y, window.innerHeight - p.size)); }
-      p.el.style.left = p.x + 'px';
-      p.el.style.top = p.y + 'px';
-    });
-    puckAnimFrame = requestAnimationFrame(tick);
-  };
-  puckAnimFrame = requestAnimationFrame(tick);
-};
-
-window._stopPuckScreensaver = function() {
-  if (puckAnimFrame) { cancelAnimationFrame(puckAnimFrame); puckAnimFrame = null; }
-  const canvas = document.getElementById('puck-canvas');
-  canvas.style.display = 'none';
-  canvas.innerHTML = '<div class="puck-exit-hint">🏒 Klikkaa sulkeaksesi</div>';
 };
 
 // Tallenna/palauta valinnat
@@ -1775,7 +1902,7 @@ function checkLoserMessage() {
   if (!hasResults) return;
   // Tarkista onko viimeisenä
   const totals = calcTotals(t);
-  const sorted = Object.entries(totals).sort((a,b) => b[1]-a[1]);
+  const sorted = sortedStandings(t);
   if (!sorted.length) return;
   const last = sorted[sorted.length - 1];
   if (last[0] !== currentUser) return;
@@ -2218,21 +2345,18 @@ function renderScoreboard(){
   const el=$('scoreboard'); if(!el) return;
   const t=getTournament();
   if(!t){ el.innerHTML='<p class="muted">Valitse turnaus.</p>'; return; }
-  const totals=calcTotals(t);
-  const sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
-  const uPts=[...new Set(sorted.map(x=>x[1]))].sort((a,b)=>b-a);
-  const icon=pts=>{ const r=uPts.indexOf(pts)+1; return r===1?'🥇':r===2?'🥈':r===3?'🥉':'💩'; };
-  const lastIdx = sorted.length - 1;
-  el.innerHTML='<div class="score-grid">'+sorted.map(([n,pts], i)=>{
-    const lastEdit = getLastEditedTime(t, n);
-    const timeStr = lastEdit
-      ? new Date(lastEdit).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})
-      : null;
-    const isLast = i === lastIdx;
+  const sorted=sortedStandings(t);
+  const icon=(rank)=>rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':'💩';
+  const lastIdx=sorted.length-1;
+  el.innerHTML='<div class="score-grid">'+sorted.map(([n,pts],i)=>{
+    const rank=i+1;
+    const lastEdit=getLastEditedTime(t,n);
+    const timeStr=lastEdit?new Date(lastEdit).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):null;
+    const isLast=i===lastIdx;
     return `<div class="score-card${isLast?' score-card-last':''}" style="cursor:${isLast?'pointer':'default'}" data-player="${n}" onclick="window._scoreCardClick(this,'${n}',${isLast})">
-      <div class="name">${icon(pts)} ${n}</div>
+      <div class="name">${icon(rank)} ${n}</div>
       <div class="pts">${pts} p</div>
-      ${timeStr ? `<div style="font-size:10px;color:var(--muted);margin-top:3px">⏱ ${timeStr}</div>` : ''}
+      ${timeStr?`<div style="font-size:10px;color:var(--muted);margin-top:3px">⏱ ${timeStr}</div>`:''}
     </div>`;
   }).join('')+'</div>';
 }
@@ -2388,7 +2512,7 @@ function renderTournamentStatus(){
 function renderStats(){
   const t=getTournament(); if(!t) return;
   const el=$('statsArea'); if(!el) return;
-  const totals=calcTotals(t), sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+  const sorted=sortedStandings(t);
   const medals=['🥇','🥈','🥉'];
   let best=null;
   (t.matches||[]).forEach(m=>PLAYERS.forEach(p=>{ const pts=calcMatchPts(t,m.id,p)+(calcTimeProximityPts(t,m.id)[p]||0); if(!best||pts>best.pts) best={player:p,matchName:m.name,pts}; }));
@@ -2550,7 +2674,7 @@ function doLogin(name){
   $('currentUserBadge').textContent=(name===ADMIN?'👑 ':'')+name;
   const isAdmin=name===ADMIN;
   // Turnaus/ottelu/status-työkalut vain adminille
-  ['adminTournamentTools','adminMatchTools','adminStatusCard'].forEach(id=>{
+  ['adminTournamentTools','adminMatchTools','adminStatusCard','tiebreakerBtnWrap'].forEach(id=>{
     const el=$(id); if(el) el.style.display=isAdmin?'':'none';
   });
   // PIN-koodit ja Käyttökerrat piilotetaan aina — ne ovat Asetukset-modaalissa
