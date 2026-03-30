@@ -807,14 +807,21 @@
           </div>
         </div>
         <div id="scoreboard"></div>
+        <div id="tiebreakerBtnWrap" style="display:none;margin-top:8px">
+          <button class="btn small secondary" style="width:100%" onclick="window._openTiebreakerModal()">🔍 Tarkastele sijoitusten tiebreaker</button>
+        </div>
       </div>
 
-      <div class="card" id="tiebreakerCard" style="display:none">
-        <div class="stack" style="justify-content:space-between;margin-bottom:10px">
-          <h2 style="margin:0">🔍 Sijoitusten tiebreaker</h2>
-          <button class="btn small secondary" onclick="window._renderTiebreaker()">🔄</button>
+      <!-- TIEBREAKER MODAALI (vain admin) -->
+      <div id="tiebreakerModal" style="display:none" class="modal-overlay" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-box" style="max-width:560px">
+          <button class="modal-close" onclick="document.getElementById('tiebreakerModal').style.display='none'">✕</button>
+          <div class="stack" style="justify-content:space-between;align-items:center;margin-bottom:14px">
+            <h2 style="margin:0">🔍 Sijoitusten tiebreaker</h2>
+            <button class="btn small secondary" onclick="window._renderTiebreaker()">🔄</button>
+          </div>
+          <div id="tiebreakerArea"><p class="muted" style="font-size:13px">Ladataan...</p></div>
         </div>
-        <div id="tiebreakerArea"><p class="muted" style="font-size:13px">Ladataan...</p></div>
       </div>
 
       <div class="card" id="statsCard" style="display:none">
@@ -1129,31 +1136,27 @@ window._renderTiebreaker = function(){
 
   let html = '';
 
-  // Sijoitustaulukko
-  html += '<div style="overflow-x:auto;margin-bottom:16px">';
-  html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
-  html += '<thead><tr style="background:rgba(249,115,22,0.1)">';
-  html += '<th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--border)">Sija</th>';
-  html += '<th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--border)">Pelaaja</th>';
-  html += '<th style="padding:6px 8px;text-align:center;border-bottom:2px solid var(--border)">1️⃣ Pisteet</th>';
-  CRITERIA.forEach(c => {
-    html += `<th style="padding:6px 8px;text-align:center;border-bottom:2px solid var(--border);white-space:nowrap">${CRITERIA_LABELS[c]}</th>`;
-  });
-  html += '</tr></thead><tbody>';
+  // Yhteenvetokortit (ei leveää taulukkoa)
+  html += '<div style="display:grid;gap:6px;margin-bottom:16px;">';
   sorted.forEach(([p, pts], i) => {
     const s = stats[p];
     const isInTie = tiedPairs.some(pair => pair.includes(p));
-    const rowBg = isInTie ? 'background:rgba(251,191,36,0.07)' : '';
-    html += `<tr style="${rowBg};border-bottom:1px solid var(--border)">`;
-    html += `<td style="padding:6px 8px;font-weight:800;font-size:14px">${i===0?'🥇':i===1?'🥈':i===2?'🥉':'💩'}</td>`;
-    html += `<td style="padding:6px 8px;font-weight:700">${isInTie?'⚠️ ':''} ${p}</td>`;
-    html += `<td style="padding:6px 8px;text-align:center;font-weight:900;color:var(--primary)">${pts}</td>`;
-    CRITERIA.forEach(c => {
-      html += `<td style="padding:6px 8px;text-align:center">${s[c]} ${CRITERIA_UNIT[c]}</td>`;
-    });
-    html += '</tr>';
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'💩';
+    const bg = isInTie ? 'background:rgba(251,191,36,0.07);border-color:rgba(251,191,36,0.3)' : 'background:var(--bg);border-color:var(--border)';
+    html += `<div style="${bg};border:1px solid;border-radius:10px;padding:10px 12px;">`;
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">`;
+    html += `<div style="font-weight:800;font-size:14px">${medal} ${isInTie?'⚠️ ':''} ${p}</div>`;
+    html += `<div style="font-weight:900;font-size:16px;color:var(--primary)">${pts} p</div>`;
+    html += `</div>`;
+    html += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:11px;color:var(--muted)">`;
+    html += `<div>Otteluvoitot: <strong>${s.matchWins}</strong></div>`;
+    html += `<div>Paras ottelu: <strong>${s.bestMatch} p</strong></div>`;
+    html += `<div>Lopputulokset: <strong>${s.correctResults} kpl</strong></div>`;
+    html += `<div>Maalintekijät: <strong>${s.correctScorers} kpl</strong></div>`;
+    html += `<div>Viimeisin: <strong>${s.lastMatchPts} p</strong></div>`;
+    html += `</div></div>`;
   });
-  html += '</tbody></table></div>';
+  html += '</div>';
 
   // Tasatilanteiden erittely
   if(tiedPairs.length === 0){
@@ -1221,6 +1224,13 @@ window._renderTiebreaker = function(){
   el.innerHTML = html;
 };
 
+
+window._openTiebreakerModal = function(){
+  const modal = document.getElementById('tiebreakerModal');
+  if(!modal) return;
+  modal.style.display = 'flex';
+  window._renderTiebreaker();
+};
 
 // ============================
 // FAQ TOGGLE
@@ -2706,7 +2716,6 @@ function render(){
   renderMatchArea();
   renderTournamentStatus();
   if(currentUser===ADMIN) renderPinManage();
-  if(currentUser===ADMIN) window._renderTiebreaker();
   renderMessageCard();
   checkNightMode();
   checkLoserMessage();
@@ -2810,7 +2819,7 @@ function doLogin(name){
   $('currentUserBadge').textContent=(name===ADMIN?'👑 ':'')+name;
   const isAdmin=name===ADMIN;
   // Turnaus/ottelu/status-työkalut vain adminille
-  ['adminTournamentTools','adminMatchTools','adminStatusCard','tiebreakerCard'].forEach(id=>{
+  ['adminTournamentTools','adminMatchTools','adminStatusCard','tiebreakerBtnWrap'].forEach(id=>{
     const el=$(id); if(el) el.style.display=isAdmin?'':'none';
   });
   // PIN-koodit ja Käyttökerrat piilotetaan aina — ne ovat Asetukset-modaalissa
