@@ -22,8 +22,7 @@
     #night-banner{ display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1e293b; border:1px solid #334155; border-radius:14px; padding:12px 20px; font-size:14px; font-weight:700; color:#94a3b8; z-index:9998; box-shadow:0 4px 20px rgba(0,0,0,0.4); white-space:nowrap; animation:slideUpModal 0.4s ease; }
 
     /* Vihjaustila-nappi */
-    #hint-btn{ position:fixed; bottom:24px; right:16px; width:48px; height:48px; border-radius:50%; background:#1e293b; border:2px solid #334155; font-size:22px; cursor:pointer; z-index:9000; display:none; box-shadow:0 2px 10px rgba(0,0,0,0.3); transition:transform 0.15s; }
-    #hint-btn:active{ transform:scale(0.9); }
+
     @media (prefers-color-scheme: dark) {
       .score-card { background:#ffffff !important; color:#000000 !important; }
       .score-card .name { color:#000000 !important; font-weight:700; }
@@ -399,7 +398,7 @@
 <div id="loader-bar"></div>
 <canvas id="ice-canvas"></canvas>
 <div id="night-banner">🌙 Eikö ole jo nukkumaanmeno? 😴</div>
-<button id="hint-btn" title="Lähetä vihje adminille" onclick="window._sendHint()">👀</button>
+
 
 <div id="fb-status"></div>
 
@@ -1750,28 +1749,6 @@ function activateSwedishMode() {
 }
 
 // ============================
-// 5. VIHJAUSTILA 👀
-// ============================
-window._sendHint = async function() {
-  const btn = document.getElementById('hint-btn');
-  if (!btn) return;
-  btn.textContent = '✅';
-  btn.style.borderColor = '#22c55e';
-  try {
-    const snap = await getDoc(MESSAGES_DOC);
-    const msgs = snap.exists() ? (snap.data().messages || []) : [];
-    msgs.push({ from: currentUser, text: '👀', ts: new Date().toISOString(), hint: true });
-    await setDoc(MESSAGES_DOC, { messages: msgs });
-  } catch(e) {}
-  setTimeout(() => { btn.textContent = '👀'; btn.style.borderColor = '#334155'; }, 2000);
-};
-
-function showHintBtn(show) {
-  const btn = document.getElementById('hint-btn');
-  if (btn) btn.style.display = (show && currentUser && currentUser !== ADMIN) ? 'flex' : 'none';
-}
-
-// ============================
 // 6. MOTIVAATIOVIESTI HÄVIÄJÄLLE
 // ============================
 const LOSER_MSGS = [
@@ -2464,7 +2441,6 @@ function render(){
   if(currentUser===ADMIN) renderPinManage();
   renderMessageCard();
   checkNightMode();
-  showHintBtn(true);
   checkLoserMessage();
   if(currentUser===ADMIN) checkUnreadMessages();
   else checkPlayerUnread();
