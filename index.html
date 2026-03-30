@@ -510,7 +510,7 @@
           <h2 style="margin:8px 0">🔐 PIN-koodit</h2>
           <button id="togglePins2" class="btn small secondary">Näytä</button>
         </div>
-        <div id="pinManageArea2"></div>
+        <div id="pinManageArea2" style="display:none"></div>
       </div>
 
       <!-- Käyttökerrat -->
@@ -2768,7 +2768,10 @@ function renderPinManage2() {
 window._openSettingsPanel = function() {
   $('settingsModal').style.display = 'flex';
   renderPinManage2();
+  const area2 = $('pinManageArea2');
+  if (area2) area2.style.display = 'none';
   const btn2 = $('togglePins2');
+  if (btn2) btn2.textContent = 'Näytä';
   if (btn2 && !btn2._hooked) {
     btn2._hooked = true;
     let pinManageVisible2 = false;
