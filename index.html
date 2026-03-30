@@ -804,10 +804,17 @@
             <div class="faq-rule"><span>4️⃣ Lopputulos-osumat yhteensä</span><strong>Jos tasan</strong></div>
             <div class="faq-rule"><span>5️⃣ Maalintekijä-osumat yhteensä</span><strong>Jos tasan</strong></div>
             <div class="faq-rule"><span>6️⃣ Viimeisin ottelu pisteet</span><strong>Jos tasan</strong></div>
-            <div style="margin-top:8px;font-size:12px;color:var(--muted)">💡 Sijoitukset eivät ole jaettavissa. Jos kaikki kriteerit ovat tasan, järjestys määräytyy aakkosjärjestyksen mukaan.</div>
           </div>
         </div>
         <div id="scoreboard"></div>
+      </div>
+
+      <div class="card" id="tiebreakerCard" style="display:none">
+        <div class="stack" style="justify-content:space-between;margin-bottom:10px">
+          <h2 style="margin:0">🔍 Sijoitusten tiebreaker</h2>
+          <button class="btn small secondary" onclick="window._renderTiebreaker()">🔄</button>
+        </div>
+        <div id="tiebreakerArea"><p class="muted" style="font-size:13px">Ladataan...</p></div>
       </div>
 
       <div class="card" id="statsCard" style="display:none">
@@ -1083,6 +1090,137 @@ function sortedStandings(t){
   });
   return entries;
 }
+
+// ============================
+// TIEBREAKER ADMIN -NÄKYMÄ
+// ============================
+window._renderTiebreaker = function(){
+  const el = document.getElementById('tiebreakerArea');
+  if(!el) return;
+  const t = getTournament();
+  if(!t){ el.innerHTML='<p class="muted" style="font-size:13px">Valitse ensin turnaus.</p>'; return; }
+
+  const totals = calcTotals(t);
+  const sorted = sortedStandings(t);
+  const CRITERIA = ['matchWins','bestMatch','correctResults','correctScorers','lastMatchPts'];
+  const CRITERIA_LABELS = {
+    matchWins:      '2️⃣ Otteluvoitot',
+    bestMatch:      '3️⃣ Paras ottelutulos',
+    correctResults: '4️⃣ Lopputulos-osumat',
+    correctScorers: '5️⃣ Maalintekijä-osumat',
+    lastMatchPts:   '6️⃣ Viimeisin ottelu'
+  };
+  const CRITERIA_UNIT = {
+    matchWins: 'voittoa', bestMatch: 'p', correctResults: 'kpl',
+    correctScorers: 'kpl', lastMatchPts: 'p'
+  };
+
+  // Laske stats kaikille
+  const stats = {};
+  sorted.forEach(([p]) => { stats[p] = calcTiebreakerStats(t, p); });
+
+  // Tunnista tasaparit
+  const tiedPairs = [];
+  for(let i=0; i<sorted.length-1; i++){
+    for(let j=i+1; j<sorted.length; j++){
+      if(sorted[i][1] === sorted[j][1]) tiedPairs.push([sorted[i][0], sorted[j][0]]);
+    }
+  }
+
+  let html = '';
+
+  // Sijoitustaulukko
+  html += '<div style="overflow-x:auto;margin-bottom:16px">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html += '<thead><tr style="background:rgba(249,115,22,0.1)">';
+  html += '<th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--border)">Sija</th>';
+  html += '<th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--border)">Pelaaja</th>';
+  html += '<th style="padding:6px 8px;text-align:center;border-bottom:2px solid var(--border)">1️⃣ Pisteet</th>';
+  CRITERIA.forEach(c => {
+    html += `<th style="padding:6px 8px;text-align:center;border-bottom:2px solid var(--border);white-space:nowrap">${CRITERIA_LABELS[c]}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+  sorted.forEach(([p, pts], i) => {
+    const s = stats[p];
+    const isInTie = tiedPairs.some(pair => pair.includes(p));
+    const rowBg = isInTie ? 'background:rgba(251,191,36,0.07)' : '';
+    html += `<tr style="${rowBg};border-bottom:1px solid var(--border)">`;
+    html += `<td style="padding:6px 8px;font-weight:800;font-size:14px">${i===0?'🥇':i===1?'🥈':i===2?'🥉':'💩'}</td>`;
+    html += `<td style="padding:6px 8px;font-weight:700">${isInTie?'⚠️ ':''} ${p}</td>`;
+    html += `<td style="padding:6px 8px;text-align:center;font-weight:900;color:var(--primary)">${pts}</td>`;
+    CRITERIA.forEach(c => {
+      html += `<td style="padding:6px 8px;text-align:center">${s[c]} ${CRITERIA_UNIT[c]}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  // Tasatilanteiden erittely
+  if(tiedPairs.length === 0){
+    html += '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px 14px;font-size:13px;font-weight:700;color:#22c55e">✅ Ei tasatilanteita — kaikki sijoitukset määräytyvät suoraan pisteiden mukaan.</div>';
+  } else {
+    html += '<div style="font-weight:800;font-size:14px;margin-bottom:10px">⚠️ Tasatilanteiden läpikäynti:</div>';
+    tiedPairs.forEach(([a, b]) => {
+      const sa = stats[a], sb = stats[b];
+      const posA = sorted.findIndex(([p])=>p===a) + 1;
+      const posB = sorted.findIndex(([p])=>p===b) + 1;
+
+      html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:13px">`;
+      html += `<div style="font-weight:900;font-size:14px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)">${a} (${posA}. sija) vs ${b} (${posB}. sija)</div>`;
+
+      // Kriteeri 1: Pisteet
+      html += `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;padding:8px;border-radius:8px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2)">`;
+      html += `<div style="font-size:18px;flex-shrink:0">➖</div>`;
+      html += `<div><div style="font-weight:800">1️⃣ Kokonaispisteet — ei ratkaissut</div>`;
+      html += `<div style="color:var(--muted);margin-top:2px">${a}: <strong>${totals[a]} p</strong> · ${b}: <strong>${totals[b]} p</strong> — Tasan, siirrytään seuraavaan.</div></div>`;
+      html += `</div>`;
+
+      // Kriteerit 2–6 käydään järjestyksessä
+      let resolved = false;
+      CRITERIA.forEach((c, idx) => {
+        if(resolved) return;
+        const va = sa[c], vb = sb[c];
+        const label = CRITERIA_LABELS[c];
+        const unit = CRITERIA_UNIT[c];
+        if(va !== vb){
+          // Tämä ratkaisi
+          const winner = va > vb ? a : b;
+          const loser  = winner === a ? b : a;
+          const wVal   = winner === a ? va : vb;
+          const lVal   = winner === a ? vb : va;
+          html += `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;padding:8px;border-radius:8px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3)">`;
+          html += `<div style="font-size:18px;flex-shrink:0">✅</div>`;
+          html += `<div><div style="font-weight:800;color:#22c55e">${label} — RATKAISI</div>`;
+          html += `<div style="color:var(--muted);margin-top:2px">${a}: <strong>${va} ${unit}</strong> · ${b}: <strong>${vb} ${unit}</strong></div>`;
+          html += `<div style="margin-top:4px;font-weight:700">🏆 ${winner} voittaa (${wVal} vs ${lVal} ${unit})</div></div>`;
+          html += `</div>`;
+          resolved = true;
+        } else {
+          // Ei ratkaissut
+          html += `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;padding:8px;border-radius:8px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2)">`;
+          html += `<div style="font-size:18px;flex-shrink:0">➖</div>`;
+          html += `<div><div style="font-weight:800">${label} — ei ratkaissut</div>`;
+          html += `<div style="color:var(--muted);margin-top:2px">${a}: <strong>${va} ${unit}</strong> · ${b}: <strong>${vb} ${unit}</strong> — Tasan, siirrytään seuraavaan.</div></div>`;
+          html += `</div>`;
+        }
+      });
+
+      // Jos kaikki tasan
+      if(!resolved){
+        html += `<div style="display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3)">`;
+        html += `<div style="font-size:18px;flex-shrink:0">❌</div>`;
+        html += `<div><div style="font-weight:800;color:#dc2626">Kaikki 6 kriteeriä tasan</div>`;
+        html += `<div style="color:var(--muted);margin-top:2px">Järjestys säilyy nykyisellään.</div></div>`;
+        html += `</div>`;
+      }
+
+      html += `</div>`;
+    });
+  }
+
+  el.innerHTML = html;
+};
+
 
 // ============================
 // FAQ TOGGLE
@@ -2568,9 +2706,9 @@ function render(){
   renderMatchArea();
   renderTournamentStatus();
   if(currentUser===ADMIN) renderPinManage();
+  if(currentUser===ADMIN) window._renderTiebreaker();
   renderMessageCard();
   checkNightMode();
-  showHintBtn(true);
   checkLoserMessage();
   if(currentUser===ADMIN) checkUnreadMessages();
   else checkPlayerUnread();
@@ -2672,7 +2810,7 @@ function doLogin(name){
   $('currentUserBadge').textContent=(name===ADMIN?'👑 ':'')+name;
   const isAdmin=name===ADMIN;
   // Turnaus/ottelu/status-työkalut vain adminille
-  ['adminTournamentTools','adminMatchTools','adminStatusCard'].forEach(id=>{
+  ['adminTournamentTools','adminMatchTools','adminStatusCard','tiebreakerCard'].forEach(id=>{
     const el=$(id); if(el) el.style.display=isAdmin?'':'none';
   });
   // PIN-koodit ja Käyttökerrat piilotetaan aina — ne ovat Asetukset-modaalissa
