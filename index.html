@@ -96,6 +96,42 @@
     .actuals-card .kv-row{ grid-template-columns:minmax(0,180px) minmax(0,1fr); }
     @media(max-width:480px){ .actuals-card .kv-row{ grid-template-columns:minmax(0,140px) minmax(0,1fr); } }
     .actuals-card input, .actuals-card select{ padding:14px 16px; font-size:18px; border-radius:12px; }
+    /* FIREBASE KIRJAUTUMINEN */
+    #firebaseLoginScreen {
+        position:fixed; inset:0;
+        background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);
+        display:flex; flex-direction:column; align-items:center; justify-content:center;
+        z-index:99999; padding:24px;
+    }
+    .fb-login-logo { font-size:48px; margin-bottom:8px; text-align:center; }
+    .fb-login-title { font-size:26px; font-weight:900; color:#fff; margin-bottom:4px; text-align:center; }
+    .fb-login-sub { font-size:14px; color:#94a3b8; margin-bottom:32px; text-align:center; }
+    .fb-login-card {
+        background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12);
+        border-radius:18px; padding:28px 24px;
+        width:100%; max-width:360px;
+        display:flex; flex-direction:column; gap:14px;
+        backdrop-filter:blur(10px);
+    }
+    .fb-login-field { display:flex; flex-direction:column; gap:5px; }
+    .fb-login-field label { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#94a3b8; }
+    .fb-login-field input {
+        padding:13px 14px; border:1.5px solid rgba(255,255,255,0.15);
+        border-radius:10px; background:rgba(255,255,255,0.08);
+        font-size:16px; color:#fff; outline:none;
+    }
+    .fb-login-field input::placeholder { color:#64748b; }
+    .fb-login-field input:focus { border-color:var(--primary); background:rgba(255,255,255,0.12); }
+    .fb-login-error { color:#f87171; font-size:13px; font-weight:600; min-height:18px; text-align:center; }
+    .fb-login-btn {
+        padding:14px; background:var(--primary);
+        color:#fff; border:none; border-radius:10px;
+        font-size:16px; font-weight:700; cursor:pointer; margin-top:4px;
+        transition:filter 0.15s;
+    }
+    .fb-login-btn:hover { filter:brightness(1.1); }
+    .fb-login-btn:active { filter:brightness(0.88); }
+
     #loginScreen{ max-width:420px; margin:60px auto; text-align:center; }
     .pin-dot{ width:16px; height:16px; border-radius:50%; border:2px solid var(--border); background:transparent; transition:background 0.15s; }
     .pin-dot.filled{ background:var(--primary); border-color:var(--primary); }
@@ -420,8 +456,27 @@
 <!-- KIEKKO SCREENSAVER -->
 
 
+<!-- FIREBASE KIRJAUTUMINEN -->
+<div id="firebaseLoginScreen">
+    <div class="fb-login-logo">🏒</div>
+    <div class="fb-login-title">Turnausveikkaus</div>
+    <div class="fb-login-sub">Kirjaudu sisään jatkaaksesi</div>
+    <div class="fb-login-card">
+        <div class="fb-login-field">
+            <label>Sähköposti</label>
+            <input type="email" id="fbLoginEmail" placeholder="sinä@email.com" autocomplete="email">
+        </div>
+        <div class="fb-login-field">
+            <label>Salasana</label>
+            <input type="password" id="fbLoginPassword" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <div class="fb-login-error" id="fbLoginError"></div>
+        <button class="fb-login-btn" id="fbLoginBtn" onclick="window._fbDoLogin()">Kirjaudu sisään</button>
+    </div>
+</div>
+
 <!-- KIRJAUTUMINEN -->
-<div id="loginScreen">
+<div id="loginScreen" style="display:none">
   <div style="font-size:48px;margin-bottom:8px">🏒</div>
   <h1 style="font-size:26px;margin:0 0 6px">Turnausveikkaus</h1>
 
@@ -873,6 +928,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAsUte6gqukH14_80R6QE-sYR8d_nnaAFA",
@@ -885,9 +941,59 @@ const firebaseConfig = {
 
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
+const auth = getAuth(fbApp);
 window._firebaseDb = db; // Expose globally for non-module scripts
 const DATA_DOC = doc(db, "app", "data");
 const PINS_DOC = doc(db, "app", "pins");
+
+// ============================
+// FIREBASE AUTH
+// ============================
+window._fbDoLogin = async function(){
+    const email = document.getElementById('fbLoginEmail').value.trim();
+    const password = document.getElementById('fbLoginPassword').value;
+    const err = document.getElementById('fbLoginError');
+    const btn = document.getElementById('fbLoginBtn');
+    err.textContent = '';
+    if(!email || !password){ err.textContent = 'Täytä sähköposti ja salasana.'; return; }
+    btn.textContent = 'Kirjaudutaan...';
+    btn.disabled = true;
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+    } catch(e) {
+        btn.textContent = 'Kirjaudu sisään';
+        btn.disabled = false;
+        if(e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found'){
+            err.textContent = 'Väärä sähköposti tai salasana.';
+        } else if(e.code === 'auth/too-many-requests'){
+            err.textContent = 'Liian monta yritystä. Yritä myöhemmin.';
+        } else {
+            err.textContent = 'Kirjautumisvirhe. Tarkista yhteys.';
+        }
+    }
+};
+
+document.getElementById('fbLoginPassword').addEventListener('keydown', e => {
+    if(e.key === 'Enter') window._fbDoLogin();
+});
+document.getElementById('fbLoginEmail').addEventListener('keydown', e => {
+    if(e.key === 'Enter') document.getElementById('fbLoginPassword').focus();
+});
+
+onAuthStateChanged(auth, user => {
+    if(user){
+        // Firebase-kirjautuminen onnistui — näytä sisäinen PIN-valinta
+        document.getElementById('firebaseLoginScreen').style.display = 'none';
+        document.getElementById('loginScreen').style.display = '';
+    } else {
+        // Ei kirjautunut — näytä Firebase-kirjautuminen
+        document.getElementById('firebaseLoginScreen').style.display = 'flex';
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appScreen').style.display = 'none';
+        document.getElementById('fbLoginBtn').textContent = 'Kirjaudu sisään';
+        document.getElementById('fbLoginBtn').disabled = false;
+    }
+});
 
 // ============================
 // VAKIOT
