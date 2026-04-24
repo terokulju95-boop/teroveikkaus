@@ -982,15 +982,18 @@ document.getElementById('fbLoginEmail').addEventListener('keydown', e => {
 
 onAuthStateChanged(auth, user => {
     if(user){
-        // Firebase-kirjautuminen onnistui — näytä sisäinen PIN-valinta
+        // Firebase-kirjautuminen onnistui — piilota Firebase-ruutu
         document.getElementById('firebaseLoginScreen').style.display = 'none';
-        document.getElementById('loginScreen').style.display = '';
+        // Nayta PIN-valinta VAIN jos sovellus ei ole jo auki localStorage-sessiosta
+        if(document.getElementById('appScreen').style.display === 'none') {
+            document.getElementById('loginScreen').style.display = '';
+        }
     } else {
-        // Ei kirjautunut — näytä Firebase-kirjautuminen
+        // Ei Firebase-kirjautumista — nayta Firebase-kirjautumisruutu
         document.getElementById('firebaseLoginScreen').style.display = 'flex';
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('appScreen').style.display = 'none';
-        document.getElementById('fbLoginBtn').textContent = 'Kirjaudu sisään';
+        document.getElementById('fbLoginBtn').textContent = 'Kirjaudu sisaan';
         document.getElementById('fbLoginBtn').disabled = false;
     }
 });
