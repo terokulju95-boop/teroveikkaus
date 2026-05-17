@@ -1004,7 +1004,7 @@ onAuthStateChanged(auth, user => {
 const PLAYERS = ["Roosa","Timo","Tero","Tiina","Tepa","Äiti","Iskä"];
 const ADMIN = "Tero";
 const PENALTY_REASONS = ['Koukkaaminen','Mailasta kiinnipitäminen','Estäminen','Päähän kohdistuva taklaus','Huitominen','Väkivaltaisuus','Ryntäys','Tappelu','Liian monta pelaajaa jäällä','Poikittainen maila','Kampitus','Kiinnipitäminen','Mailan tai esineen heittäminen','Laitataklaus','Sukeltaminen','Kyynärpäätaklaus','Pelin viivyttäminen','Kiekon sulkeminen','Korkea maila','Selästä taklaaminen','Käytösrangaistus','Päällä iskeminen','Polvitaklaus','Mailan päällä lyöminen tai sen yritys','Keihästäminen','Jalkapyyhkäisy','Rikkoutuneella mailalla pelaaminen','Väärä varuste','Pelaajaa ei ole merkitty pöytäkirjaan','Potkaisee tai sylkee','Ei jäähyä'];
-const GOAL_SCORERS = ['Harri Säteri (MV)','Joonas Korpisalo (MV)','Justus Annunen (MV)','Olli Määttä (P)','Mikko Lehtonen (P)','Henri Jokiharju (P)','Vili Saarijärvi (P)','Nikolas Matinpalo (P)','Ville Heinola (P)','Mikael Seppälä (P)','Urho Vaakanainen (P)','Jesse Puljujärvi (H)','Aleksander Barkov (H)','Waltteri Merelä (H)','Patrik Puistola (H)','Sami Päivärinta (H)','Hannes Björninen (H)','Janne Kuokkanen (H)','Anton Lundell (H)','Aatu Räty (H)','Eemil Erholtz (H)','Sakari Manninen (H)','Saku Mäenalanen (H)','Teuvo Teräväinen (H)','Lenni Hämeenaho (H)','Ei maalia'];
+const GOAL_SCORERS = ['Harri Säteri (MV)','Joonas Korpisalo (MV)','Justus Annunen (MV)','Olli Määttä (P)','Mikko Lehtonen (P)','Henri Jokiharju (P)','Vili Saarijärvi (P)','Nikolas Matinpalo (P)','Ville Heinola (P)','Mikael Seppälä (P)','Urho Vaakanainen (P)','Jesse Puljujärvi (H)','Aleksander Barkov (H)','Mikael Granlund (H)','Waltteri Merelä (H)','Patrik Puistola (H)','Sami Päivärinta (H)','Hannes Björninen (H)','Janne Kuokkanen (H)','Anton Lundell (H)','Aatu Räty (H)','Eemil Erholtz (H)','Sakari Manninen (H)','Saku Mäenalanen (H)','Teuvo Teräväinen (H)','Lenni Hämeenaho (H)','Ei maalia'];
 const PENALTY_TAKERS = [...GOAL_SCORERS.slice(0,-1),'Ei jäähyä','Joukkuerangaistus'];
 const FIELDS = [
   {key:'lopputulos',label:'Lopputulos'},{key:'ekan_maalintekija',label:'1. Maalintekijä'},
@@ -2116,6 +2116,15 @@ async function loadData(){
   // Kuuntele muutoksia – ÄLÄ nollaa käyttäjän valintoja
   onSnapshot(DATA_DOC, snap => {
     if(!snap.exists() || isSaving) return;
+    // Älä renderöi jos käyttäjä on aktiivisesti muokkaamassa kenttää
+    // (select-picker, input, textarea auki) – muuten DOM tuhoutuu alta
+    const ae = document.activeElement;
+    const userEditing = ae && (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA');
+    if(userEditing){
+      // Päivitä data taustalla mutta älä renderöi – renderöi kun käyttäjä poistuu kentästä
+      try{ const d=JSON.parse(snap.data().json); if(d&&d.tournaments) window._pendingSnapshotData=d; }catch(e){}
+      return;
+    }
     try{
       const prevTid=tid, prevMid=mid;
       data = JSON.parse(snap.data().json);
@@ -2273,7 +2282,13 @@ function attachPredListeners(el, t, matchId){
       const pl=hi.dataset.predHome.split(':')[0];
       t.predictions[matchId]=t.predictions[matchId]||{};
       t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
-      t.predictions[matchId][pl]['lopputulos']=(hi.value&&ai.value)?(hi.value+'-'+ai.value):'';
+      // Tallennetaan vain kun molemmat taytettyna; jos molemmat tyhjia nollataan;
+      // muuten sailytetaan vanha arvo (kayttaja viela kirjoittaa toista kenttaa)
+      if(hi.value && ai.value){
+        t.predictions[matchId][pl]['lopputulos']=hi.value+'-'+ai.value;
+      } else if(!hi.value && !ai.value){
+        t.predictions[matchId][pl]['lopputulos']='';
+      }
       return;
     }
     if(e.target.dataset.predMin!==undefined || e.target.dataset.predSec!==undefined){
@@ -2283,7 +2298,12 @@ function attachPredListeners(el, t, matchId){
       const pl=mi.dataset.predMin.split(':')[0];
       t.predictions[matchId]=t.predictions[matchId]||{};
       t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
-      t.predictions[matchId][pl]['ekan_maali_aika']=(mi.value&&si.value)?(mi.value+':'+si.value):'';
+      // Sama logiikka: tallenna vain kun molemmat taytettyna
+      if(mi.value && si.value){
+        t.predictions[matchId][pl]['ekan_maali_aika']=mi.value+':'+si.value;
+      } else if(!mi.value && !si.value){
+        t.predictions[matchId][pl]['ekan_maali_aika']='';
+      }
       return;
     }
     const ds=e.target.dataset.pred; if(!ds) return;
@@ -2292,10 +2312,22 @@ function attachPredListeners(el, t, matchId){
     t.predictions[matchId][pl]=t.predictions[matchId][pl]||{};
     t.predictions[matchId][pl][key]=e.target.value;
   };
+
+  // Blur-kasittelija: tallennetaan vain kun poistutaan koko combo-parista
+  // (ei tallenneta heti kun siirrytaan kentasta toiseen saman comboen sisalla)
+  const blurHandler = e => {
+    setTimeout(function(){
+      var nextFocus = document.activeElement;
+      var par = e.target.closest('.score-combo, .time-combo');
+      if(par && par.contains(nextFocus)) return;
+      save(); renderScoreboard();
+    }, 0);
+  };
+
   el.querySelectorAll('input[data-pred],input[data-pred-home],input[data-pred-away],input[data-pred-min],input[data-pred-sec]')
-    .forEach(i=>{ i.addEventListener('input',handle); i.addEventListener('blur',()=>{ save(); renderScoreboard(); }); });
+    .forEach(function(i){ i.addEventListener('input',handle); i.addEventListener('blur', blurHandler); });
   el.querySelectorAll('select[data-pred]')
-    .forEach(s=>{ s.addEventListener('change',e=>{ handle(e); save(); renderScoreboard(); }); });
+    .forEach(function(s){ s.addEventListener('change',function(e){ handle(e); save(); renderScoreboard(); }); });
 }
 
 // ============================
@@ -2307,15 +2339,30 @@ function attachActualListeners(el, t, matchId){
       const par=e.target.closest('.score-combo'); if(!par) return;
       const hi=par.querySelector('[data-act-home]'), ai=par.querySelector('[data-act-away]');
       t.actuals[matchId]=t.actuals[matchId]||{};
-      t.actuals[matchId]['lopputulos']=(hi.value&&ai.value)?(hi.value+'-'+ai.value):'';
-      renderScoreboard(); save(); return;
+      // Tallennetaan vain kun molemmat taytettyna; jos molemmat tyhjia nollataan
+      if(hi.value && ai.value){
+        t.actuals[matchId]['lopputulos']=hi.value+'-'+ai.value;
+        renderScoreboard(); save();
+      } else if(!hi.value && !ai.value){
+        t.actuals[matchId]['lopputulos']='';
+        renderScoreboard(); save();
+      }
+      // Jos vain toinen taytettyna, ei tallenneta viela
+      return;
     }
     if(e.target.dataset.actMin!==undefined || e.target.dataset.actSec!==undefined){
       const par=e.target.closest('.time-combo'); if(!par) return;
       const mi=par.querySelector('[data-act-min]'), si=par.querySelector('[data-act-sec]');
       t.actuals[matchId]=t.actuals[matchId]||{};
-      t.actuals[matchId]['ekan_maali_aika']=(mi.value&&si.value)?(mi.value+':'+si.value):'';
-      renderScoreboard(); save(); return;
+      // Sama logiikka
+      if(mi.value && si.value){
+        t.actuals[matchId]['ekan_maali_aika']=mi.value+':'+si.value;
+        renderScoreboard(); save();
+      } else if(!mi.value && !si.value){
+        t.actuals[matchId]['ekan_maali_aika']='';
+        renderScoreboard(); save();
+      }
+      return;
     }
     const key=e.target.dataset.act; if(!key) return;
     t.actuals[matchId]=t.actuals[matchId]||{};
@@ -2323,9 +2370,9 @@ function attachActualListeners(el, t, matchId){
     renderScoreboard(); save();
   };
   el.querySelectorAll('input[data-act],input[data-act-home],input[data-act-away],input[data-act-min],input[data-act-sec]')
-    .forEach(i=>i.addEventListener('input',handle));
+    .forEach(function(i){ i.addEventListener('input',handle); });
   el.querySelectorAll('select[data-act]')
-    .forEach(s=>s.addEventListener('change',handle));
+    .forEach(function(s){ s.addEventListener('change',handle); });
 }
 
 // ============================
@@ -3259,6 +3306,37 @@ async function checkPlayerUnread() {
 
 buildLogin();
 document.querySelectorAll('.pin-key').forEach(btn=>btn.addEventListener('click',()=>handlePinKey(btn.dataset.v)));
+
+// Globaali blur-kuuntelija: jos onSnapshot-paivitys on odottamassa (kayttaja oli
+// kentassa kun snapshot saapui), renderoidaan se kun kayttaja poistuu kentasta
+document.addEventListener('blur', function() {
+  setTimeout(function() {
+    const ae = document.activeElement;
+    const stillEditing = ae && (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA');
+    if(!stillEditing && window._pendingSnapshotData) {
+      var pending = window._pendingSnapshotData;
+      window._pendingSnapshotData = null;
+      if(!isSaving) {
+        try {
+          var prevTid=tid, prevMid=mid;
+          data = pending;
+          if(!data.tournaments) data.tournaments=[];
+          var tOk = prevTid && data.tournaments.find(function(t){ return String(t.id)===String(prevTid); });
+          if(tOk){
+            tid=prevTid;
+            var tObj=data.tournaments.find(function(t){ return String(t.id)===String(prevTid); });
+            var mOk = prevMid && (tObj.matches||[]).find(function(m){ return String(m.id)===String(prevMid); });
+            mid = mOk ? prevMid : null;
+          } else {
+            tid=data.selectedTournamentId||null;
+            mid=data.selectedMatchId||null;
+          }
+          render();
+        }catch(e){}
+      }
+    }
+  }, 100);
+}, true); // capture-vaiheessa jotta toimii myos select-elementeilla
 
 const savedUser=localStorage.getItem('tv_user');
 if(savedUser && PLAYERS.includes(savedUser)) doLogin(savedUser);
