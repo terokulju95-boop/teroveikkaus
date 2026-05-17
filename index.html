@@ -4829,21 +4829,7 @@ function attachTeroPress(){
 }
 attachTeroPress();
 
-function attachScoreboardPress(){
-  var sb=document.getElementById('scoreboard');
-  if(!sb){ setTimeout(attachScoreboardPress,1000); return; }
-  var t=null;
-  function tryStart(e){
-    var card=e.target.closest('.score-card');
-    if(card) return; // Korteilla on oma logiikka
-    t=setTimeout(function(){ window._openDodge(); },LONG_PRESS_MS);
-  }
-  function cancel(){ clearTimeout(t); }
-  sb.addEventListener('mousedown',tryStart);
-  sb.addEventListener('touchstart',function(e){ tryStart(e); },{passive:true});
-  ['mouseup','mouseleave','touchend','touchcancel'].forEach(function(ev){ sb.addEventListener(ev,cancel); });
-}
-attachScoreboardPress();
+
 
 })();
 
