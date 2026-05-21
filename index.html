@@ -147,6 +147,7 @@
     .player-status-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:8px; }
     .player-status-card{ border-radius:10px; padding:8px 10px; text-align:center; font-weight:700; font-size:13px; border:2px solid; }
     .player-status-card.voted{ background:#dcfce7; border-color:#22c55e; color:#166534; }
+    .player-status-card.partial{ background:#ffedd5; border-color:#f97316; color:#9a3412; }
     .player-status-card.not-voted{ background:#fee2e2; border-color:#dc2626; color:#991b1b; }
     .player-status-card.done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
     .lock-banner{ background:#dc2626; color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:10px; }
@@ -1032,6 +1033,7 @@ let viewMode = 'cards';
 let currentUser = null;
 let isSaving = false;
 let saveQueued = false;
+let localDirty = false; // Onko paikallisia tallentamattomia muutoksia (iOS race condition -suojaus)
 let cdTimer = null;      // countdown setInterval handle
 let cdRunning = false;   // guard: is countdown active?
 
@@ -1419,11 +1421,15 @@ async function save(){
   try{ localStorage.setItem('tv_bkp', JSON.stringify(data)); }catch(e){}
   if(isSaving){ saveQueued=true; return; }
   isSaving=true; showStatus('💾 Tallennetaan…','#f97316');
+  let saveOk=false;
   try{
     await setDoc(DATA_DOC, {json: JSON.stringify(data)});
+    saveOk=true;
     showStatus('✅ Tallennettu','#22c55e'); hideStatus();
   }catch(e){ showStatus('❌ Tallennus epäonnistui','#dc2626'); }
   isSaving=false;
+  // Nollaa dirty-lippu vain jos onnistui JA jonossa ei ole uusia muutoksia
+  if(saveOk && !saveQueued) localDirty=false;
   if(saveQueued){ saveQueued=false; save(); }
 }
 
@@ -2116,12 +2122,13 @@ async function loadData(){
   // Kuuntele muutoksia – ÄLÄ nollaa käyttäjän valintoja
   onSnapshot(DATA_DOC, snap => {
     if(!snap.exists() || isSaving) return;
-    // Älä renderöi jos käyttäjä on aktiivisesti muokkaamassa kenttää
-    // (select-picker, input, textarea auki) – muuten DOM tuhoutuu alta
+    // Älä renderöi jos käyttäjä on aktiivisesti muokkaamassa kenttää TAI
+    // jos paikallisia tallentamattomia muutoksia on jonossa (iOS race condition -suojaus)
     const ae = document.activeElement;
     const userEditing = ae && (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA');
-    if(userEditing){
-      // Päivitä data taustalla mutta älä renderöi – renderöi kun käyttäjä poistuu kentästä
+    if(userEditing || localDirty){
+      // Päivitä data taustalla mutta älä renderöi – sovelletaan kun käyttäjä poistuu kentästä
+      // ja paikalliset muutokset on tallennettu
       try{ const d=JSON.parse(snap.data().json); if(d&&d.tournaments) window._pendingSnapshotData=d; }catch(e){}
       return;
     }
@@ -2275,6 +2282,7 @@ function predCardHTML(t, match, player, showColors){
 // ============================
 function attachPredListeners(el, t, matchId){
   const handle = e => {
+    localDirty = true; // Merkitään paikalliset muutokset
     if(e.target.dataset.predHome!==undefined || e.target.dataset.predAway!==undefined){
       const par=e.target.closest('.score-combo'); if(!par) return;
       const hi=par.querySelector('[data-pred-home]'), ai=par.querySelector('[data-pred-away]');
@@ -2335,6 +2343,7 @@ function attachPredListeners(el, t, matchId){
 // ============================
 function attachActualListeners(el, t, matchId){
   const handle = e => {
+    localDirty = true; // Merkitään paikalliset muutokset
     if(e.target.dataset.actHome!==undefined || e.target.dataset.actAway!==undefined){
       const par=e.target.closest('.score-combo'); if(!par) return;
       const hi=par.querySelector('[data-act-home]'), ai=par.querySelector('[data-act-away]');
@@ -2541,11 +2550,23 @@ function renderPlayerStatus(){
   const preds=(t.predictions||{})[match.id]||{};
   const locked=isLocked(match);
   const hist=(t.editHistory||{})[match.id]||{};
+  const total=FIELDS.length; // 18
   el.innerHTML='<div class="player-status-grid">'+PLAYERS.map(p=>{
-    const voted=preds[p]&&Object.values(preds[p]).some(v=>v!=='');
-    const cls=locked?'done':voted?'voted':'not-voted';
+    const playerPreds=preds[p]||{};
+    const filled=FIELDS.filter(f=>{
+      const v=playerPreds[f.key];
+      return v!=null && v!=='';
+    }).length;
+    const isComplete=filled===total;
+    const hasNone=filled===0;
+    let cls, icon;
+    if(locked){ cls='done'; icon=isComplete?'✅':hasNone?'❌':'⏳'; }
+    else if(isComplete){ cls='voted'; icon='✅'; }
+    else if(hasNone){ cls='not-voted'; icon='❌'; }
+    else { cls='partial'; icon='⏳'; }
     const lastEdit=hist[p]?new Date(hist[p]).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-    return '<div class="player-status-card '+cls+'">'+(voted?'✅':'❌')+' '+p+
+    return '<div class="player-status-card '+cls+'">'+icon+' '+p+
+      ' <span style="opacity:0.85;font-weight:800">'+filled+'/'+total+'</span>'+
       (lastEdit?'<div style="font-size:10px;opacity:0.7;margin-top:2px">'+lastEdit+'</div>':'')+
     '</div>';
   }).join('')+'</div>';
@@ -2585,10 +2606,18 @@ function renderTopThree(){
 
   let adminStatus='';
   if(isAdmin){
-    adminStatus='<div style="margin-bottom:10px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">👥 Kuka on veikannut?</div><div class="player-status-grid">'+
+    adminStatus='<div style="margin-bottom:10px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">👥 Kuka on veikannut? (kolmen kärki)</div><div class="player-status-grid">'+
     PLAYERS.map(p=>{
-      const voted=(t.topThreePrediction[p]||[]).some(v=>v!=='');
-      return `<div class="player-status-card ${voted?'voted':'not-voted'}">${voted?'✅':'❌'} ${p}</div>`;
+      const arr=t.topThreePrediction[p]||[];
+      const filled=arr.filter(v=>v!=='').length;
+      const total=3;
+      const isComplete=filled===total;
+      const hasNone=filled===0;
+      let cls, icon;
+      if(isComplete){ cls='voted'; icon='✅'; }
+      else if(hasNone){ cls='not-voted'; icon='❌'; }
+      else { cls='partial'; icon='⏳'; }
+      return `<div class="player-status-card ${cls}">${icon} ${p} <span style="opacity:0.85;font-weight:800">${filled}/${total}</span></div>`;
     }).join('')+'</div></div>';
   }
 
@@ -2622,12 +2651,14 @@ function renderTopThree(){
   if(isAdmin && locked){
     [0,1,2].forEach(i=>{ const s=wrap.querySelector('[data-t3a="'+i+'"]'); if(s&&aT3[i]) s.value=aT3[i]; });
     wrap.querySelectorAll('[data-t3a]').forEach(inp=>inp.addEventListener('change',e=>{
+      localDirty = true;
       t.actualTopThree[+e.target.dataset.t3a]=e.target.value; renderScoreboard(); save();
     }));
   }
   if(!locked){
     [0,1,2].forEach(i=>{ const s=wrap.querySelector('[data-t3m="'+i+'"]'); if(s&&uPred[i]) s.value=uPred[i]; });
     wrap.querySelectorAll('[data-t3m]').forEach(inp=>inp.addEventListener('change',e=>{
+      localDirty = true;
       const idx=+e.target.dataset.t3m;
       t.topThreePrediction[currentUser]=t.topThreePrediction[currentUser]||['','',''];
       t.topThreePrediction[currentUser][idx]=e.target.value;
@@ -3309,11 +3340,12 @@ document.querySelectorAll('.pin-key').forEach(btn=>btn.addEventListener('click',
 
 // Globaali blur-kuuntelija: jos onSnapshot-paivitys on odottamassa (kayttaja oli
 // kentassa kun snapshot saapui), renderoidaan se kun kayttaja poistuu kentasta
+// JA paikalliset muutokset on tallennettu
 document.addEventListener('blur', function() {
   setTimeout(function() {
     const ae = document.activeElement;
     const stillEditing = ae && (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA');
-    if(!stillEditing && window._pendingSnapshotData) {
+    if(!stillEditing && !localDirty && window._pendingSnapshotData) {
       var pending = window._pendingSnapshotData;
       window._pendingSnapshotData = null;
       if(!isSaving) {
