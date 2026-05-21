@@ -75,6 +75,15 @@
     .time-combo input{ width:64px; text-align:center; }
     .colon{ font-weight:800; }
     .pts-badge{ display:inline-block; background:#111827; color:#fff; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px; }
+    .manual-save-wrap{ margin-top:12px; padding-top:12px; border-top:2px dashed #e5e7eb; text-align:center; }
+    .manual-save-btn{ background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff; border:none; border-radius:12px; padding:14px 28px; font-size:15px; font-weight:800; cursor:pointer; box-shadow:0 4px 12px rgba(34,197,94,0.35); transition:all 0.15s; width:100%; max-width:320px; }
+    .manual-save-btn:active{ transform:scale(0.96); }
+    .manual-save-btn:disabled{ opacity:0.6; cursor:wait; }
+    .manual-save-status{ margin-top:10px; font-size:14px; font-weight:700; min-height:20px; padding:6px 10px; border-radius:8px; display:none; }
+    .manual-save-status.success{ display:block; background:#dcfce7; color:#166534; border:1px solid #22c55e; }
+    .manual-save-status.partial{ display:block; background:#ffedd5; color:#9a3412; border:1px solid #f97316; }
+    .manual-save-status.error{ display:block; background:#fee2e2; color:#991b1b; border:1px solid #dc2626; }
+    .manual-save-status.info{ display:block; background:#dbeafe; color:#1e40af; border:1px solid #3b82f6; }
     .card-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
     .pill{ display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#fafafa; font-size:12px }
     .t3-grid{ display:grid; gap:10px; grid-template-columns:1fr; }
@@ -928,7 +937,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -1406,6 +1415,70 @@ function hideStatus(){ setTimeout(()=>{ const el=$('fb-status'); if(el) el.style
 // ============================
 // FIREBASE
 // ============================
+
+// Yhdistää tämän käyttäjän muutokset palvelimen tuoreimpaan dataan.
+// EI koskaan ylikirjoita toisten käyttäjien veikkauksia.
+// Admin-käyttäjälle myös faktat, ottelutiedot, turnausrakenne.
+function mergeUserChanges(serverData, localData, user){
+  serverData.tournaments = serverData.tournaments || [];
+  const isAdmin = (user === ADMIN);
+
+  (localData.tournaments || []).forEach(localT => {
+    let serverT = serverData.tournaments.find(t => String(t.id) === String(localT.id));
+    if(!serverT){
+      // Uusi turnaus paikallisesti – vain admin voi luoda
+      if(isAdmin){
+        serverData.tournaments.push(JSON.parse(JSON.stringify(localT)));
+      }
+      return;
+    }
+
+    // 1) Käyttäjän omat veikkaukset kaikissa peleissä
+    serverT.predictions = serverT.predictions || {};
+    Object.keys(localT.predictions || {}).forEach(matchId => {
+      const localMatchPreds = localT.predictions[matchId];
+      if(localMatchPreds && localMatchPreds[user] !== undefined){
+        serverT.predictions[matchId] = serverT.predictions[matchId] || {};
+        serverT.predictions[matchId][user] = JSON.parse(JSON.stringify(localMatchPreds[user]));
+      }
+    });
+
+    // 2) Käyttäjän oma top-3 ennustus
+    serverT.topThreePrediction = serverT.topThreePrediction || {};
+    const localT3 = (localT.topThreePrediction || {})[user];
+    if(localT3 !== undefined){
+      serverT.topThreePrediction[user] = JSON.parse(JSON.stringify(localT3));
+    }
+
+    // 3) Käyttäjän muokkaushistoria
+    serverT.editHistory = serverT.editHistory || {};
+    Object.keys(localT.editHistory || {}).forEach(matchId => {
+      const localHist = localT.editHistory[matchId];
+      if(localHist && localHist[user]){
+        serverT.editHistory[matchId] = serverT.editHistory[matchId] || {};
+        serverT.editHistory[matchId][user] = localHist[user];
+      }
+    });
+
+    // 4) Admin: yhdistä myös ottelut, faktat, turnauksen rakenne
+    if(isAdmin){
+      if(localT.name !== undefined) serverT.name = localT.name;
+      if(localT.matches !== undefined) serverT.matches = JSON.parse(JSON.stringify(localT.matches));
+      if(localT.actuals !== undefined) serverT.actuals = JSON.parse(JSON.stringify(localT.actuals));
+      if(localT.actualTopThree !== undefined) serverT.actualTopThree = JSON.parse(JSON.stringify(localT.actualTopThree));
+      if(localT.finished !== undefined) serverT.finished = localT.finished;
+    }
+  });
+
+  // Admin voi poistaa turnauksia ja muuttaa valintoja
+  if(isAdmin){
+    const localIds = new Set((localData.tournaments || []).map(t => String(t.id)));
+    serverData.tournaments = serverData.tournaments.filter(st => localIds.has(String(st.id)));
+    if(localData.selectedTournamentId !== undefined) serverData.selectedTournamentId = localData.selectedTournamentId;
+    if(localData.selectedMatchId !== undefined) serverData.selectedMatchId = localData.selectedMatchId;
+  }
+}
+
 async function save(){
   data.selectedTournamentId = tid;
   data.selectedMatchId = mid;
@@ -1423,10 +1496,42 @@ async function save(){
   isSaving=true; showStatus('💾 Tallennetaan…','#f97316');
   let saveOk=false;
   try{
-    await setDoc(DATA_DOC, {json: JSON.stringify(data)});
+    // Transaktio: lue tuorein palvelimelta, yhdistä omat muutokset, kirjoita atomisesti.
+    // Firestore yrittää automaattisesti uudestaan jos toinen käyttäjä kirjoittaa samaan aikaan.
+    const merged = await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(DATA_DOC);
+      const serverData = snap.exists() ? JSON.parse(snap.data().json) : {tournaments:[]};
+      mergeUserChanges(serverData, data, currentUser);
+      transaction.set(DATA_DOC, {json: JSON.stringify(serverData)});
+      return serverData;
+    });
+    // Päivitä paikallinen data yhdistettyyn versioon (sisältää myös muiden muutokset)
+    const prevTid = tid, prevMid = mid;
+    data = merged;
+    if(!data.tournaments) data.tournaments = [];
+    const tOk = prevTid && data.tournaments.find(t => String(t.id) === String(prevTid));
+    if(tOk){
+      tid = prevTid;
+      const tObj = data.tournaments.find(t => String(t.id) === String(prevTid));
+      const mOk = prevMid && (tObj.matches || []).find(m => String(m.id) === String(prevMid));
+      mid = mOk ? prevMid : null;
+    }
+    // Renderöi uudelleen jotta event handlerit saavat tuoreen tournament-viitteen.
+    // Jos kayttaja on aktiivisesti kentassa (esim. select avoinna),
+    // siirretaan render odottamaan blur-tapahtumaa _pendingSnapshotData:n kautta.
+    const ae = document.activeElement;
+    const userEditing = ae && (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA');
+    if(userEditing){
+      window._pendingSnapshotData = merged;
+    } else {
+      render();
+    }
     saveOk=true;
     showStatus('✅ Tallennettu','#22c55e'); hideStatus();
-  }catch(e){ showStatus('❌ Tallennus epäonnistui','#dc2626'); }
+  }catch(e){
+    console.error('Save error:', e);
+    showStatus('❌ Tallennus epäonnistui','#dc2626');
+  }
   isSaving=false;
   // Nollaa dirty-lippu vain jos onnistui JA jonossa ei ole uusia muutoksia
   if(saveOk && !saveQueued) localDirty=false;
@@ -2271,10 +2376,12 @@ function predCardHTML(t, match, player, showColors){
     return `<div class="kv-row ${ok?'correct':''} ${bad?'incorrect':''}" style="${delay}">`+
            `<div class="kv-label">${f.label}</div>${w}</div>`;
   }).join('');
+  // Tallennus-nappi näytetään vain käyttäjän omassa kortissa kun veikkaus on auki
+  const saveBtn = canEdit ? `<div class="manual-save-wrap"><button class="manual-save-btn" data-manual-save="${match.id}">💾 Tallenna veikkaus</button><div class="manual-save-status" data-manual-save-status="${match.id}"></div></div>` : '';
   return `<div class="person-card"><div class="card-head">`+
          `<div class="person-title">${player===ADMIN?'👑 ':''}${player}</div>`+
          `${showColors?`<div class="pts-badge">${pts} p</div>`:''}</div>`+
-         `<div class="kv">${rows}</div></div>`;
+         `<div class="kv">${rows}</div>${saveBtn}</div>`;
 }
 
 // ============================
@@ -2336,6 +2443,96 @@ function attachPredListeners(el, t, matchId){
     .forEach(function(i){ i.addEventListener('input',handle); i.addEventListener('blur', blurHandler); });
   el.querySelectorAll('select[data-pred]')
     .forEach(function(s){ s.addEventListener('change',function(e){ handle(e); save(); renderScoreboard(); }); });
+
+  // "Tallenna veikkaus" -nappi: pakota tallennus ja varmista palvelimelta
+  el.querySelectorAll('button[data-manual-save]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const matchId = btn.dataset.manualSave;
+      manualSavePredictions(matchId, btn);
+    });
+  });
+}
+
+// ============================
+// MANUAALINEN TALLENNUS + VERIFIOINTI
+// ============================
+async function manualSavePredictions(matchId, btnEl){
+  const t = getTournament();
+  if(!t || !matchId) return;
+  const statusEl = document.querySelector('[data-manual-save-status="'+matchId+'"]');
+  const showResult = (cls, txt) => {
+    if(statusEl){
+      statusEl.className = 'manual-save-status ' + cls;
+      statusEl.textContent = txt;
+    }
+  };
+
+  if(btnEl){ btnEl.disabled = true; btnEl.textContent = '💾 Tallennetaan…'; }
+  showResult('info', '💾 Tallennetaan ja varmistetaan…');
+
+  // Pakota tallennus läpi
+  localDirty = true;
+  try { await save(); } catch(e){}
+
+  // Odota että jonossa olevat tallennukset valmistuvat
+  let waited = 0;
+  while((isSaving || saveQueued) && waited < 10000){
+    await new Promise(r => setTimeout(r, 100));
+    waited += 100;
+  }
+
+  // Lue palvelimelta varmistukseksi
+  let serverPreds = {};
+  let readOk = false;
+  try {
+    const snap = await getDoc(DATA_DOC);
+    if(snap.exists()){
+      const serverData = JSON.parse(snap.data().json);
+      const serverT = (serverData.tournaments || []).find(tt => String(tt.id) === String(t.id));
+      if(serverT){
+        serverPreds = ((serverT.predictions || {})[matchId] || {})[currentUser] || {};
+        readOk = true;
+      }
+    }
+  } catch(e){
+    showResult('error', '❌ Tarkistus epäonnistui: ' + (e.message || 'verkko'));
+    if(btnEl){ btnEl.disabled = false; btnEl.textContent = '💾 Tallenna veikkaus'; }
+    return;
+  }
+
+  if(!readOk){
+    showResult('error', '❌ Palvelimelta ei saatu vastausta');
+    if(btnEl){ btnEl.disabled = false; btnEl.textContent = '💾 Tallenna veikkaus'; }
+    return;
+  }
+
+  // Vertaa kenttä kentältä
+  const localPreds = ((t.predictions || {})[matchId] || {})[currentUser] || {};
+  let saved = 0, total = 0;
+  const missing = [];
+  FIELDS.forEach(f => {
+    const localV = localPreds[f.key];
+    if(localV != null && localV !== ''){
+      total++;
+      if(serverPreds[f.key] === localV){
+        saved++;
+      } else {
+        missing.push(f.label);
+      }
+    }
+  });
+
+  if(total === 0){
+    showResult('info', '💡 Ei veikkauksia tallennettavana');
+  } else if(saved === total){
+    showResult('success', '✅ Kaikki tallennettu! ('+saved+'/'+FIELDS.length+' kohdetta)');
+  } else if(saved > 0){
+    showResult('partial', '⚠️ Osittainen tallennus: '+saved+'/'+total+' meni läpi. Ei tallentui: '+missing.slice(0,3).join(', ')+(missing.length>3?'…':''));
+  } else {
+    showResult('error', '❌ Tallennus epäonnistui (0/'+total+'). Yritä uudelleen.');
+  }
+
+  if(btnEl){ btnEl.disabled = false; btnEl.textContent = '💾 Tallenna veikkaus'; }
 }
 
 // ============================
