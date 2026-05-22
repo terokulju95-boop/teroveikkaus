@@ -171,6 +171,11 @@
     .personal-best-match{ font-size:12px; color:var(--muted); margin-top:1px; }
     /* Muokkaushistoria */
     .edit-history{ font-size:11px; color:var(--muted); text-align:right; padding:4px 0; }
+    .save-pred-wrap{ margin-top:12px; display:flex; flex-direction:column; align-items:stretch; gap:6px; }
+    .save-pred-btn{ width:100%; padding:13px; font-size:15px; font-weight:700; background:linear-gradient(135deg,#16a34a,#15803d); border:none; border-radius:12px; color:#fff; cursor:pointer; letter-spacing:0.3px; transition:opacity .15s; }
+    .save-pred-btn:active{ opacity:.8; }
+    .save-pred-btn:disabled{ opacity:.6; cursor:default; }
+    .save-pred-msg{ font-size:13px; font-weight:600; text-align:center; min-height:18px; }
     .edit-history span{ background:var(--border); border-radius:4px; padding:2px 6px; }
     .open-banner{ background:#22c55e; color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:10px; }
     #countdown{ margin-bottom:10px; }
@@ -947,6 +952,8 @@ const auth = getAuth(fbApp);
 window._firebaseDb = db; // Expose globally for non-module scripts
 const DATA_DOC = doc(db, "app", "data");
 const PINS_DOC = doc(db, "app", "pins");
+// Jokaisella pelaajalla oma veikkausdokumentti – ei enää race conditionia
+function predDoc(player){ return doc(db, "predictions", player); }
 
 // ============================
 // FIREBASE AUTH
@@ -1032,8 +1039,12 @@ let tid = null; // selected tournament id
 let mid = null; // selected match id
 let viewMode = 'cards';
 let currentUser = null;
-let isSaving = false;
-let saveQueued = false;
+let isSavingStructure = false;
+let saveStructureQueued = false;
+let isSavingPred = false;
+let savePredQueued = false;
+// Taaksepäin yhteensopivuus – käytetään onSnapshot-tarkistukseen
+Object.defineProperty(window, 'isSaving', { get(){ return isSavingStructure||isSavingPred; } });
 let cdTimer = null;      // countdown setInterval handle
 let cdRunning = false;   // guard: is countdown active?
 
@@ -1404,12 +1415,12 @@ function showStatus(msg, color){
 function hideStatus(){ setTimeout(()=>{ const el=$('fb-status'); if(el) el.style.opacity='0'; }, 1800); }
 
 // ============================
-// FIREBASE
+// FIREBASE – RAKENNE (turnaukset, ottelut, actuals, jne.)
+// Ei sisällä veikkauksia – ne menevät predDoc:iin
 // ============================
-async function save(){
+async function saveStructure(){
   data.selectedTournamentId = tid;
   data.selectedMatchId = mid;
-  // Tallenna muokkaushistoria
   if(currentUser && mid){
     const t=getTournament();
     if(t){
@@ -1419,14 +1430,66 @@ async function save(){
     }
   }
   try{ localStorage.setItem('tv_bkp', JSON.stringify(data)); }catch(e){}
-  if(isSaving){ saveQueued=true; return; }
-  isSaving=true; showStatus('💾 Tallennetaan…','#f97316');
+  if(isSavingStructure){ saveStructureQueued=true; return; }
+  isSavingStructure=true; showStatus('💾 Tallennetaan…','#f97316');
   try{
-    await setDoc(DATA_DOC, {json: JSON.stringify(data)});
+    // Poistetaan predictions ja topThreePrediction – ne tallennetaan erikseen
+    const toSave={
+      ...data,
+      tournaments:(data.tournaments||[]).map(t=>{
+        const copy={...t};
+        delete copy.predictions;
+        delete copy.topThreePrediction;
+        return copy;
+      })
+    };
+    await setDoc(DATA_DOC,{json:JSON.stringify(toSave)});
     showStatus('✅ Tallennettu','#22c55e'); hideStatus();
   }catch(e){ showStatus('❌ Tallennus epäonnistui','#dc2626'); }
-  isSaving=false;
-  if(saveQueued){ saveQueued=false; save(); }
+  isSavingStructure=false;
+  if(saveStructureQueued){ saveStructureQueued=false; saveStructure(); }
+}
+
+// ============================
+// FIREBASE – PELAAJAN VEIKKAUKSET
+// Kirjoittaa vain yhden pelaajan omaan dokumenttiin
+// ============================
+async function savePredictions(player){
+  if(!player) return;
+  try{ localStorage.setItem('tv_bkp', JSON.stringify(data)); }catch(e){}
+  if(isSavingPred){ savePredQueued=true; return; }
+  isSavingPred=true; showStatus('💾 Tallennetaan…','#f97316');
+  try{
+    const playerData={ matches:{}, topThree:{} };
+    (data.tournaments||[]).forEach(t=>{
+      // Otteluveikkaukset tälle pelaajalle
+      const matchPreds={};
+      (t.matches||[]).forEach(m=>{
+        const pr=((t.predictions||{})[m.id]||{})[player];
+        if(pr && Object.keys(pr).length) matchPreds[m.id]=pr;
+      });
+      if(Object.keys(matchPreds).length) playerData.matches[t.id]=matchPreds;
+      // Kolmen kärki tälle pelaajalle
+      const top3=(t.topThreePrediction||{})[player];
+      if(top3) playerData.topThree[t.id]=top3;
+    });
+    await setDoc(predDoc(player),{json:JSON.stringify(playerData)});
+    showStatus('✅ Tallennettu','#22c55e'); hideStatus();
+  }catch(e){
+    console.error('savePredictions virhe:', e);
+    // Jos kyseessä on Firebase permission-virhe, näytetään ohje
+    const msg = (e&&e.code==='permission-denied')
+      ? '🔒 Firebase-luvat estävät tallennuksen – päivitä säännöt'
+      : '❌ Tallennus epäonnistui';
+    showStatus(msg,'#dc2626');
+  }
+  isSavingPred=false;
+  if(savePredQueued){ savePredQueued=false; savePredictions(player); }
+}
+
+// Yhteensopivuusapu: tuonti ja muut erityistilanteet
+async function save(){
+  await Promise.all([saveStructure(), savePredictions(currentUser)]);
 }
 
 // ============================
@@ -2097,6 +2160,8 @@ window._renderLoginStats = async function() {
 async function loadData(){
   loaderStart();
   showStatus('⏳ Ladataan…','#6366f1');
+
+  // Ladataan ensin rakenne ja pinit – nämä ovat kriittisiä
   try{
     const [snap, pinSnap] = await Promise.all([getDoc(DATA_DOC), getDoc(PINS_DOC)]);
     if(snap.exists()){ data=JSON.parse(snap.data().json); }
@@ -2107,6 +2172,34 @@ async function loadData(){
     showStatus('⚠️ Yhteysvirhe – paikallinen data','#f59e0b');
   }
   if(!data.tournaments) data.tournaments=[];
+
+  // Ladataan veikkausdokumentit erikseen – virhe yhdessä ei kaada muita
+  const predResults = await Promise.allSettled(PLAYERS.map(p => getDoc(predDoc(p))));
+  predResults.forEach((result, i)=>{
+    if(result.status !== 'fulfilled') return; // Luku epäonnistui – skipataan
+    const predSnap = result.value;
+    const player = PLAYERS[i];
+    if(!predSnap.exists()) return; // Ei vielä dokumenttia – OK
+    try{
+      const pd=JSON.parse(predSnap.data().json||'{}');
+      const matchPreds=pd.matches||{};
+      const topThree=pd.topThree||{};
+      data.tournaments.forEach(t=>{
+        if(matchPreds[t.id]){
+          t.predictions=t.predictions||{};
+          Object.entries(matchPreds[t.id]).forEach(([matchId,fields])=>{
+            t.predictions[matchId]=t.predictions[matchId]||{};
+            t.predictions[matchId][player]=fields;
+          });
+        }
+        if(topThree[t.id]){
+          t.topThreePrediction=t.topThreePrediction||{};
+          t.topThreePrediction[player]=topThree[t.id];
+        }
+      });
+    }catch(e2){}
+  });
+  if(!data.tournaments) data.tournaments=[];
   // Palauta valinnat datasta tai localStoragesta
   if(!tid) tid = data.selectedTournamentId||null;
   if(!mid) mid = data.selectedMatchId||null;
@@ -2115,23 +2208,32 @@ async function loadData(){
   hideStatus();
   render();
 
-  // Kuuntele muutoksia – ÄLÄ nollaa käyttäjän valintoja
+  // Kuuntele rakennemuutoksia (turnaukset, ottelut, actuals)
   onSnapshot(DATA_DOC, snap => {
-    if(!snap.exists() || isSaving) return;
-    // Älä renderöi jos käyttäjä on aktiivisesti muokkaamassa kenttää
-    // (select-picker, input, textarea auki) – muuten DOM tuhoutuu alta
+    if(!snap.exists() || isSavingStructure) return;
     const ae = document.activeElement;
     const userEditing = ae && (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA');
     if(userEditing){
-      // Päivitä data taustalla mutta älä renderöi – renderöi kun käyttäjä poistuu kentästä
-      try{ const d=JSON.parse(snap.data().json); if(d&&d.tournaments) window._pendingSnapshotData=d; }catch(e){}
+      try{
+        const d=JSON.parse(snap.data().json);
+        if(d&&d.tournaments) window._pendingSnapshotData=d;
+      }catch(e){}
       return;
     }
     try{
       const prevTid=tid, prevMid=mid;
-      data = JSON.parse(snap.data().json);
+      const newData=JSON.parse(snap.data().json);
+      if(!newData.tournaments) newData.tournaments=[];
+      // Säilytetään muistissa olevat veikkaukset – ne tulevat predDoc-kuuntelijoilta
+      newData.tournaments.forEach(t=>{
+        const existing=(data.tournaments||[]).find(et=>String(et.id)===String(t.id));
+        if(existing){
+          t.predictions=existing.predictions||{};
+          t.topThreePrediction=existing.topThreePrediction||{};
+        }
+      });
+      data=newData;
       if(!data.tournaments) data.tournaments=[];
-      // Säilytä valinnat jos ne ovat edelleen valideja
       const tOk = prevTid && data.tournaments.find(t=>String(t.id)===String(prevTid));
       if(tOk){
         tid=prevTid;
@@ -2144,6 +2246,37 @@ async function loadData(){
       }
       render();
     }catch(e){}
+  });
+
+  // Kuuntele jokaisen pelaajan veikkauksia erikseen – race condition poistuu
+  PLAYERS.forEach(player=>{
+    onSnapshot(predDoc(player), snap=>{
+      if(!snap.exists()) return;
+      // Ei ylikirjoiteta omia veikkauksia kesken tallennuksen
+      if(isSavingPred && player===currentUser) return;
+      try{
+        const pd=JSON.parse(snap.data().json||'{}');
+        const matchPreds=pd.matches||{};
+        const topThree=pd.topThree||{};
+        (data.tournaments||[]).forEach(t=>{
+          if(matchPreds[t.id]){
+            t.predictions=t.predictions||{};
+            Object.entries(matchPreds[t.id]).forEach(([matchId,fields])=>{
+              t.predictions[matchId]=t.predictions[matchId]||{};
+              t.predictions[matchId][player]=fields;
+            });
+          }
+          if(topThree[t.id]){
+            t.topThreePrediction=t.topThreePrediction||{};
+            t.topThreePrediction[player]=topThree[t.id];
+          }
+        });
+        // Renderöidään vain jos käyttäjä ei ole muokkaamassa kenttää
+        const ae=document.activeElement;
+        const userEditing=ae&&(ae.tagName==='INPUT'||ae.tagName==='SELECT'||ae.tagName==='TEXTAREA');
+        if(!userEditing) render();
+      }catch(e){}
+    });
   });
 }
 
@@ -2322,14 +2455,14 @@ function attachPredListeners(el, t, matchId){
       var nextFocus = document.activeElement;
       var par = e.target.closest('.score-combo, .time-combo');
       if(par && par.contains(nextFocus)) return;
-      save(); renderScoreboard();
+      savePredictions(currentUser); renderScoreboard();
     }, 0);
   };
 
   el.querySelectorAll('input[data-pred],input[data-pred-home],input[data-pred-away],input[data-pred-min],input[data-pred-sec]')
     .forEach(function(i){ i.addEventListener('input',handle); i.addEventListener('blur', blurHandler); });
   el.querySelectorAll('select[data-pred]')
-    .forEach(function(s){ s.addEventListener('change',function(e){ handle(e); save(); renderScoreboard(); }); });
+    .forEach(function(s){ s.addEventListener('change',function(e){ handle(e); savePredictions(currentUser); renderScoreboard(); }); });
 }
 
 // ============================
@@ -2344,10 +2477,10 @@ function attachActualListeners(el, t, matchId){
       // Tallennetaan vain kun molemmat taytettyna; jos molemmat tyhjia nollataan
       if(hi.value && ai.value){
         t.actuals[matchId]['lopputulos']=hi.value+'-'+ai.value;
-        renderScoreboard(); save();
+        renderScoreboard(); saveStructure();
       } else if(!hi.value && !ai.value){
         t.actuals[matchId]['lopputulos']='';
-        renderScoreboard(); save();
+        renderScoreboard(); saveStructure();
       }
       // Jos vain toinen taytettyna, ei tallenneta viela
       return;
@@ -2359,17 +2492,17 @@ function attachActualListeners(el, t, matchId){
       // Sama logiikka
       if(mi.value && si.value){
         t.actuals[matchId]['ekan_maali_aika']=mi.value+':'+si.value;
-        renderScoreboard(); save();
+        renderScoreboard(); saveStructure();
       } else if(!mi.value && !si.value){
         t.actuals[matchId]['ekan_maali_aika']='';
-        renderScoreboard(); save();
+        renderScoreboard(); saveStructure();
       }
       return;
     }
     const key=e.target.dataset.act; if(!key) return;
     t.actuals[matchId]=t.actuals[matchId]||{};
     t.actuals[matchId][key]=e.target.value;
-    renderScoreboard(); save();
+    renderScoreboard(); saveStructure();
   };
   el.querySelectorAll('input[data-act],input[data-act-home],input[data-act-away],input[data-act-min],input[data-act-sec]')
     .forEach(function(i){ i.addEventListener('input',handle); });
@@ -2460,10 +2593,55 @@ function renderPredictions(){
         '<div class="edit-history">Viimeksi muokattu: <span>'+
           new Date(hist).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})+
         '</span></div>':'';
-      el.innerHTML=bestHTML+predCardHTML(t,match,currentUser,false)+histHTML;
+      // Tallenna-nappi kortin alle
+      const pr=(t.predictions[match.id]||{})[currentUser]||{};
+      const filled=FIELDS.filter(f=>pr[f.key]!=null&&pr[f.key]!=='').length;
+      const total=FIELDS.length;
+      const allFilled=filled===total;
+      const saveBtn=
+        '<div class="save-pred-wrap">'+
+          '<button class="btn save-pred-btn" id="savePredBtn" onclick="window._savePredManual()">'+
+            '💾 Tallenna veikkaus ('+filled+'/'+total+')'+
+          '</button>'+
+          '<div id="savePredMsg" class="save-pred-msg"></div>'+
+        '</div>';
+      el.innerHTML=bestHTML+predCardHTML(t,match,currentUser,false)+histHTML+saveBtn;
     }
   }
   attachPredListeners(el,t,match.id);
+
+  // Manuaalinen tallennusnappi
+  window._savePredManual = async function(){
+    const t2=getTournament(), match2=getMatch();
+    if(!t2||!match2) return;
+    const pr2=(t2.predictions[match2.id]||{})[currentUser]||{};
+    const missing=FIELDS.filter(f=>!pr2[f.key]||pr2[f.key]==='').map(f=>f.label);
+    const msgEl=document.getElementById('savePredMsg');
+    const btn=document.getElementById('savePredBtn');
+    if(btn){ btn.disabled=true; btn.textContent='💾 Tallennetaan…'; }
+    try{
+      await savePredictions(currentUser);
+      if(msgEl){
+        if(missing.length===0){
+          msgEl.style.color='#22c55e';
+          msgEl.textContent='✅ Kaikki veikkaukset tallennettu!';
+        } else {
+          msgEl.style.color='#f59e0b';
+          msgEl.textContent='⚠️ Tallennettu, mutta täyttämättä: '+missing.join(', ');
+        }
+        setTimeout(()=>{ if(msgEl) msgEl.textContent=''; },4000);
+      }
+    }catch(e){
+      if(msgEl){ msgEl.style.color='#dc2626'; msgEl.textContent='❌ Tallennus epäonnistui'; }
+    }
+    if(btn){
+      const pr3=(getTournament()&&getMatch())
+        ? ((getTournament().predictions[getMatch().id]||{})[currentUser]||{}) : {};
+      const f2=FIELDS.filter(f=>pr3[f.key]!=null&&pr3[f.key]!=='').length;
+      btn.disabled=false;
+      btn.textContent='💾 Tallenna veikkaus ('+f2+'/'+FIELDS.length+')';
+    }
+  };
 }
 
 // ============================
@@ -2634,7 +2812,7 @@ function renderTopThree(){
   if(isAdmin && locked){
     [0,1,2].forEach(i=>{ const s=wrap.querySelector('[data-t3a="'+i+'"]'); if(s&&aT3[i]) s.value=aT3[i]; });
     wrap.querySelectorAll('[data-t3a]').forEach(inp=>inp.addEventListener('change',e=>{
-      t.actualTopThree[+e.target.dataset.t3a]=e.target.value; renderScoreboard(); save();
+      t.actualTopThree[+e.target.dataset.t3a]=e.target.value; renderScoreboard(); saveStructure();
     }));
   }
   if(!locked){
@@ -2643,7 +2821,7 @@ function renderTopThree(){
       const idx=+e.target.dataset.t3m;
       t.topThreePrediction[currentUser]=t.topThreePrediction[currentUser]||['','',''];
       t.topThreePrediction[currentUser][idx]=e.target.value;
-      renderScoreboard(); save();
+      renderScoreboard(); savePredictions(currentUser);
     }));
   }
 }
@@ -2752,7 +2930,7 @@ function renderTournamentSelects(){
   if(tSel){
     tSel.innerHTML='<option value="">Valitse turnaus…</option>'+
       (data.tournaments||[]).map(t=>'<option value="'+t.id+'" '+(String(t.id)===String(tid)?'selected':'')+'>'+t.name+(t.finished?' ✅':'')+'</option>').join('');
-    tSel.onchange=e=>{ tid=e.target.value||null; mid=null; saveSelections(); save(); render(); };
+    tSel.onchange=e=>{ tid=e.target.value||null; mid=null; saveSelections(); saveStructure(); render(); };
   }
   // Otteluvalinta
   const mSel=$('matchSelect'), t=getTournament();
@@ -3006,10 +3184,13 @@ $('importBtn2') && ($('importBtn2').onclick = () => $('importFile2') && $('impor
 $('importFile2') && ($('importFile2').onchange = function() {
   const file = this.files[0]; if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     try {
       data = JSON.parse(e.target.result);
-      save(); render();
+      // Tuonnin jälkeen tallennetaan rakenne + kaikkien pelaajien veikkaukset
+      await saveStructure();
+      await Promise.all(PLAYERS.map(p => savePredictions(p)));
+      render();
       showStatus('✅ Tuonti onnistui!', '#22c55e'); hideStatus();
     } catch(err) { showStatus('❌ Virheellinen JSON', '#dc2626'); }
   };
@@ -3360,18 +3541,18 @@ $('createTournament').onclick=()=>{
   const name=$('newTournamentName').value.trim(); if(!name){alert('Anna nimi');return;}
   const id=Date.now().toString();
   data.tournaments.push({id,name,matches:[],predictions:{},actuals:{},topThreePrediction:{},actualTopThree:[]});
-  tid=id; mid=null; saveSelections(); save(); render(); $('newTournamentName').value='';
+  tid=id; mid=null; saveSelections(); saveStructure(); render(); $('newTournamentName').value='';
 };
 $('finishTournament').onclick=()=>{
   const t=getTournament(); if(!t) return;
   if(!confirm('Päätä turnaus "'+t.name+'"?')) return;
-  t.finished=true; save(); render();
+  t.finished=true; saveStructure(); render();
 };
 $('deleteTournament').onclick=()=>{
   const t=getTournament(); if(!t) return;
   if(!confirm('Poistetaanko turnaus "'+t.name+'" ja kaikki sen data? Tätä ei voi peruuttaa!')) return;
   data.tournaments=data.tournaments.filter(x=>String(x.id)!==String(tid));
-  tid=null; mid=null; saveSelections(); save(); render();
+  tid=null; mid=null; saveSelections(); saveStructure(); render();
 };
 $('createMatch').onclick=()=>{
   const t=getTournament(); if(!t){alert('Luo ensin turnaus');return;}
@@ -3381,7 +3562,7 @@ $('createMatch').onclick=()=>{
   const id=Date.now().toString();
   t.matches.push({id,name,startTime:new Date(tv).toISOString()});
   t.predictions=t.predictions||{}; t.actuals=t.actuals||{};
-  mid=id; saveSelections(); save(); render(); $('newMatchName').value=''; $('newMatchTime').value='';
+  mid=id; saveSelections(); saveStructure(); render(); $('newMatchName').value=''; $('newMatchTime').value='';
 };
 $('deleteMatch').onclick=()=>{
   const t=getTournament(); if(!t||!mid) return;
@@ -3389,12 +3570,12 @@ $('deleteMatch').onclick=()=>{
   if(!confirm('Poistetaanko ottelu "'+match.name+'"? Tätä ei voi peruuttaa!')) return;
   t.matches=t.matches.filter(m=>String(m.id)!==String(mid));
   delete (t.predictions||{})[mid]; delete (t.actuals||{})[mid];
-  mid=null; saveSelections(); save(); render();
+  mid=null; saveSelections(); saveStructure(); render();
 };
 $('tabTable').onclick=()=>{ viewMode='table'; $('tabTable').classList.add('active'); $('tabCards').classList.remove('active'); renderPredictions(); };
 $('tabCards').onclick=()=>{ viewMode='cards'; $('tabCards').classList.add('active'); $('tabTable').classList.remove('active'); renderPredictions(); };
-$('refreshCheck').onclick=()=>{ save(); renderScoreboard(); renderPredictions(); };
-$('saveTopThree').onclick=()=>save();
+$('refreshCheck').onclick=()=>{ saveStructure(); savePredictions(currentUser); renderScoreboard(); renderPredictions(); };
+$('saveTopThree').onclick=()=>{ saveStructure(); savePredictions(currentUser); };
 // Export-funktio (käytetään myös asetusmodaalista)
 window._doExport = function() {
   const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
