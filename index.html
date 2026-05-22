@@ -2594,8 +2594,13 @@ function renderTopThree(){
   if(isAdmin){
     adminStatus='<div style="margin-bottom:10px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">👥 Kuka on veikannut?</div><div class="player-status-grid">'+
     PLAYERS.map(p=>{
-      const voted=(t.topThreePrediction[p]||[]).some(v=>v!=='');
-      return `<div class="player-status-card ${voted?'voted':'not-voted'}">${voted?'✅':'❌'} ${p}</div>`;
+      const arr=t.topThreePrediction[p]||[];
+      const total=3;
+      const filled=[0,1,2].filter(i=>arr[i]!=null && arr[i]!=='').length;
+      const complete=filled===total;
+      const cls=complete?'voted':(filled>0?'partial':'not-voted');
+      const icon=complete?'✅':(filled>0?'🟡':'❌');
+      return `<div class="player-status-card ${cls}">${locked?'🔒 ':''}${icon} ${p}<div class="veik-count">${filled}/${total}</div></div>`;
     }).join('')+'</div></div>';
   }
 
