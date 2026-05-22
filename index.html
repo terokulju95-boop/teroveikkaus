@@ -75,6 +75,15 @@
     .time-combo input{ width:64px; text-align:center; }
     .colon{ font-weight:800; }
     .pts-badge{ display:inline-block; background:#111827; color:#fff; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px; }
+    .manual-save-wrap{ margin-top:12px; padding-top:12px; border-top:2px dashed #e5e7eb; text-align:center; }
+    .manual-save-btn{ background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff; border:none; border-radius:12px; padding:14px 28px; font-size:15px; font-weight:800; cursor:pointer; box-shadow:0 4px 12px rgba(34,197,94,0.35); transition:all 0.15s; width:100%; max-width:320px; }
+    .manual-save-btn:active{ transform:scale(0.96); }
+    .manual-save-btn:disabled{ opacity:0.6; cursor:wait; }
+    .manual-save-status{ margin-top:10px; font-size:14px; font-weight:700; min-height:20px; padding:6px 10px; border-radius:8px; display:none; }
+    .manual-save-status.success{ display:block; background:#dcfce7; color:#166534; border:1px solid #22c55e; }
+    .manual-save-status.partial{ display:block; background:#ffedd5; color:#9a3412; border:1px solid #f97316; }
+    .manual-save-status.error{ display:block; background:#fee2e2; color:#991b1b; border:1px solid #dc2626; }
+    .manual-save-status.info{ display:block; background:#dbeafe; color:#1e40af; border:1px solid #3b82f6; }
     .card-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
     .pill{ display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#fafafa; font-size:12px }
     .t3-grid{ display:grid; gap:10px; grid-template-columns:1fr; }
@@ -147,6 +156,7 @@
     .player-status-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:8px; }
     .player-status-card{ border-radius:10px; padding:8px 10px; text-align:center; font-weight:700; font-size:13px; border:2px solid; }
     .player-status-card.voted{ background:#dcfce7; border-color:#22c55e; color:#166534; }
+    .player-status-card.partial{ background:#ffedd5; border-color:#f97316; color:#9a3412; }
     .player-status-card.not-voted{ background:#fee2e2; border-color:#dc2626; color:#991b1b; }
     .player-status-card.done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
     .lock-banner{ background:#dc2626; color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:10px; }
@@ -1032,6 +1042,7 @@ let viewMode = 'cards';
 let currentUser = null;
 let isSaving = false;
 let saveQueued = false;
+let localDirty = false; // Onko paikallisia tallentamattomia muutoksia
 let cdTimer = null;      // countdown setInterval handle
 let cdRunning = false;   // guard: is countdown active?
 
@@ -1404,6 +1415,70 @@ function hideStatus(){ setTimeout(()=>{ const el=$('fb-status'); if(el) el.style
 // ============================
 // FIREBASE
 // ============================
+
+// Yhdistää tämän käyttäjän muutokset palvelimen tuoreimpaan dataan.
+// EI koskaan ylikirjoita toisten käyttäjien veikkauksia.
+// Admin-käyttäjälle yhdistetään myös faktat, ottelut ja turnausrakenne.
+function mergeUserChanges(serverData, localData, user){
+  serverData.tournaments = serverData.tournaments || [];
+  const isAdmin = (user === ADMIN);
+
+  (localData.tournaments || []).forEach(localT => {
+    let serverT = serverData.tournaments.find(t => String(t.id) === String(localT.id));
+    if(!serverT){
+      // Uusi turnaus paikallisesti – vain admin voi luoda
+      if(isAdmin){
+        serverData.tournaments.push(JSON.parse(JSON.stringify(localT)));
+      }
+      return;
+    }
+
+    // 1) Käyttäjän omat veikkaukset kaikissa peleissä
+    serverT.predictions = serverT.predictions || {};
+    Object.keys(localT.predictions || {}).forEach(matchId => {
+      const localMatchPreds = localT.predictions[matchId];
+      if(localMatchPreds && localMatchPreds[user] !== undefined){
+        serverT.predictions[matchId] = serverT.predictions[matchId] || {};
+        serverT.predictions[matchId][user] = JSON.parse(JSON.stringify(localMatchPreds[user]));
+      }
+    });
+
+    // 2) Käyttäjän oma top-3 ennustus
+    serverT.topThreePrediction = serverT.topThreePrediction || {};
+    const localT3 = (localT.topThreePrediction || {})[user];
+    if(localT3 !== undefined){
+      serverT.topThreePrediction[user] = JSON.parse(JSON.stringify(localT3));
+    }
+
+    // 3) Käyttäjän muokkaushistoria
+    serverT.editHistory = serverT.editHistory || {};
+    Object.keys(localT.editHistory || {}).forEach(matchId => {
+      const localHist = localT.editHistory[matchId];
+      if(localHist && localHist[user]){
+        serverT.editHistory[matchId] = serverT.editHistory[matchId] || {};
+        serverT.editHistory[matchId][user] = localHist[user];
+      }
+    });
+
+    // 4) Admin: yhdistä myös ottelut, faktat ja turnauksen perustiedot
+    if(isAdmin){
+      if(localT.name !== undefined) serverT.name = localT.name;
+      if(localT.matches !== undefined) serverT.matches = JSON.parse(JSON.stringify(localT.matches));
+      if(localT.actuals !== undefined) serverT.actuals = JSON.parse(JSON.stringify(localT.actuals));
+      if(localT.actualTopThree !== undefined) serverT.actualTopThree = JSON.parse(JSON.stringify(localT.actualTopThree));
+      if(localT.finished !== undefined) serverT.finished = localT.finished;
+    }
+  });
+
+  // Admin voi poistaa turnauksia ja muuttaa valintoja
+  if(isAdmin){
+    const localIds = new Set((localData.tournaments || []).map(t => String(t.id)));
+    serverData.tournaments = serverData.tournaments.filter(st => localIds.has(String(st.id)));
+    if(localData.selectedTournamentId !== undefined) serverData.selectedTournamentId = localData.selectedTournamentId;
+    if(localData.selectedMatchId !== undefined) serverData.selectedMatchId = localData.selectedMatchId;
+  }
+}
+
 async function save(){
   data.selectedTournamentId = tid;
   data.selectedMatchId = mid;
@@ -1419,11 +1494,51 @@ async function save(){
   try{ localStorage.setItem('tv_bkp', JSON.stringify(data)); }catch(e){}
   if(isSaving){ saveQueued=true; return; }
   isSaving=true; showStatus('💾 Tallennetaan…','#f97316');
+  let saveOk=false;
   try{
-    await setDoc(DATA_DOC, {json: JSON.stringify(data)});
+    // Read-Merge-Write: lue tuorein palvelimelta, yhdistä omat muutokset, kirjoita takaisin.
+    // Näin toisten käyttäjien veikkaukset eivät katoa.
+    let serverData = {tournaments:[]};
+    try{
+      const snap = await getDoc(DATA_DOC);
+      if(snap.exists()) serverData = JSON.parse(snap.data().json);
+    }catch(readErr){
+      // Jos luku epäonnistuu, käytetään paikallista dataa varakopiona
+      serverData = JSON.parse(JSON.stringify(data));
+    }
+    if(!serverData.tournaments) serverData.tournaments = [];
+
+    mergeUserChanges(serverData, data, currentUser);
+
+    await setDoc(DATA_DOC, {json: JSON.stringify(serverData)});
+
+    // Päivitä paikallinen data yhdistettyyn versioon (sisältää myös muiden muutokset)
+    const prevTid = tid, prevMid = mid;
+    data = serverData;
+    if(!data.tournaments) data.tournaments = [];
+    const tOk = prevTid && data.tournaments.find(t => String(t.id) === String(prevTid));
+    if(tOk){
+      tid = prevTid;
+      const tObj = data.tournaments.find(t => String(t.id) === String(prevTid));
+      const mOk = prevMid && (tObj.matches || []).find(m => String(m.id) === String(prevMid));
+      mid = mOk ? prevMid : null;
+    }
+    // Renderöi uudelleen jotta handlerit saavat tuoreen viitteen – paitsi jos käyttäjä kirjoittaa
+    const ae = document.activeElement;
+    const userEditing = ae && (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA');
+    if(userEditing){
+      window._pendingSnapshotData = data;
+    } else {
+      render();
+    }
+    saveOk=true;
     showStatus('✅ Tallennettu','#22c55e'); hideStatus();
-  }catch(e){ showStatus('❌ Tallennus epäonnistui','#dc2626'); }
+  }catch(e){
+    console.error('Save error:', e);
+    showStatus('❌ Tallennus epäonnistui','#dc2626');
+  }
   isSaving=false;
+  if(saveOk && !saveQueued) localDirty=false;
   if(saveQueued){ saveQueued=false; save(); }
 }
 
@@ -2116,12 +2231,11 @@ async function loadData(){
   // Kuuntele muutoksia – ÄLÄ nollaa käyttäjän valintoja
   onSnapshot(DATA_DOC, snap => {
     if(!snap.exists() || isSaving) return;
-    // Älä renderöi jos käyttäjä on aktiivisesti muokkaamassa kenttää
-    // (select-picker, input, textarea auki) – muuten DOM tuhoutuu alta
+    // Älä renderöi jos käyttäjä muokkaa kenttää TAI jos tallentamattomia muutoksia on jonossa
     const ae = document.activeElement;
     const userEditing = ae && (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA');
-    if(userEditing){
-      // Päivitä data taustalla mutta älä renderöi – renderöi kun käyttäjä poistuu kentästä
+    if(userEditing || localDirty){
+      // Päivitä data taustalla mutta älä renderöi – sovelletaan kun käyttäjä poistuu kentästä
       try{ const d=JSON.parse(snap.data().json); if(d&&d.tournaments) window._pendingSnapshotData=d; }catch(e){}
       return;
     }
@@ -2264,10 +2378,11 @@ function predCardHTML(t, match, player, showColors){
     return `<div class="kv-row ${ok?'correct':''} ${bad?'incorrect':''}" style="${delay}">`+
            `<div class="kv-label">${f.label}</div>${w}</div>`;
   }).join('');
+  const saveBtn = canEdit ? `<div class="manual-save-wrap"><button class="manual-save-btn" data-manual-save="${match.id}">💾 Tallenna veikkaus</button><div class="manual-save-status" data-manual-save-status="${match.id}"></div></div>` : '';
   return `<div class="person-card"><div class="card-head">`+
          `<div class="person-title">${player===ADMIN?'👑 ':''}${player}</div>`+
          `${showColors?`<div class="pts-badge">${pts} p</div>`:''}</div>`+
-         `<div class="kv">${rows}</div></div>`;
+         `<div class="kv">${rows}</div>${saveBtn}</div>`;
 }
 
 // ============================
@@ -2275,6 +2390,7 @@ function predCardHTML(t, match, player, showColors){
 // ============================
 function attachPredListeners(el, t, matchId){
   const handle = e => {
+    localDirty = true; // Merkitään paikalliset muutokset
     if(e.target.dataset.predHome!==undefined || e.target.dataset.predAway!==undefined){
       const par=e.target.closest('.score-combo'); if(!par) return;
       const hi=par.querySelector('[data-pred-home]'), ai=par.querySelector('[data-pred-away]');
@@ -2328,6 +2444,101 @@ function attachPredListeners(el, t, matchId){
     .forEach(function(i){ i.addEventListener('input',handle); i.addEventListener('blur', blurHandler); });
   el.querySelectorAll('select[data-pred]')
     .forEach(function(s){ s.addEventListener('change',function(e){ handle(e); save(); renderScoreboard(); }); });
+
+  // "Tallenna veikkaus" -nappi
+  el.querySelectorAll('button[data-manual-save]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      manualSavePredictions(btn.dataset.manualSave, btn);
+    });
+  });
+}
+
+// ============================
+// MANUAALINEN TALLENNUS + VERIFIOINTI + UUDELLEENYRITYS
+// ============================
+async function manualSavePredictions(matchId, btnEl, attempt){
+  attempt = attempt || 1;
+  const MAX_ATTEMPTS = 3;
+  const t = getTournament();
+  if(!t || !matchId) return;
+  const statusEl = document.querySelector('[data-manual-save-status="'+matchId+'"]');
+  const showResult = (cls, txt) => {
+    if(statusEl){ statusEl.className = 'manual-save-status ' + cls; statusEl.textContent = txt; }
+  };
+
+  if(btnEl){ btnEl.disabled = true; btnEl.textContent = '💾 Tallennetaan…'; }
+  showResult('info', attempt>1 ? ('🔄 Yritetään uudestaan ('+attempt+'/'+MAX_ATTEMPTS+')…') : '💾 Tallennetaan ja varmistetaan…');
+
+  // Pakota tallennus läpi
+  localDirty = true;
+  try { await save(); } catch(e){}
+
+  // Odota että jonossa olevat tallennukset valmistuvat
+  let waited = 0;
+  while((isSaving || saveQueued) && waited < 10000){
+    await new Promise(r => setTimeout(r, 100));
+    waited += 100;
+  }
+
+  // Lue palvelimelta varmistukseksi
+  let serverPreds = {};
+  let readOk = false;
+  try {
+    const snap = await getDoc(DATA_DOC);
+    if(snap.exists()){
+      const serverData = JSON.parse(snap.data().json);
+      const serverT = (serverData.tournaments || []).find(tt => String(tt.id) === String(t.id));
+      if(serverT){
+        serverPreds = ((serverT.predictions || {})[matchId] || {})[currentUser] || {};
+        readOk = true;
+      }
+    }
+  } catch(e){
+    showResult('error', '❌ Tarkistus epäonnistui: ' + (e.message || 'verkkovirhe'));
+    if(btnEl){ btnEl.disabled = false; btnEl.textContent = '💾 Tallenna veikkaus'; }
+    return;
+  }
+
+  if(!readOk){
+    showResult('error', '❌ Palvelimelta ei saatu vastausta');
+    if(btnEl){ btnEl.disabled = false; btnEl.textContent = '💾 Tallenna veikkaus'; }
+    return;
+  }
+
+  // Vertaa kenttä kentältä (käytetään tuoreinta paikallista dataa)
+  const tNow = getTournament();
+  const localPreds = ((tNow.predictions || {})[matchId] || {})[currentUser] || {};
+  let saved = 0, total = 0;
+  const missing = [];
+  FIELDS.forEach(f => {
+    const localV = localPreds[f.key];
+    if(localV != null && localV !== ''){
+      total++;
+      if(serverPreds[f.key] === localV){ saved++; }
+      else { missing.push(f.label); }
+    }
+  });
+
+  if(total === 0){
+    showResult('info', '💡 Ei veikkauksia tallennettavana');
+    if(btnEl){ btnEl.disabled = false; btnEl.textContent = '💾 Tallenna veikkaus'; }
+  } else if(saved === total){
+    showResult('success', '✅ Kaikki tallennettu! ('+total+'/'+FIELDS.length+' kohdetta täytetty)');
+    if(btnEl){ btnEl.disabled = false; btnEl.textContent = '💾 Tallenna veikkaus'; }
+  } else if(attempt < MAX_ATTEMPTS){
+    // Osittainen tai epäonnistunut → yritä automaattisesti uudestaan
+    showResult('partial', '⚠️ '+saved+'/'+total+' tallentui – yritetään uudestaan…');
+    await new Promise(r => setTimeout(r, 600));
+    return manualSavePredictions(matchId, btnEl, attempt+1);
+  } else {
+    // Viimeinenkin yritys jäi vajaaksi
+    if(saved > 0){
+      showResult('partial', '⚠️ Osittainen tallennus: '+saved+'/'+total+'. Ei tallentui: '+missing.slice(0,3).join(', ')+(missing.length>3?'…':'')+'. Yritä vielä kerran.');
+    } else {
+      showResult('error', '❌ Tallennus epäonnistui ('+saved+'/'+total+'). Tarkista verkko ja yritä uudelleen.');
+    }
+    if(btnEl){ btnEl.disabled = false; btnEl.textContent = '💾 Tallenna veikkaus'; }
+  }
 }
 
 // ============================
@@ -2335,6 +2546,7 @@ function attachPredListeners(el, t, matchId){
 // ============================
 function attachActualListeners(el, t, matchId){
   const handle = e => {
+    localDirty = true; // Merkitään paikalliset muutokset
     if(e.target.dataset.actHome!==undefined || e.target.dataset.actAway!==undefined){
       const par=e.target.closest('.score-combo'); if(!par) return;
       const hi=par.querySelector('[data-act-home]'), ai=par.querySelector('[data-act-away]');
@@ -2541,11 +2753,23 @@ function renderPlayerStatus(){
   const preds=(t.predictions||{})[match.id]||{};
   const locked=isLocked(match);
   const hist=(t.editHistory||{})[match.id]||{};
+  const total=FIELDS.length; // 18
   el.innerHTML='<div class="player-status-grid">'+PLAYERS.map(p=>{
-    const voted=preds[p]&&Object.values(preds[p]).some(v=>v!=='');
-    const cls=locked?'done':voted?'voted':'not-voted';
+    const playerPreds=preds[p]||{};
+    const filled=FIELDS.filter(f=>{
+      const v=playerPreds[f.key];
+      return v!=null && v!=='';
+    }).length;
+    const isComplete=filled===total;
+    const hasNone=filled===0;
+    let cls, icon;
+    if(locked){ cls='done'; icon=isComplete?'✅':hasNone?'❌':'⏳'; }
+    else if(isComplete){ cls='voted'; icon='✅'; }
+    else if(hasNone){ cls='not-voted'; icon='❌'; }
+    else { cls='partial'; icon='⏳'; }
     const lastEdit=hist[p]?new Date(hist[p]).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-    return '<div class="player-status-card '+cls+'">'+(voted?'✅':'❌')+' '+p+
+    return '<div class="player-status-card '+cls+'">'+icon+' '+p+
+      ' <span style="opacity:0.85;font-weight:800">'+filled+'/'+total+'</span>'+
       (lastEdit?'<div style="font-size:10px;opacity:0.7;margin-top:2px">'+lastEdit+'</div>':'')+
     '</div>';
   }).join('')+'</div>';
@@ -2585,10 +2809,17 @@ function renderTopThree(){
 
   let adminStatus='';
   if(isAdmin){
-    adminStatus='<div style="margin-bottom:10px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">👥 Kuka on veikannut?</div><div class="player-status-grid">'+
+    adminStatus='<div style="margin-bottom:10px"><div style="font-weight:700;font-size:13px;margin-bottom:6px">👥 Kuka on veikannut? (kolmen kärki)</div><div class="player-status-grid">'+
     PLAYERS.map(p=>{
-      const voted=(t.topThreePrediction[p]||[]).some(v=>v!=='');
-      return `<div class="player-status-card ${voted?'voted':'not-voted'}">${voted?'✅':'❌'} ${p}</div>`;
+      const arr=t.topThreePrediction[p]||[];
+      const filled=arr.filter(v=>v!=='').length;
+      const total=3;
+      const isComplete=filled===total, hasNone=filled===0;
+      let cls, icon;
+      if(isComplete){ cls='voted'; icon='✅'; }
+      else if(hasNone){ cls='not-voted'; icon='❌'; }
+      else { cls='partial'; icon='⏳'; }
+      return `<div class="player-status-card ${cls}">${icon} ${p} <span style="opacity:0.85;font-weight:800">${filled}/${total}</span></div>`;
     }).join('')+'</div></div>';
   }
 
@@ -2622,12 +2853,14 @@ function renderTopThree(){
   if(isAdmin && locked){
     [0,1,2].forEach(i=>{ const s=wrap.querySelector('[data-t3a="'+i+'"]'); if(s&&aT3[i]) s.value=aT3[i]; });
     wrap.querySelectorAll('[data-t3a]').forEach(inp=>inp.addEventListener('change',e=>{
+      localDirty = true;
       t.actualTopThree[+e.target.dataset.t3a]=e.target.value; renderScoreboard(); save();
     }));
   }
   if(!locked){
     [0,1,2].forEach(i=>{ const s=wrap.querySelector('[data-t3m="'+i+'"]'); if(s&&uPred[i]) s.value=uPred[i]; });
     wrap.querySelectorAll('[data-t3m]').forEach(inp=>inp.addEventListener('change',e=>{
+      localDirty = true;
       const idx=+e.target.dataset.t3m;
       t.topThreePrediction[currentUser]=t.topThreePrediction[currentUser]||['','',''];
       t.topThreePrediction[currentUser][idx]=e.target.value;
@@ -3313,7 +3546,7 @@ document.addEventListener('blur', function() {
   setTimeout(function() {
     const ae = document.activeElement;
     const stillEditing = ae && (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA');
-    if(!stillEditing && window._pendingSnapshotData) {
+    if(!stillEditing && !localDirty && window._pendingSnapshotData) {
       var pending = window._pendingSnapshotData;
       window._pendingSnapshotData = null;
       if(!isSaving) {
