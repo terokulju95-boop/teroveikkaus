@@ -148,7 +148,9 @@
     .player-status-card{ border-radius:10px; padding:8px 10px; text-align:center; font-weight:700; font-size:13px; border:2px solid; }
     .player-status-card.voted{ background:#dcfce7; border-color:#22c55e; color:#166534; }
     .player-status-card.not-voted{ background:#fee2e2; border-color:#dc2626; color:#991b1b; }
+    .player-status-card.partial{ background:#fef9c3; border-color:#eab308; color:#854d0e; }
     .player-status-card.done{ background:#dbeafe; border-color:#3b82f6; color:#1e40af; }
+    .player-status-card .veik-count{ font-size:13px; font-weight:800; margin-top:3px; }
     .lock-banner{ background:#dc2626; color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:10px; }
     .locked-view-header{ background:linear-gradient(135deg,#dc2626,#b91c1c); color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:12px; font-size:14px; }
     .pred-card-wrapper{ margin-bottom:10px; }
@@ -2542,10 +2544,15 @@ function renderPlayerStatus(){
   const locked=isLocked(match);
   const hist=(t.editHistory||{})[match.id]||{};
   el.innerHTML='<div class="player-status-grid">'+PLAYERS.map(p=>{
-    const voted=preds[p]&&Object.values(preds[p]).some(v=>v!=='');
-    const cls=locked?'done':voted?'voted':'not-voted';
+    const pr=preds[p]||{};
+    const total=FIELDS.length;
+    const filled=FIELDS.filter(f=>pr[f.key]!=null && pr[f.key]!=='').length;
+    const complete=filled===total;
+    const cls=complete?'voted':(filled>0?'partial':'not-voted');
+    const icon=complete?'✅':(filled>0?'🟡':'❌');
     const lastEdit=hist[p]?new Date(hist[p]).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-    return '<div class="player-status-card '+cls+'">'+(voted?'✅':'❌')+' '+p+
+    return '<div class="player-status-card '+cls+'">'+(locked?'🔒 ':'')+icon+' '+p+
+      '<div class="veik-count">'+filled+'/'+total+'</div>'+
       (lastEdit?'<div style="font-size:10px;opacity:0.7;margin-top:2px">'+lastEdit+'</div>':'')+
     '</div>';
   }).join('')+'</div>';
