@@ -1475,14 +1475,7 @@ async function savePredictions(player){
     });
     await setDoc(predDoc(player),{json:JSON.stringify(playerData)});
     showStatus('✅ Tallennettu','#22c55e'); hideStatus();
-  }catch(e){
-    console.error('savePredictions virhe:', e);
-    // Jos kyseessä on Firebase permission-virhe, näytetään ohje
-    const msg = (e&&e.code==='permission-denied')
-      ? '🔒 Firebase-luvat estävät tallennuksen – päivitä säännöt'
-      : '❌ Tallennus epäonnistui';
-    showStatus(msg,'#dc2626');
-  }
+  }catch(e){ showStatus('❌ Tallennus epäonnistui','#dc2626'); }
   isSavingPred=false;
   if(savePredQueued){ savePredQueued=false; savePredictions(player); }
 }
@@ -2160,45 +2153,47 @@ window._renderLoginStats = async function() {
 async function loadData(){
   loaderStart();
   showStatus('⏳ Ladataan…','#6366f1');
-
-  // Ladataan ensin rakenne ja pinit – nämä ovat kriittisiä
   try{
-    const [snap, pinSnap] = await Promise.all([getDoc(DATA_DOC), getDoc(PINS_DOC)]);
+    // Ladataan rakenne + pinit + kaikkien pelaajien omat veikkaukset rinnakkain
+    const predPromises = PLAYERS.map(p => getDoc(predDoc(p)));
+    const [snap, pinSnap, ...predSnaps] = await Promise.all([
+      getDoc(DATA_DOC),
+      getDoc(PINS_DOC),
+      ...predPromises
+    ]);
     if(snap.exists()){ data=JSON.parse(snap.data().json); }
     if(pinSnap.exists()){ pins=pinSnap.data().pins||{}; }
+    if(!data.tournaments) data.tournaments=[];
+    // Yhdistetään pelaajien veikkaukset muistirakenteeseen
+    predSnaps.forEach((predSnap, i)=>{
+      const player=PLAYERS[i];
+      if(!predSnap.exists()) return; // Ei vielä veikkausdokumenttia – OK
+      try{
+        const pd=JSON.parse(predSnap.data().json||'{}');
+        const matchPreds=pd.matches||{};
+        const topThree=pd.topThree||{};
+        data.tournaments.forEach(t=>{
+          // Otteluveikkaukset
+          if(matchPreds[t.id]){
+            t.predictions=t.predictions||{};
+            Object.entries(matchPreds[t.id]).forEach(([matchId,fields])=>{
+              t.predictions[matchId]=t.predictions[matchId]||{};
+              t.predictions[matchId][player]=fields;
+            });
+          }
+          // Kolmen kärki
+          if(topThree[t.id]){
+            t.topThreePrediction=t.topThreePrediction||{};
+            t.topThreePrediction[player]=topThree[t.id];
+          }
+        });
+      }catch(e2){}
+    });
   }catch(e){
     const bkp=localStorage.getItem('tv_bkp');
     if(bkp) try{ data=JSON.parse(bkp); }catch(e2){}
     showStatus('⚠️ Yhteysvirhe – paikallinen data','#f59e0b');
   }
-  if(!data.tournaments) data.tournaments=[];
-
-  // Ladataan veikkausdokumentit erikseen – virhe yhdessä ei kaada muita
-  const predResults = await Promise.allSettled(PLAYERS.map(p => getDoc(predDoc(p))));
-  predResults.forEach((result, i)=>{
-    if(result.status !== 'fulfilled') return; // Luku epäonnistui – skipataan
-    const predSnap = result.value;
-    const player = PLAYERS[i];
-    if(!predSnap.exists()) return; // Ei vielä dokumenttia – OK
-    try{
-      const pd=JSON.parse(predSnap.data().json||'{}');
-      const matchPreds=pd.matches||{};
-      const topThree=pd.topThree||{};
-      data.tournaments.forEach(t=>{
-        if(matchPreds[t.id]){
-          t.predictions=t.predictions||{};
-          Object.entries(matchPreds[t.id]).forEach(([matchId,fields])=>{
-            t.predictions[matchId]=t.predictions[matchId]||{};
-            t.predictions[matchId][player]=fields;
-          });
-        }
-        if(topThree[t.id]){
-          t.topThreePrediction=t.topThreePrediction||{};
-          t.topThreePrediction[player]=topThree[t.id];
-        }
-      });
-    }catch(e2){}
-  });
   if(!data.tournaments) data.tournaments=[];
   // Palauta valinnat datasta tai localStoragesta
   if(!tid) tid = data.selectedTournamentId||null;
@@ -3181,21 +3176,28 @@ window._toggleLoginStats2 = function() {
 // Import/export from settings modal
 $('exportBtn2') && ($('exportBtn2').onclick = () => { window._doExport && window._doExport(); });
 $('importBtn2') && ($('importBtn2').onclick = () => $('importFile2') && $('importFile2').click());
-$('importFile2') && ($('importFile2').onchange = function() {
+$('importFile2') && ($('importFile2').onchange = async function() {
   const file = this.files[0]; if (!file) return;
+  this.value = '';
   const reader = new FileReader();
   reader.onload = async e => {
     try {
       data = JSON.parse(e.target.result);
-      // Tuonnin jälkeen tallennetaan rakenne + kaikkien pelaajien veikkaukset
+      tid = data.selectedTournamentId||null; mid = null;
+      showStatus('💾 Tallennetaan rakennetta…','#f97316');
       await saveStructure();
-      await Promise.all(PLAYERS.map(p => savePredictions(p)));
+      // Tallennetaan jokaisen pelaajan veikkaukset peräkkäin – ei rinnakkain
+      // (rinnakkain queue-mekanismi ei toimi oikein)
+      for(const p of PLAYERS){
+        showStatus('💾 Tallennetaan: '+p+'…','#f97316');
+        await savePredictions(p);
+      }
       render();
-      showStatus('✅ Tuonti onnistui!', '#22c55e'); hideStatus();
-    } catch(err) { showStatus('❌ Virheellinen JSON', '#dc2626'); }
+      showStatus('✅ Tuonti onnistui! Kaikki '+PLAYERS.length+' pelaajaa tallennettu.','#22c55e');
+      hideStatus();
+    } catch(err) { showStatus('❌ Virheellinen JSON: '+err.message,'#dc2626'); }
   };
   reader.readAsText(file);
-  this.value = '';
 });
 
 // ============================
@@ -3587,16 +3589,29 @@ $('exportBtn2') && ($('exportBtn2').onclick = window._doExport);
 
 function doImportFile(file) {
   if (!file) return;
-  const r=new FileReader(); r.onload=async()=>{
-    try{ const obj=JSON.parse(r.result); data=obj; tid=data.selectedTournamentId||null; mid=null; await save(); render(); alert('Tuotu!'); }
-    catch(er){ alert('Virhe: '+er.message); }
-  }; r.readAsText(file,'utf-8');
+  const r=new FileReader();
+  r.onload=async()=>{
+    try{
+      const obj=JSON.parse(r.result);
+      data=obj; tid=data.selectedTournamentId||null; mid=null;
+      showStatus('💾 Tallennetaan rakennetta…','#f97316');
+      await saveStructure();
+      for(const p of PLAYERS){
+        showStatus('💾 Tallennetaan: '+p+'…','#f97316');
+        await savePredictions(p);
+      }
+      render();
+      showStatus('✅ Tuonti onnistui! Kaikki '+PLAYERS.length+' pelaajaa tallennettu.','#22c55e');
+      hideStatus();
+    }
+    catch(er){ showStatus('❌ Virhe: '+er.message,'#dc2626'); }
+  };
+  r.readAsText(file,'utf-8');
 }
 $('importBtn').onclick=()=>$('importFile').click();
 $('importFile').addEventListener('change',e=>{ doImportFile(e.target.files[0]); });
-// Asetusmodaalin import
-const ib2=$('importBtn2'); if(ib2) ib2.onclick=()=>{ const f=$('importFile2'); if(f) f.click(); };
-const if2=$('importFile2'); if(if2) if2.addEventListener('change',e=>{ doImportFile(e.target.files[0]); });
+// Asetusmodaalin import – käyttää samaa doImportFile-funktiota
+// HUOM: importFile2:lla on jo onchange-kuuntelija ylempänä – ei lisätä toista
 
 let t3v=localStorage.getItem('tv_top3')!=='0';
 function applyT3(){ $('topThreeArea').style.display=t3v?'':'none'; $('saveTop3Row').style.display=t3v?'':'none'; $('toggleTop3').textContent=t3v?'Piilota':'Näytä'; }
