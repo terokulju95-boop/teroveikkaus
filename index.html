@@ -2687,6 +2687,8 @@ function renderPredictions(){
     if(btn){ btn.disabled=true; btn.textContent='💾 Tallennetaan…'; }
     try{
       await savePredictions(currentUser);
+      await saveStructure();   // merkitsee pelaajan aikaleiman (editHistory)
+      renderScoreboard();      // näytä päivittynyt aika heti pistetaulussa
       if(msgEl){
         if(missing.length===0){
           msgEl.style.color='#22c55e';
@@ -3128,6 +3130,9 @@ function doLogin(name){
   });
   // Vie/Tuo JSON piilotetaan aina — ne ovat Asetukset-modaalissa
   const ib=$('importBtn'); if(ib) ib.style.display='none';
+
+  // "Päivitä & tarkasta" vain adminille (hän päivittää faktat); muut käyttävät Tallenna-nappia
+  const rc=$('refreshCheck'); if(rc) rc.style.display=isAdmin?'':'none';
 
   // Admin-painikkeet yläpalkissa
   const msgBtn=$('adminMsgBtn'); if(msgBtn) msgBtn.style.display=isAdmin?'':'none';
