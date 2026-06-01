@@ -3279,7 +3279,7 @@ function hofTournamentResult(t){
 
 // Uran tilastot kaikkien turnausten yli
 function calcCareerStats(){
-  const stats={}; PLAYERS.forEach(p=>stats[p]={points:0,wins:0,podiums:0,played:0,best:0,correct:0,scorable:0,accuracy:null});
+  const stats={}; PLAYERS.forEach(p=>stats[p]={points:0,golds:0,silvers:0,bronzes:0,played:0,best:0,correct:0,scorable:0,accuracy:null});
   (data.tournaments||[]).forEach(t=>{
     const r=hofTournamentResult(t);
     const hasResults = t.historical || t.finished || PLAYERS.some(p=>(r.points[p]||0)>0);
@@ -3289,9 +3289,10 @@ function calcCareerStats(){
       if(hasResults) stats[p].played++;
       if(pts>stats[p].best) stats[p].best=pts;
     });
-    if(r.finished){                    // voitot & mitalit: vain valmiit turnaukset
-      if(r.order[0]) stats[r.order[0]].wins++;
-      r.order.slice(0,3).forEach(p=>{ if(p) stats[p].podiums++; });
+    if(r.finished){                    // mitalit: vain valmiit turnaukset
+      if(r.order[0]) stats[r.order[0]].golds++;
+      if(r.order[1]) stats[r.order[1]].silvers++;
+      if(r.order[2]) stats[r.order[2]].bronzes++;
     }
     // Osumaprosentti – vain oikeista turnauksista (joissa on kohdetietoa)
     if(!t.historical){
@@ -3338,7 +3339,9 @@ function renderHallOfFame(){
   const area=document.getElementById('hofArea'); if(!area) return;
   const stats=calcCareerStats();
   const order=PLAYERS.slice().sort((a,b)=>{
-    if(stats[b].wins!==stats[a].wins) return stats[b].wins-stats[a].wins;
+    if(stats[b].golds!==stats[a].golds) return stats[b].golds-stats[a].golds;
+    if(stats[b].silvers!==stats[a].silvers) return stats[b].silvers-stats[a].silvers;
+    if(stats[b].bronzes!==stats[a].bronzes) return stats[b].bronzes-stats[a].bronzes;
     if(stats[b].points!==stats[a].points) return stats[b].points-stats[a].points;
     return (stats[b].accuracy||0)-(stats[a].accuracy||0);
   });
@@ -3351,16 +3354,15 @@ function renderHallOfFame(){
       const lead = i===0 ? '🏆 ' : (i+1)+'. ';
       const accStr = s.accuracy==null ? '–' : s.accuracy+'%';
       html += '<div style="background:'+(i===0?'rgba(249,115,22,0.08)':'rgba(255,255,255,0.03)')+';border:1px solid '+(i===0?'rgba(249,115,22,0.35)':'var(--border)')+';border-radius:12px;padding:12px;margin-bottom:8px">'
-        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px">'
           + '<div style="font-weight:800;font-size:16px">'+lead+(p===ADMIN?'👑 ':'')+p+'</div>'
-          + '<div style="font-weight:900;font-size:15px;color:#f97316">🥇 '+s.wins+'</div>'
+          + '<div style="font-weight:800;font-size:14px;white-space:nowrap">🥇 '+s.golds+' &nbsp;🥈 '+s.silvers+' &nbsp;🥉 '+s.bronzes+'</div>'
         + '</div>'
         + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:13px">'
-          + '<div>🏅 Mitalit: <strong>'+s.podiums+'</strong></div>'
           + '<div>⭐ Uran pisteet: <strong>'+s.points+'</strong></div>'
           + '<div>🎯 Osuma: <strong>'+accStr+'</strong></div>'
           + '<div>📅 Turnaukset: <strong>'+s.played+'</strong></div>'
-          + '<div style="grid-column:1/3">🔝 Paras turnaus: <strong>'+s.best+' p</strong></div>'
+          + '<div>🔝 Paras turnaus: <strong>'+s.best+' p</strong></div>'
         + '</div>'
       + '</div>';
     });
