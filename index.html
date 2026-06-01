@@ -894,10 +894,6 @@
       <div class="card">
         <div class="stack" style="justify-content:space-between;margin-bottom:8px">
           <h2 style="margin:0">Ottelun veikkaukset</h2>
-          <div class="tabs" id="viewTabs" style="display:none">
-            <div id="tabTable" class="tab">Taulukko</div>
-            <div id="tabCards" class="tab active">Kortit</div>
-          </div>
         </div>
         <div id="matchLockBanner"></div>
         <div id="countdown"></div>
@@ -2625,22 +2621,6 @@ function renderPredictions(){
         </div>
         ${editCard}${saveArea}`;
       if(adminEditPlayer) attachPredListeners(el, t, match.id, adminEditPlayer);
-    } else if(viewMode==='table'){
-      const actual=(t.actuals||{})[match.id]||{};
-      let thead='<tr><th class="sticky-top sticky-left sticky-corner">Kohde</th>'+
-        PLAYERS.map(p=>'<th class="sticky-top">'+(p===ADMIN?'👑':'')+' '+p+'</th>').join('')+'</tr>';
-      let tbody=FIELDS.map(f=>{
-        let row='<tr><th class="sticky-left">'+f.label+'</th>';
-        row+=PLAYERS.map(p=>{
-          const pv=((t.predictions[match.id]||{})[p]||{})[f.key]||'';
-          const av=actual[f.key]||'';
-          const ok=av!==''&&fieldMatch(f.key,pv,av);
-          const bad=av!==''&&pv!==''&&!ok;
-          return '<td class="'+(ok?'correct':bad?'incorrect':'')+'">'+widget(f.key,pv,p+':'+f.key,true,false)+'</td>';
-        }).join('');
-        return row+'</tr>';
-      }).join('');
-      el.innerHTML='<div class="table-wrap"><table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table></div>';
     } else {
       el.innerHTML=PLAYERS.map(p=>predCardHTML(t,match,p,true)).join('');
     }
@@ -3148,7 +3128,6 @@ function doLogin(name){
   });
   // Vie/Tuo JSON piilotetaan aina — ne ovat Asetukset-modaalissa
   const ib=$('importBtn'); if(ib) ib.style.display='none';
-  const vt=$('viewTabs'); if(vt) vt.style.display=isAdmin?'':'none';
 
   // Admin-painikkeet yläpalkissa
   const msgBtn=$('adminMsgBtn'); if(msgBtn) msgBtn.style.display=isAdmin?'':'none';
@@ -3698,8 +3677,6 @@ $('deleteMatch').onclick=()=>{
   delete (t.predictions||{})[mid]; delete (t.actuals||{})[mid];
   mid=null; saveSelections(); saveStructure(); render();
 };
-$('tabTable').onclick=()=>{ viewMode='table'; $('tabTable').classList.add('active'); $('tabCards').classList.remove('active'); renderPredictions(); };
-$('tabCards').onclick=()=>{ viewMode='cards'; $('tabCards').classList.add('active'); $('tabTable').classList.remove('active'); renderPredictions(); };
 $('refreshCheck').onclick=()=>{ saveStructure(); savePredictions(currentUser); renderScoreboard(); renderPredictions(); };
 $('saveTopThree').onclick=()=>{ saveStructure(); savePredictions(currentUser); };
 // Export-funktio (käytetään myös asetusmodaalista)
