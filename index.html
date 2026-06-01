@@ -32,6 +32,7 @@
       .card, .person-card, .t3-card, table th, table td { background:var(--card) !important; }
       .score-card { background:var(--card); border-color:var(--border); }
       .tabs .tab { background:var(--card); color:var(--text); }
+      .modal-box { background:rgba(17,23,39,0.82) !important; border:1px solid rgba(255,255,255,0.08); }
     }
     h1{ text-align:center; margin:0 0 12px; font-size:22px } h2{ margin:0 0 10px; font-size:16px }
     .layout{ max-width:960px; margin:0 auto; display:grid; gap:12px; grid-template-columns:1fr }
@@ -42,12 +43,12 @@
     input[type="text"], input[type="number"], input[type="datetime-local"], select{ width:100%; padding:12px; border:1px solid var(--border); border-radius:10px; font-size:16px; background:#fff }
     input[type="number"]{ -moz-appearance:textfield }
     input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
-    .btn{ display:inline-flex; justify-content:center; align-items:center; gap:8px; border:none; border-radius:12px; padding:12px 14px; font-weight:700; cursor:pointer; background:var(--primary); color:#fff; font-size:15px; }
-    .btn.small{ padding:10px; font-size:14px; } .btn:disabled{ opacity:.6; cursor:not-allowed } .btn:hover:not(:disabled){ background:var(--primary-hover) }
-    .btn.secondary{ background:#fff; color:#111; border:1px solid var(--border); }
+    .btn{ display:inline-flex; justify-content:center; align-items:center; gap:8px; border:none; border-radius:12px; padding:12px 14px; font-weight:700; cursor:pointer; background:linear-gradient(135deg, var(--primary), #dc2626); color:#fff; font-size:15px; transition:filter 0.15s ease, transform 0.1s ease; box-shadow:0 3px 12px rgba(220,38,38,0.22); }
+    .btn.small{ padding:10px; font-size:14px; } .btn:disabled{ opacity:.6; cursor:not-allowed } .btn:hover:not(:disabled){ filter:brightness(1.08) } .btn:active:not(:disabled){ transform:scale(0.97) }
+    .btn.secondary{ background:#fff; color:#111; border:1px solid var(--border); box-shadow:none; }
     .btn.secondary:hover:not(:disabled){ background:#f3f4f6; }
     .btn.danger{ background:#dc2626; } .btn.danger:hover:not(:disabled){ background:#b91c1c; }
-    .btn.green{ background:#22c55e; } .btn.green:hover:not(:disabled){ background:#16a34a; }
+    .btn.green{ background:#22c55e; box-shadow:0 3px 12px rgba(34,197,94,0.28); } .btn.green:hover:not(:disabled){ background:#16a34a; }
     .muted{ color:var(--muted); font-size:13px } .grid{ display:grid; gap:10px } .separator{ height:1px; background:var(--border); margin:12px 0 }
     .score-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px }
     .score-card{ background:#fff; border:1px solid var(--border); border-radius:10px; padding:8px; text-align:center }
@@ -180,9 +181,9 @@
     .open-banner{ background:#22c55e; color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:10px; }
     #countdown{ margin-bottom:10px; }
     /* Modaalit */
-    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; display:flex; align-items:center; justify-content:center; padding:16px; animation:fadeInOverlay 0.2s ease; }
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:16px; animation:fadeInOverlay 0.2s ease; }
     @keyframes fadeInOverlay { from{opacity:0} to{opacity:1} }
-    .modal-box { background:var(--card); border-radius:18px; padding:20px; max-width:480px; width:100%; max-height:85vh; overflow-y:auto; box-shadow:0 8px 40px rgba(0,0,0,0.3); animation:slideUpModal 0.25s ease; }
+    .modal-box { background:rgba(255,255,255,0.8); backdrop-filter:blur(20px) saturate(140%); -webkit-backdrop-filter:blur(20px) saturate(140%); border:1px solid rgba(255,255,255,0.6); border-radius:18px; padding:20px; max-width:480px; width:100%; max-height:85vh; overflow-y:auto; box-shadow:0 8px 40px rgba(0,0,0,0.3); animation:slideUpModal 0.25s ease; }
     @keyframes slideUpModal { from{transform:translateY(30px);opacity:0} to{transform:translateY(0);opacity:1} }
     .modal-close { float:right; background:var(--border); border:none; border-radius:999px; width:32px; height:32px; font-size:18px; cursor:pointer; line-height:32px; text-align:center; color:var(--text); }
     .profile-header { text-align:center; padding:16px 0 10px; }
@@ -205,6 +206,7 @@
     .faq-rule:last-child { border-bottom:none; }
     .score-card { transition:transform 0.15s, box-shadow 0.15s; cursor:pointer; }
     .score-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.13); }
+    .score-card-first { border-color:#f59e0b !important; box-shadow:0 0 18px rgba(245,158,11,0.55), 0 0 5px rgba(245,158,11,0.7) !important; }
     /* Admin alert overlay */
     .alert-overlay { position:fixed;inset:0;z-index:99997;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeInOverlay 0.3s ease; }
     .alert-box { background:var(--card);border-radius:20px;padding:28px 24px;max-width:360px;width:100%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.5);animation:slideUpModal 0.3s ease; }
@@ -254,7 +256,7 @@
       opacity:0; z-index:5;
     }
     #introScreen .studio-present { font-size:11px; letter-spacing:10px; color:#555; text-transform:uppercase; margin-bottom:16px; opacity:0; animation: introLineUp 1s ease 0.4s forwards; }
-    #introScreen .studio-box { font-size:14px; letter-spacing:7px; color:#aaa; text-transform:uppercase; border:1px solid #333; padding:12px 28px; opacity:0; animation: introLineUp 1s ease 1s forwards; }
+    #introScreen .studio-box { font-size:14px; letter-spacing:7px; color:#aaa; text-transform:uppercase; border:1px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.05); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border-radius:8px; padding:12px 28px; opacity:0; animation: introLineUp 1s ease 1s forwards; }
     #introScreen .q-line { display:block; font-size:clamp(15px,3.8vw,22px); color:#999; line-height:2.4; letter-spacing:3px; font-style:italic; text-align:center; opacity:0; animation: introLineUp 1s ease forwards; }
     #introScreen .q-line:nth-child(1){animation-delay:0.4s}
     #introScreen .q-line:nth-child(2){animation-delay:1.6s}
@@ -311,9 +313,9 @@
     #introScreen .fact-text:nth-child(3){animation-delay:1.6s}
     #introScreen .fact-text:nth-child(4){animation-delay:2.6s}
     #introScreen .fact-text.accent { color:#fff; font-weight:800; font-size:clamp(20px,5vw,30px); letter-spacing:5px; margin-top:8px; }
-    #introScreen .enter-btn { font-size:clamp(12px,2.8vw,16px); letter-spacing:10px; color:#fb8a3c; text-transform:uppercase; border:1px solid #fb8a3c44; padding:14px 32px; border-radius:2px; opacity:0; animation: introLineUp 0.8s ease 0.6s forwards, introPulsate 2s ease-in-out 1.4s infinite; cursor:pointer; background:transparent; }
+    #introScreen .enter-btn { font-size:clamp(12px,2.8vw,16px); letter-spacing:10px; color:#fb8a3c; text-transform:uppercase; border:1px solid #fb8a3c44; padding:14px 32px; border-radius:8px; opacity:0; animation: introLineUp 0.8s ease 0.6s forwards, introPulsate 2s ease-in-out 1.4s infinite; cursor:pointer; background:rgba(255,255,255,0.06); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
     @keyframes introPulsate { 0%,100%{opacity:0.4;border-color:#fb8a3c33} 50%{opacity:1;border-color:#fb8a3c99} }
-    #introScreen .i-skip { position:fixed; bottom:18px; right:18px; z-index:200; background:transparent; color:#333; border:1px solid #222; padding:7px 16px; border-radius:20px; font-size:11px; cursor:pointer; letter-spacing:3px; }
+    #introScreen .i-skip { position:fixed; bottom:18px; right:18px; z-index:200; background:rgba(255,255,255,0.05); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); color:#777; border:1px solid rgba(255,255,255,0.15); padding:7px 16px; border-radius:20px; font-size:11px; cursor:pointer; letter-spacing:3px; }
     @keyframes introLineUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
     @keyframes introZoomIn { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
 
@@ -2873,12 +2875,14 @@ function renderScoreboard(){
   const sorted=sortedStandings(t);
   const icon=(rank)=>rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':'💩';
   const lastIdx=sorted.length-1;
+  const topPts=sorted.length?sorted[0][1]:0;
   el.innerHTML='<div class="score-grid">'+sorted.map(([n,pts],i)=>{
     const rank=i+1;
     const lastEdit=getLastEditedTime(t,n);
     const timeStr=lastEdit?new Date(lastEdit).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):null;
     const isLast=i===lastIdx;
-    return `<div class="score-card${isLast?' score-card-last':''}" style="cursor:${isLast?'pointer':'default'}" data-player="${n}" onclick="window._scoreCardClick(this,'${n}',${isLast})">
+    const isFirst=i===0 && topPts>0;
+    return `<div class="score-card${isFirst?' score-card-first':''}${isLast?' score-card-last':''}" style="cursor:${isLast?'pointer':'default'}" data-player="${n}" onclick="window._scoreCardClick(this,'${n}',${isLast})">
       <div class="name">${icon(rank)} ${n}</div>
       <div class="pts">${pts} p</div>
       ${timeStr?`<div style="font-size:10px;color:var(--muted);margin-top:3px">⏱ ${timeStr}</div>`:''}
