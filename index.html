@@ -195,12 +195,6 @@
     .profile-stat-lbl { font-size:11px; color:var(--muted); margin-top:2px; }
     .profile-match-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:14px; }
     .profile-match-row:last-child { border-bottom:none; }
-    .loser-overlay { position:fixed; inset:0; z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,0,0,0.85); animation:fadeInOverlay 0.3s ease; }
-    .loser-trophy { font-size:90px; animation:trophyBounce 0.6s ease infinite alternate; }
-    @keyframes trophyBounce { from{transform:scale(1) rotate(-6deg)} to{transform:scale(1.12) rotate(6deg)} }
-    .loser-title { font-size:28px; font-weight:900; color:#fbbf24; margin:16px 0 8px; text-align:center; }
-    .loser-sub { font-size:16px; color:#94a3b8; text-align:center; max-width:260px; }
-    .loser-close { margin-top:24px; background:#f97316; color:#fff; border:none; border-radius:12px; padding:12px 28px; font-size:16px; font-weight:700; cursor:pointer; }
     /* puck screensaver poistettu */
     .faq-section { margin-bottom:8px; }
     .faq-toggle { width:100%; text-align:left; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:12px 14px; font-weight:700; font-size:14px; cursor:pointer; color:var(--text); display:flex; justify-content:space-between; align-items:center; transition:border-color 0.15s; }
@@ -452,14 +446,6 @@
   </div>
 </div>
 
-<!-- HÄVIÄJÄ EASTER EGG -->
-<div id="loserEasterEgg" style="display:none" class="loser-overlay" onclick="document.getElementById('loserEasterEgg').style.display='none'">
-  <div class="loser-trophy">🏅</div>
-  <div class="loser-title">Paras häviäjä!</div>
-  <div class="loser-sub">Kolmannella kertaa katsomassa pohjaa… olet todellinen legenda omalla tavallasi 😂</div>
-  <button class="loser-close" onclick="document.getElementById('loserEasterEgg').style.display='none'">Kiitos tunnustuksesta 🙏</button>
-</div>
-
 <!-- KIEKKO SCREENSAVER -->
 
 
@@ -522,7 +508,7 @@
   <div style="max-width:960px;margin:0 auto 10px;">
     <!-- Rivi 1: otsikko -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-      <h1 style="margin:0;font-size:20px">🏒 Turnausveikkaus <span id="fi-flag" style="cursor:pointer;user-select:none" title="Klikkaa 7x...">🇫🇮</span></h1>
+      <h1 style="margin:0;font-size:20px">🏒 Turnausveikkaus 🇫🇮</h1>
     </div>
     <!-- Rivi 2: napit -->
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -1390,13 +1376,6 @@ window.showPlayerProfile = function(player) {
   document.getElementById('playerProfileModal').style.display = 'flex';
 };
 
-// ============================
-// HÄVIÄJÄ EASTER EGG
-// ============================
-window.showLoserEasterEgg = function() {
-  document.getElementById('loserEasterEgg').style.display = 'flex';
-};
-
 // Tallenna/palauta valinnat
 function saveSelections(){ try{ localStorage.setItem('tv_sel', JSON.stringify({t:tid,m:mid})); }catch(e){} }
 function restoreSelections(){
@@ -2000,66 +1979,6 @@ function checkNightMode() {
     banner.style.display = 'block';
     setTimeout(() => { banner.style.display = 'none'; }, 6000);
   }
-}
-
-// ============================
-// 4. SUOMEN LIPPU → RUOTSI
-// ============================
-let flagClicks = 0, flagTimer = null;
-document.addEventListener('click', e => {
-  if (!e.target.closest('#fi-flag')) return;
-  flagClicks++;
-  if (flagTimer) clearTimeout(flagTimer);
-  flagTimer = setTimeout(() => { flagClicks = 0; }, 2000);
-  if (flagClicks >= 7) {
-    flagClicks = 0;
-    activateSwedishMode();
-  }
-});
-
-const SWEDISH_MAP = {
-  'Turnausveikkaus': 'Turneringstipping',
-  'Valitse turnaus': 'Välj turnering',
-  'Valitse ottelu': 'Välj match',
-  'Yhteispisteet': 'Totalpoäng',
-  'Ottelun veikkaukset': 'Matchbetting',
-  'Ottelun tulos': 'Matchresultat',
-  'Tallenna veikkaukset': 'Spara tips',
-  'Luo turnaus': 'Skapa turnering',
-  'Luo ottelu': 'Skapa match',
-  'Vaihda käyttäjä': 'Byt användare',
-  'Kolmen kärki': 'Topp tre',
-  'Lopputulos': 'Slutresultat',
-  'Viesti Terolle': 'Meddelande till Tero',
-  'Päivitä & tarkasta': 'Uppdatera & kontrollera',
-  'Miten pisteet lasketaan': 'Hur räknas poäng',
-};
-
-function activateSwedishMode() {
-  const flag = document.getElementById('fi-flag');
-  if (flag) flag.textContent = '🇸🇪';
-
-  // Vaihda tekstit
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  const nodes = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode);
-  const originals = nodes.map(n => ({ node: n, text: n.textContent }));
-
-  nodes.forEach(node => {
-    let t = node.textContent;
-    Object.entries(SWEDISH_MAP).forEach(([fi, sv]) => { t = t.replace(fi, sv); });
-    node.textContent = t;
-  });
-
-  showStatus('🇸🇪 Välkommen till svenska läget!', '#006AA7');
-
-  // Palautetaan 4 sekunnin kuluttua
-  setTimeout(() => {
-    originals.forEach(({ node, text }) => { node.textContent = text; });
-    if (flag) flag.textContent = '🇫🇮';
-    showStatus('🇫🇮 Palataan suomeen!', '#003580');
-    hideStatus();
-  }, 4000);
 }
 
 // ============================
@@ -2755,8 +2674,6 @@ function renderActuals(){
 // ============================
 // RENDER: SCOREBOARD
 // ============================
-let lastPlaceClickCount = 0;
-let lastPlaceClickTimer = null;
 
 function getLastEditedTime(t, player) {
   // Etsi viimeisin muokkausaika kaikista otteluista
@@ -2789,16 +2706,6 @@ function renderScoreboard(){
 }
 
 window._scoreCardClick = function(el, player, isLast) {
-  if (isLast) {
-    lastPlaceClickCount++;
-    if (lastPlaceClickTimer) clearTimeout(lastPlaceClickTimer);
-    lastPlaceClickTimer = setTimeout(() => { lastPlaceClickCount = 0; }, 1200);
-    if (lastPlaceClickCount >= 3) {
-      lastPlaceClickCount = 0;
-      showLoserEasterEgg();
-      return;
-    }
-  }
   showPlayerProfile(player);
 };
 
