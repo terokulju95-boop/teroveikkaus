@@ -586,7 +586,19 @@
         ✉️ Viestit<span id="playerMsgBadge" style="display:none;position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;font-weight:900;padding:1px 5px;min-width:16px;text-align:center;line-height:1.5">0</span>
       </button>
       <button id="adminSettingsBtn" onclick="window._openSettingsPanel()" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:14px;cursor:pointer;color:var(--text)">⚙️ Asetukset</button>
+      <button id="hofBtn" onclick="window._openHallOfFame()" style="background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">🏆 Hall of Fame</button>
       <button class="btn small secondary" onclick="window._logout()">Vaihda käyttäjä</button>
+    </div>
+  </div>
+
+  <!-- HALL OF FAME MODAALI -->
+  <div id="hofModal" style="display:none" class="modal-overlay" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-box" style="max-width:560px">
+      <button class="modal-close" onclick="document.getElementById('hofModal').style.display='none'">✕</button>
+      <h2 style="margin:0 0 2px">🏆 Hall of Fame</h2>
+      <p class="muted" style="margin:0 0 14px;font-size:13px">Uran tilastot kaikista turnauksista</p>
+      <div id="hofArea"></div>
+      <div id="hofAdminArea"></div>
     </div>
   </div>
 
@@ -3096,7 +3108,7 @@ function renderTournamentSelects(){
   const tSel=$('tournamentSelect');
   if(tSel){
     tSel.innerHTML='<option value="">Valitse turnaus…</option>'+
-      (data.tournaments||[]).map(t=>'<option value="'+t.id+'" '+(String(t.id)===String(tid)?'selected':'')+'>'+t.name+(t.finished?' ✅':'')+'</option>').join('');
+      (data.tournaments||[]).filter(t=>!t.historical).map(t=>'<option value="'+t.id+'" '+(String(t.id)===String(tid)?'selected':'')+'>'+t.name+(t.finished?' ✅':'')+'</option>').join('');
     tSel.onchange=e=>{ tid=e.target.value||null; mid=null; saveSelections(); saveStructure(); render(); };
   }
   // Otteluvalinta
@@ -3247,6 +3259,165 @@ function getPersonalBest(player){
   if(!allMatches.length) return null;
   return allMatches.reduce((best,cur)=>cur.pts>best.pts?cur:best);
 }
+
+// ============================
+// HALL OF FAME – uran tilastot
+// ============================
+function _hofParseTime(s){ const m=(s||'').match(/^(\d{1,2}):(\d{2})$/); return m ? (+m[1])*60 + (+m[2]) : null; }
+
+// Yhden turnauksen tulos: pisteet, sijajärjestys (paras ensin), valmis?
+function hofTournamentResult(t){
+  if(t.historical){
+    const pts={}; PLAYERS.forEach(p=>{ pts[p]=(t.finalPoints && t.finalPoints[p]!=null) ? (Number(t.finalPoints[p])||0) : 0; });
+    const order=PLAYERS.slice().sort((a,b)=>pts[b]-pts[a]);
+    return { points:pts, order:order, finished:true };
+  }
+  const totals=calcTotals(t);
+  const order=sortedStandings(t).map(e=>e[0]);
+  return { points:totals, order:order, finished:!!t.finished };
+}
+
+// Uran tilastot kaikkien turnausten yli
+function calcCareerStats(){
+  const stats={}; PLAYERS.forEach(p=>stats[p]={points:0,wins:0,podiums:0,played:0,best:0,correct:0,scorable:0,accuracy:null});
+  (data.tournaments||[]).forEach(t=>{
+    const r=hofTournamentResult(t);
+    const hasResults = t.historical || t.finished || PLAYERS.some(p=>(r.points[p]||0)>0);
+    PLAYERS.forEach(p=>{
+      const pts=r.points[p]||0;
+      stats[p].points += pts;          // uran pisteet: kaikki turnaukset
+      if(hasResults) stats[p].played++;
+      if(pts>stats[p].best) stats[p].best=pts;
+    });
+    if(r.finished){                    // voitot & mitalit: vain valmiit turnaukset
+      if(r.order[0]) stats[r.order[0]].wins++;
+      r.order.slice(0,3).forEach(p=>{ if(p) stats[p].podiums++; });
+    }
+    // Osumaprosentti – vain oikeista turnauksista (joissa on kohdetietoa)
+    if(!t.historical){
+      (t.matches||[]).forEach(m=>{
+        const ac=(t.actuals||{})[m.id]||{};
+        FIELDS.forEach(f=>{
+          if(ac[f.key]==null || ac[f.key]==='') return; // ei tulosta → ei arvosteltava
+          PLAYERS.forEach(p=>{
+            const pr=((t.predictions||{})[m.id]||{})[p]||{};
+            stats[p].scorable++;
+            let ok;
+            if(f.key==='ekan_maali_aika'){
+              const pp=_hofParseTime(pr[f.key]||''), ap=_hofParseTime(ac[f.key]);
+              ok = pp!==null && ap!==null && pp===ap;
+            } else {
+              ok = fieldMatch(f.key, pr[f.key]||'', ac[f.key]);
+            }
+            if(ok) stats[p].correct++;
+          });
+        });
+      });
+      if(t.topThreePrediction && t.actualTopThree){
+        (t.actualTopThree||[]).forEach((slot,i)=>{
+          if(!slot) return;
+          PLAYERS.forEach(p=>{
+            stats[p].scorable++;
+            const arr=t.topThreePrediction[p]||[];
+            if(arr[i] && ciEq(arr[i],slot)) stats[p].correct++;
+          });
+        });
+      }
+    }
+  });
+  PLAYERS.forEach(p=>{ stats[p].accuracy = stats[p].scorable>0 ? Math.round(stats[p].correct/stats[p].scorable*100) : null; });
+  return stats;
+}
+
+window._openHallOfFame=function(){
+  document.getElementById('hofModal').style.display='flex';
+  renderHallOfFame();
+};
+
+function renderHallOfFame(){
+  const area=document.getElementById('hofArea'); if(!area) return;
+  const stats=calcCareerStats();
+  const order=PLAYERS.slice().sort((a,b)=>{
+    if(stats[b].wins!==stats[a].wins) return stats[b].wins-stats[a].wins;
+    if(stats[b].points!==stats[a].points) return stats[b].points-stats[a].points;
+    return (stats[b].accuracy||0)-(stats[a].accuracy||0);
+  });
+  if(!(data.tournaments||[]).length){
+    area.innerHTML='<p class="muted" style="font-size:13px">Ei vielä turnauksia.</p>';
+  } else {
+    let html='';
+    order.forEach((p,i)=>{
+      const s=stats[p];
+      const lead = i===0 ? '🏆 ' : (i+1)+'. ';
+      const accStr = s.accuracy==null ? '–' : s.accuracy+'%';
+      html += '<div style="background:'+(i===0?'rgba(249,115,22,0.08)':'rgba(255,255,255,0.03)')+';border:1px solid '+(i===0?'rgba(249,115,22,0.35)':'var(--border)')+';border-radius:12px;padding:12px;margin-bottom:8px">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+          + '<div style="font-weight:800;font-size:16px">'+lead+(p===ADMIN?'👑 ':'')+p+'</div>'
+          + '<div style="font-weight:900;font-size:15px;color:#f97316">🥇 '+s.wins+'</div>'
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:13px">'
+          + '<div>🏅 Mitalit: <strong>'+s.podiums+'</strong></div>'
+          + '<div>⭐ Uran pisteet: <strong>'+s.points+'</strong></div>'
+          + '<div>🎯 Osuma: <strong>'+accStr+'</strong></div>'
+          + '<div>📅 Turnaukset: <strong>'+s.played+'</strong></div>'
+          + '<div style="grid-column:1/3">🔝 Paras turnaus: <strong>'+s.best+' p</strong></div>'
+        + '</div>'
+      + '</div>';
+    });
+    area.innerHTML=html;
+  }
+  // Admin: menneiden turnausten lisäys
+  const adm=document.getElementById('hofAdminArea'); if(!adm) return;
+  if(currentUser!==ADMIN){ adm.innerHTML=''; return; }
+  let inputs='';
+  PLAYERS.forEach((p,idx)=>{
+    inputs+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">'
+      +'<span style="font-size:14px">'+(p===ADMIN?'👑 ':'')+p+'</span>'
+      +'<input id="hofPts'+idx+'" type="number" inputmode="numeric" placeholder="0" style="width:90px" />'
+    +'</div>';
+  });
+  const hist=(data.tournaments||[]).filter(t=>t.historical);
+  let histList='';
+  if(hist.length){
+    histList='<div style="margin-top:12px"><div style="font-size:12px;color:var(--muted);margin-bottom:6px">Lisätyt menneet turnaukset:</div>';
+    hist.forEach(t=>{
+      histList+='<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border:1px solid var(--border);border-radius:8px;margin-bottom:4px;font-size:13px">'
+        +'<span>'+t.name+'</span>'
+        +'<button onclick="window._deleteHistorical(\''+t.id+'\')" style="background:transparent;border:none;color:#dc2626;font-size:16px;cursor:pointer;padding:0 4px">✕</button>'
+      +'</div>';
+    });
+    histList+='</div>';
+  }
+  adm.innerHTML='<div class="separator" style="margin:16px 0"></div>'
+    +'<h2 style="margin:0 0 4px;font-size:16px">➕ Lisää mennyt turnaus</h2>'
+    +'<p class="muted" style="font-size:12px;margin:0 0 10px">Syötä turnauksen nimi ja kunkin pelaajan loppupisteet — voittaja päätellään pisteistä. Et tarvitse otteluita.</p>'
+    +'<input id="hofHistName" type="text" placeholder="Esim. MM 2024 · Tšekki" style="margin-bottom:10px" />'
+    +inputs
+    +'<button class="btn small" style="width:100%;margin-top:6px" onclick="window._addHistoricalTournament()">Lisää Hall of Fameen</button>'
+    +'<div id="hofHistMsg" style="font-size:13px;text-align:center;min-height:18px;margin-top:6px"></div>'
+    +histList;
+}
+
+window._addHistoricalTournament=function(){
+  const nameEl=document.getElementById('hofHistName');
+  const name=((nameEl&&nameEl.value)||'').trim();
+  const msg=document.getElementById('hofHistMsg');
+  if(!name){ if(msg){ msg.style.color='#dc2626'; msg.textContent='Anna turnauksen nimi'; } return; }
+  const finalPoints={};
+  PLAYERS.forEach((p,idx)=>{ const el=document.getElementById('hofPts'+idx); finalPoints[p]= el ? (parseInt(el.value,10)||0) : 0; });
+  if(!data.tournaments) data.tournaments=[];
+  data.tournaments.push({ id:'hist_'+Date.now(), name:name, historical:true, finished:true, finalPoints:finalPoints, matches:[], predictions:{}, actuals:{}, topThreePrediction:{}, actualTopThree:[] });
+  saveStructure();
+  if(msg){ msg.style.color='#22c55e'; msg.textContent='✅ Lisätty!'; setTimeout(function(){ if(msg) msg.textContent=''; },3000); }
+  renderHallOfFame();
+};
+
+window._deleteHistorical=function(id){
+  if(!confirm('Poistetaanko tämä mennyt turnaus Hall of Famesta?')) return;
+  data.tournaments=(data.tournaments||[]).filter(t=>String(t.id)!==String(id));
+  saveStructure();
+  renderHallOfFame();
+};
 
 // ============================
 // EXPOSE TO WINDOW (PDF-skripti tarvitsee)
