@@ -4405,38 +4405,81 @@ function haptic(type){
   }catch(e){}
 }
 
-// Pisteiden tallennus localStorageen
+// Pisteiden tallennus: Firebase (jaettu kaikille) + localStorage-välimuisti
 var SCORES_KEY = 'tv_game_scores_v2';
-function getScores(){
+
+function getScoresLocal(){
   try{ return JSON.parse(localStorage.getItem(SCORES_KEY)||'{}'); }catch(e){ return {}; }
 }
-function saveScore(game, pts){
-  var player = window.currentUser || (function(){ try{ return localStorage.getItem('tv_user')||'?'; }catch(e){ return '?'; } })();
-  var all = getScores();
-  all[game] = all[game] || [];
-  all[game].push({player:player, pts:pts, ts:new Date().toISOString()});
-  all[game].sort(function(a,b){return b.pts-a.pts;});
-  all[game] = all[game].slice(0,20);
+function setScoresLocal(all){
   try{ localStorage.setItem(SCORES_KEY, JSON.stringify(all)); }catch(e){}
-  return all[game];
-}
-function getTop5(game){
-  var all = getScores();
-  return (all[game]||[]).slice(0,5);
 }
 
-// Admin: renderöi pelitilastot asetuksiin
-window._renderGameStats = function(){
+// Hae Firestore-viittaus pelituloksiin (tai null jos Firebase ei ole valmis)
+async function _gamesFbRef(){
+  if(!window._firebaseDb) return null;
+  try{
+    var fs = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    return { fs: fs, ref: fs.doc(window._firebaseDb, 'app', 'gamescores') };
+  }catch(e){ return null; }
+}
+
+// Hae kaikki tulokset Firebasesta (fallback: localStorage-välimuisti)
+async function getScoresRemote(){
+  var fb = await _gamesFbRef();
+  if(!fb) return getScoresLocal();
+  try{
+    var snap = await fb.fs.getDoc(fb.ref);
+    var data = snap.exists() ? (snap.data().games || {}) : {};
+    setScoresLocal(data); // päivitä välimuisti
+    return data;
+  }catch(e){ return getScoresLocal(); }
+}
+
+// Tallenna tulos: päivitä välimuisti heti + yhdistä Firebaseen (lue–muokkaa–kirjoita)
+async function saveScore(game, pts){
+  var player = window.currentUser || (function(){ try{ return localStorage.getItem('tv_user')||'?'; }catch(e){ return '?'; } })();
+  var entry = { player:player, pts:pts, ts:new Date().toISOString() };
+
+  // 1) Paikallinen välimuisti heti (nopea fallback jos verkko pätkii)
+  var local = getScoresLocal();
+  local[game] = (local[game]||[]).concat([entry]);
+  local[game].sort(function(a,b){ return b.pts-a.pts; });
+  local[game] = local[game].slice(0,20);
+  setScoresLocal(local);
+
+  // 2) Firebase: kaikkien jaettu, pysyvä tallennus
+  var fb = await _gamesFbRef();
+  if(fb){
+    try{
+      var snap = await fb.fs.getDoc(fb.ref);
+      var data = snap.exists() ? (snap.data().games || {}) : {};
+      var arr = (data[game]||[]).concat([entry]);
+      arr.sort(function(a,b){ return b.pts-a.pts; });
+      arr = arr.slice(0,20);
+      data[game] = arr;
+      await fb.fs.setDoc(fb.ref, { games: data });
+      local[game] = arr; setScoresLocal(local); // synkkaa välimuisti
+      return arr;
+    }catch(e){ /* käytetään paikallista tulosta alla */ }
+  }
+  return local[game];
+}
+
+// Admin: renderöi pelitilastot asetuksiin (lukee Firebasesta → näkee KAIKKIEN tulokset)
+window._renderGameStats = async function(){
   var el = document.getElementById('gameStatsArea');
   if(!el) return;
+  el.innerHTML = '<p style="color:#6b7280;font-size:13px">Ladataan…</p>';
   var games = [
     {key:'2048', label:'🏒 2048 Kiekko'},
     {key:'dodge', label:'⛸️ Väistä Kiekkoja'},
     {key:'snake', label:'🐍 Snake Kiekko'}
   ];
+  var all = await getScoresRemote();
   var html = '';
   games.forEach(function(g){
-    var top = getTop5(g.key);
+    var top = (all[g.key]||[]).slice(0,5);
     html += '<div style="margin-bottom:14px;">';
     html += '<div style="font-weight:800;font-size:13px;margin-bottom:7px;color:#f97316">'+g.label+'</div>';
     if(!top.length){
@@ -4456,9 +4499,11 @@ window._renderGameStats = function(){
   el.innerHTML = html || '<p style="color:#6b7280;font-size:13px">Ei pelattuja pelejä.</p>';
 };
 
-window._resetGameStats = function(){
+window._resetGameStats = async function(){
   if(!confirm('Nollataan kaikki pelitilastot?')) return;
   try{ localStorage.removeItem(SCORES_KEY); }catch(e){}
+  var fb = await _gamesFbRef();
+  if(fb){ try{ await fb.fs.setDoc(fb.ref, { games: {} }); }catch(e){} }
   window._renderGameStats();
 };
 
@@ -4481,18 +4526,15 @@ function makeOverlay(id){
 }
 
 // Game-over ruutu
-function showGameOver(containerId, icon, title, pts, game, onRestart){
-  var sc = saveScore(game, pts);
-  var rank = sc.findIndex(function(e){ return e.pts===pts && e.player===(window.currentUser||'?'); });
-  var rankTxt = rank===0 ? '🏆 Uusi ennätys!' : rank===1 ? '🥈 Toinen sija!' : rank===2 ? '🥉 Kolmas sija!' : '';
+async function showGameOver(containerId, icon, title, pts, game, onRestart){
   var go = document.getElementById(containerId+'-go');
   if(!go) return;
+  // Näytä ruutu heti (ei jää odottamaan verkkoa)
   go.style.display = 'flex';
   go.innerHTML =
     '<div class="g-gameover-icon">'+icon+'</div>'+
     '<div class="g-gameover-title">'+title+'</div>'+
     '<div class="g-gameover-score">'+pts+'</div>'+
-    (rankTxt?'<div style="color:#fbbf24;font-weight:800;font-size:14px">'+rankTxt+'</div>':'')+
     '<div class="g-gameover-sub">pistettä</div>'+
     '<div style="display:flex;gap:10px;margin-top:8px;">'+
       '<button class="g-btn g-btn-orange" onclick="window._gameRestart_'+containerId+'&&window._gameRestart_'+containerId+'()">Uudelleen!</button>'+
@@ -4500,6 +4542,23 @@ function showGameOver(containerId, icon, title, pts, game, onRestart){
     '</div>';
   window['_gameRestart_'+containerId] = onRestart;
   haptic('heavy');
+
+  // Tallenna tulos (Firebase + välimuisti) ja näytä sijoitus kun valmis
+  try{
+    var sc = await saveScore(game, pts);
+    var rank = sc.findIndex(function(e){ return e.pts===pts && e.player===(window.currentUser||'?'); });
+    var rankTxt = rank===0 ? '🏆 Uusi ennätys!' : rank===1 ? '🥈 Toinen sija!' : rank===2 ? '🥉 Kolmas sija!' : '';
+    if(rankTxt && go.isConnected){
+      var scoreEl = go.querySelector('.g-gameover-score');
+      if(scoreEl && !go.querySelector('.g-gameover-rank')){
+        var badge = document.createElement('div');
+        badge.className = 'g-gameover-rank';
+        badge.style.cssText = 'color:#fbbf24;font-weight:800;font-size:14px';
+        badge.textContent = rankTxt;
+        scoreEl.insertAdjacentElement('afterend', badge);
+      }
+    }
+  }catch(e){}
 }
 
 // ══════════════════════════════════════════
