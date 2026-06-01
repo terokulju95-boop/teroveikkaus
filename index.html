@@ -340,6 +340,29 @@
     .wanted-poster .w-bullet { position:absolute; border-radius:50%; background:radial-gradient(circle,#1a0f00 30%,#3d1f00 60%,#f5deb3 100%); }
     .wanted-close { position:fixed; top:20px; right:20px; background:rgba(255,255,255,0.1); color:#fff; border:1px solid #555; border-radius:50%; width:40px; height:40px; font-size:20px; cursor:pointer; z-index:100; display:flex; align-items:center; justify-content:center; }
 
+    /* ===== KAUDEN KOOSTE (Wrapped) ===== */
+    #wrappedOverlay { position:fixed; inset:0; z-index:99990; display:none; flex-direction:column; align-items:center; justify-content:center; overflow:hidden;
+      background:linear-gradient(160deg,#1e1b4b 0%,#831843 50%,#7c2d12 100%); color:#fff; font-family:system-ui,sans-serif; padding:24px; }
+    #wrappedOverlay.show { display:flex; }
+    .wr-bars { position:absolute; top:14px; left:14px; right:14px; display:flex; gap:5px; z-index:5; }
+    .wr-bar { flex:1; height:3px; border-radius:3px; background:rgba(255,255,255,0.25); overflow:hidden; }
+    .wr-bar-fill { height:100%; width:0; background:#fff; border-radius:3px; }
+    .wr-bar-fill.full { width:100%; }
+    .wr-bar-fill.run { width:100%; transition:width linear; }
+    .wr-close { position:absolute; top:26px; right:18px; z-index:6; background:rgba(0,0,0,0.25); color:#fff; border:none; border-radius:50%; width:38px; height:38px; font-size:20px; cursor:pointer; }
+    .wr-nav { position:absolute; top:0; bottom:0; width:35%; z-index:4; cursor:pointer; }
+    .wr-nav.left { left:0; } .wr-nav.right { right:0; width:65%; }
+    .wr-card { position:relative; z-index:3; text-align:center; max-width:480px; width:100%; animation:wrIn 0.5s ease; }
+    @keyframes wrIn { from{opacity:0;transform:translateY(18px) scale(0.98)} to{opacity:1;transform:translateY(0) scale(1)} }
+    .wr-emoji { font-size:clamp(48px,16vw,96px); line-height:1; margin-bottom:14px; }
+    .wr-big { font-size:clamp(56px,20vw,120px); font-weight:900; letter-spacing:-3px; line-height:1; margin:6px 0; }
+    .wr-label { font-size:11px; letter-spacing:6px; text-transform:uppercase; opacity:0.7; margin-bottom:10px; }
+    .wr-headline { font-size:clamp(22px,6vw,34px); font-weight:800; line-height:1.25; margin:6px 0; }
+    .wr-sub { font-size:clamp(14px,4vw,18px); opacity:0.85; margin-top:12px; line-height:1.5; }
+    .wr-pill { display:inline-block; margin-top:18px; padding:8px 18px; border-radius:999px; background:rgba(255,255,255,0.15); font-size:13px; font-weight:700; letter-spacing:1px; }
+    .wr-share { margin-top:26px; background:#fff; color:#1e1b4b; border:none; border-radius:999px; padding:14px 28px; font-size:15px; font-weight:800; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.3); }
+    .wr-hint { position:absolute; bottom:18px; left:0; right:0; text-align:center; font-size:11px; opacity:0.5; z-index:3; letter-spacing:1px; }
+
   </style>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
@@ -591,6 +614,14 @@
       <button id="hofBtn" onclick="window._openHallOfFame()" style="background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">🏆 Hall of Fame</button>
       <button class="btn small secondary" onclick="window._logout()">Vaihda käyttäjä</button>
     </div>
+  </div>
+
+  <!-- KAUDEN KOOSTE (Wrapped) -->
+  <div id="wrappedOverlay" onclick="window._wrappedTap(event)">
+    <div class="wr-bars" id="wrBars"></div>
+    <button class="wr-close" onclick="event.stopPropagation(); window._closeWrapped()">✕</button>
+    <div class="wr-card" id="wrCard"></div>
+    <div class="wr-hint">Napauta jatkaaksesi → · vasen reuna taakse</div>
   </div>
 
   <!-- HALL OF FAME MODAALI -->
@@ -2888,6 +2919,9 @@ function renderScoreboard(){
       ${timeStr?`<div style="font-size:10px;color:var(--muted);margin-top:3px">⏱ ${timeStr}</div>`:''}
     </div>`;
   }).join('')+'</div>';
+  if(t.finished){
+    el.innerHTML += '<button class="btn small" style="width:100%;margin-top:10px;background:linear-gradient(135deg,#8b5cf6,#ec4899);box-shadow:0 3px 12px rgba(139,92,246,0.3)" onclick="window._openWrapped()">🎬 Kauden kooste</button>';
+  }
 }
 
 window._scoreCardClick = function(el, player, isLast) {
@@ -3437,6 +3471,136 @@ window._deleteHistorical=function(id){
   data.tournaments=(data.tournaments||[]).filter(t=>String(t.id)!==String(id));
   saveStructure();
   renderHallOfFame();
+};
+
+// ============================
+// KAUDEN KOOSTE (Wrapped)
+// ============================
+function computeWrapped(t, player){
+  const sorted=sortedStandings(t);
+  const order=sorted.map(e=>e[0]);
+  const rank=order.indexOf(player)+1;
+  const total=sorted.length;
+  const totals=calcTotals(t);
+  const pts=totals[player]||0;
+  let correct=0, scorable=0;
+  const fieldStat={}; FIELDS.forEach(f=>fieldStat[f.key]={c:0,s:0,label:f.label});
+  let bestMatch={pts:-1,name:''};
+  (t.matches||[]).forEach(m=>{
+    const ac=(t.actuals||{})[m.id]||{};
+    const pr=((t.predictions||{})[m.id]||{})[player]||{};
+    FIELDS.forEach(f=>{
+      if(ac[f.key]==null||ac[f.key]==='') return;
+      scorable++; fieldStat[f.key].s++;
+      let ok;
+      if(f.key==='ekan_maali_aika'){ const pp=_hofParseTime(pr[f.key]||''), ap=_hofParseTime(ac[f.key]); ok=pp!==null&&ap!==null&&pp===ap; }
+      else ok=fieldMatch(f.key, pr[f.key]||'', ac[f.key]);
+      if(ok){ correct++; fieldStat[f.key].c++; }
+    });
+    const mp=calcMatchPts(t,m.id,player)+(calcTimeProximityPts(t,m.id)[player]||0);
+    if(mp>bestMatch.pts){ bestMatch={pts:mp,name:(m.name||'Ottelu')}; }
+  });
+  if(t.topThreePrediction && t.actualTopThree){
+    (t.actualTopThree||[]).forEach((slot,i)=>{ if(!slot) return; scorable++; const arr=t.topThreePrediction[player]||[]; if(arr[i]&&ciEq(arr[i],slot)) correct++; });
+  }
+  const accuracy = scorable>0 ? Math.round(correct/scorable*100) : null;
+  let strongest=null, weakest=null;
+  Object.keys(fieldStat).forEach(k=>{
+    const fs=fieldStat[k]; if(fs.s<1) return;
+    const ratio=fs.c/fs.s;
+    if(!strongest || ratio>strongest.ratio || (ratio===strongest.ratio && fs.s>strongest.s)) strongest={label:fs.label,c:fs.c,s:fs.s,ratio:ratio};
+    if(ratio<1){ if(!weakest || ratio<weakest.ratio || (ratio===weakest.ratio && fs.s>weakest.s)) weakest={label:fs.label,c:fs.c,s:fs.s,ratio:ratio}; }
+  });
+  const above = rank>1 ? order[rank-2] : null;
+  const abovePts = above!=null ? (totals[above]||0) : null;
+  return {player:player, name:t.name, rank:rank, total:total, pts:pts, accuracy:accuracy, correct:correct, scorable:scorable,
+    bestMatch:(bestMatch.pts>=0?bestMatch:null), strongest:strongest, weakest:weakest, above:above, abovePts:abovePts, isWinner:(order[0]===player)};
+}
+
+function buildWrappedCards(d){
+  const cards=[];
+  const medal = d.rank===1?'🥇':d.rank===2?'🥈':d.rank===3?'🥉':'';
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  cards.push({dur:3200, html:'<div class="wr-label">Kauden kooste</div><div class="wr-emoji">🏒</div><div class="wr-headline">'+esc(d.name)+'</div><div class="wr-sub">Sinun koosteesi, '+esc(d.player)+'</div>'});
+  cards.push({dur:4000, html:'<div class="wr-label">Sijoituksesi</div><div class="wr-emoji">'+(medal||'🎯')+'</div><div class="wr-big">'+d.rank+'.</div><div class="wr-sub">'+d.total+' veikkaajasta</div>'});
+  cards.push({dur:4000, html:'<div class="wr-label">Pisteet</div><div class="wr-big wr-count" data-target="'+d.pts+'">0</div><div class="wr-sub">pistettä kerätty</div>'});
+  if(d.accuracy!=null) cards.push({dur:4000, html:'<div class="wr-label">Osumatarkkuus</div><div class="wr-emoji">🎯</div><div class="wr-big wr-count" data-target="'+d.accuracy+'" data-suffix="%">0%</div><div class="wr-sub">kohteista oikein ('+d.correct+'/'+d.scorable+')</div>'});
+  if(d.bestMatch && d.bestMatch.pts>0) cards.push({dur:4200, html:'<div class="wr-label">Paras ottelusi</div><div class="wr-emoji">🔥</div><div class="wr-headline">'+esc(d.bestMatch.name)+'</div><div class="wr-sub">'+d.bestMatch.pts+' pistettä yhdestä ottelusta</div>'});
+  if(d.strongest){
+    let h='<div class="wr-label">Vahvuutesi</div><div class="wr-emoji">💪</div><div class="wr-headline">'+esc(d.strongest.label)+'</div><div class="wr-sub">osuit '+Math.round(d.strongest.ratio*100)+'% ('+d.strongest.c+'/'+d.strongest.s+')';
+    if(d.weakest && d.weakest.label!==d.strongest.label) h+='<br>Heikoin laji: '+esc(d.weakest.label)+' '+Math.round(d.weakest.ratio*100)+'%';
+    h+='</div>';
+    cards.push({dur:4800, html:h});
+  }
+  if(d.isWinner) cards.push({dur:4200, html:'<div class="wr-label">Mestari</div><div class="wr-emoji">👑</div><div class="wr-headline">Sinä hallitsit kauden!</div><div class="wr-sub">Kukaan ei yltänyt ohitsesi.</div>'});
+  else if(d.above) cards.push({dur:4200, html:'<div class="wr-label">Edelläsi kiri</div><div class="wr-emoji">😤</div><div class="wr-headline">'+esc(d.above)+'</div><div class="wr-sub">'+d.abovePts+' p — ensi kaudella kiinni!</div>'});
+  cards.push({dur:99999999, html:'<div class="wr-emoji">🏆</div><div class="wr-headline">Nähdään ensi kaudella!</div><div class="wr-sub">'+esc(d.name)+'</div><button class="wr-share" onclick="event.stopPropagation(); window._wrappedShare()">📤 Jaa kooste</button>'});
+  return cards;
+}
+
+let _wrCards=[], _wrIdx=0, _wrTimer=null, _wrData=null;
+window._openWrapped=function(){
+  const t=getTournament(); if(!t || !t.finished) return;
+  _wrData=computeWrapped(t, currentUser);
+  _wrCards=buildWrappedCards(_wrData);
+  const bars=document.getElementById('wrBars');
+  bars.innerHTML=_wrCards.map(function(){return '<div class="wr-bar"><div class="wr-bar-fill"></div></div>';}).join('');
+  document.getElementById('wrappedOverlay').classList.add('show');
+  _wrShow(0);
+};
+window._closeWrapped=function(){ clearTimeout(_wrTimer); document.getElementById('wrappedOverlay').classList.remove('show'); };
+window._wrappedNext=function(){ _wrShow(_wrIdx+1); };
+window._wrappedPrev=function(){ _wrShow(_wrIdx-1); };
+window._wrappedTap=function(e){ const w=window.innerWidth||document.documentElement.clientWidth; if(e.clientX < w*0.32) window._wrappedPrev(); else window._wrappedNext(); };
+function _wrShow(i){
+  if(i<0) i=0;
+  if(i>=_wrCards.length){ window._closeWrapped(); return; }
+  _wrIdx=i;
+  clearTimeout(_wrTimer);
+  const card=document.getElementById('wrCard');
+  card.innerHTML=_wrCards[i].html;
+  card.style.animation='none'; void card.offsetWidth; card.style.animation='wrIn 0.5s ease';
+  const fills=document.querySelectorAll('#wrBars .wr-bar-fill');
+  fills.forEach(function(f,idx){ f.style.transition='none'; f.style.width = idx<i ? '100%' : '0%'; });
+  const cur=fills[i]; const dur=_wrCards[i].dur;
+  if(cur){
+    if(dur<60000){ void cur.offsetWidth; cur.style.transition='width '+dur+'ms linear'; cur.style.width='100%'; }
+    else { cur.style.width='35%'; }
+  }
+  const cnt=card.querySelector('.wr-count'); if(cnt) _wrCountUp(cnt);
+  if(dur<60000){ _wrTimer=setTimeout(function(){ _wrShow(i+1); }, dur); }
+}
+function _wrCountUp(el){
+  const target=parseInt(el.dataset.target,10)||0; const suffix=el.dataset.suffix||'';
+  const start=performance.now(), dur=1100;
+  function step(now){ const p=Math.min(1,(now-start)/dur); const v=Math.round(target*(1-Math.pow(1-p,3))); el.textContent=v+suffix; if(p<1) requestAnimationFrame(step); }
+  requestAnimationFrame(step);
+}
+window._wrappedShare=async function(){
+  const d=_wrData; if(!d) return;
+  try{
+    const c=document.createElement('canvas'); c.width=1080; c.height=1920; const x=c.getContext('2d');
+    const g=x.createLinearGradient(0,0,1080,1920); g.addColorStop(0,'#1e1b4b'); g.addColorStop(0.5,'#831843'); g.addColorStop(1,'#7c2d12');
+    x.fillStyle=g; x.fillRect(0,0,1080,1920);
+    x.textAlign='center'; x.fillStyle='#fff';
+    x.font='bold 46px system-ui'; x.fillText('🏒 KAUDEN KOOSTE', 540, 250);
+    x.font='bold 64px system-ui'; x.fillText(d.name, 540, 360);
+    x.font='bold 84px system-ui'; x.fillText(d.player, 540, 600);
+    const medal=d.rank===1?'🥇':d.rank===2?'🥈':d.rank===3?'🥉':'';
+    x.font='900 240px system-ui'; x.fillText(d.rank+'.', 540, 940);
+    x.font='bold 46px system-ui'; x.fillText('sija '+d.total+' veikkaajasta '+medal, 540, 1040);
+    x.font='900 150px system-ui'; x.fillText(d.pts+' p', 540, 1300);
+    if(d.accuracy!=null){ x.font='bold 54px system-ui'; x.fillText('🎯 '+d.accuracy+'% osumatarkkuus', 540, 1440); }
+    x.font='40px system-ui'; x.fillStyle='rgba(255,255,255,0.7)'; x.fillText('Turnausveikkaus', 540, 1820);
+    c.toBlob(async function(blob){
+      if(!blob){ return; }
+      const file=new File([blob],'kooste.png',{type:'image/png'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        try{ await navigator.share({files:[file], title:'Kauden kooste'}); return; }catch(e){ if(e && e.name==='AbortError') return; }
+      }
+      const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='kooste.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){URL.revokeObjectURL(url);},2000);
+    },'image/png');
+  }catch(e){ alert('Jakaminen ei onnistunut tällä laitteella.'); }
 };
 
 // ============================
