@@ -3513,27 +3513,80 @@ function computeWrapped(t, player){
   });
   const above = rank>1 ? order[rank-2] : null;
   const abovePts = above!=null ? (totals[above]||0) : null;
+
+  // ── Kuka veikkasi samoin kuin sinä (KAIKKI kohteet) ──
+  const others=PLAYERS.filter(p=>p!==player);
+  const agreeTotal={}; others.forEach(o=>agreeTotal[o]=0);
+  const fieldAgree={}; FIELDS.forEach(f=>{ fieldAgree[f.key]={}; others.forEach(o=>fieldAgree[f.key][o]=0); });
+  (t.matches||[]).forEach(m=>{
+    const mine=((t.predictions||{})[m.id]||{})[player]||{};
+    FIELDS.forEach(f=>{
+      const myV=mine[f.key]||''; if(!myV) return;
+      others.forEach(o=>{
+        const ov=(((t.predictions||{})[m.id]||{})[o]||{})[f.key]||'';
+        if(ov && ciEq(ov,myV)){ agreeTotal[o]++; fieldAgree[f.key][o]++; }
+      });
+    });
+  });
+  if(t.topThreePrediction){ // kolmen kärki mukaan kokonaislaskuun
+    const mine=t.topThreePrediction[player]||[];
+    others.forEach(o=>{ const ot=t.topThreePrediction[o]||[]; mine.forEach((v,i)=>{ if(v && ot[i] && ciEq(v,ot[i])) agreeTotal[o]++; }); });
+  }
+  let soulmate=null; others.forEach(o=>{ if(agreeTotal[o]>0 && (!soulmate || agreeTotal[o]>soulmate.count)) soulmate={player:o,count:agreeTotal[o]}; });
+  const agreeRanking=others.map(o=>({player:o,count:agreeTotal[o]})).sort((a,b)=>b.count-a.count);
+  const fieldTop={};
+  FIELDS.forEach(f=>{ let top=null; others.forEach(o=>{ const c=fieldAgree[f.key][o]; if(c>0 && (!top || c>top.count)) top={player:o,count:c}; }); if(top) fieldTop[f.key]={label:f.label,player:top.player,count:top.count}; });
+
+  // ── Turnausinfot ──
+  let predMade=0;
+  (t.matches||[]).forEach(m=>{ const pr=((t.predictions||{})[m.id]||{})[player]||{}; FIELDS.forEach(f=>{ if(pr[f.key]!=null && pr[f.key]!=='') predMade++; }); });
+  if(t.topThreePrediction){ (t.topThreePrediction[player]||[]).forEach(v=>{ if(v) predMade++; }); }
+  let familyTotal=0; PLAYERS.forEach(p=>familyTotal+=(totals[p]||0));
+  let matchesPlayed=0; (t.matches||[]).forEach(m=>{ const ac=(t.actuals||{})[m.id]||{}; if(Object.keys(ac).some(k=>ac[k]!=null&&ac[k]!=='')) matchesPlayed++; });
+  const winner=order[0]; const winnerPts=winner!=null?(totals[winner]||0):0;
+
   return {player:player, name:t.name, rank:rank, total:total, pts:pts, accuracy:accuracy, correct:correct, scorable:scorable,
-    bestMatch:(bestMatch.pts>=0?bestMatch:null), strongest:strongest, weakest:weakest, above:above, abovePts:abovePts, isWinner:(order[0]===player)};
+    bestMatch:(bestMatch.pts>=0?bestMatch:null), strongest:strongest, weakest:weakest, above:above, abovePts:abovePts, isWinner:(order[0]===player),
+    soulmate:soulmate, agreeRanking:agreeRanking, fieldTop:fieldTop, predMade:predMade, familyTotal:familyTotal, matchesPlayed:matchesPlayed, winner:winner, winnerPts:winnerPts};
 }
 
 function buildWrappedCards(d){
   const cards=[];
   const medal = d.rank===1?'🥇':d.rank===2?'🥈':d.rank===3?'🥉':'';
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  cards.push({dur:3200, html:'<div class="wr-label">Kauden kooste</div><div class="wr-emoji">🏒</div><div class="wr-headline">'+esc(d.name)+'</div><div class="wr-sub">Sinun koosteesi, '+esc(d.player)+'</div>'});
-  cards.push({dur:4000, html:'<div class="wr-label">Sijoituksesi</div><div class="wr-emoji">'+(medal||'🎯')+'</div><div class="wr-big">'+d.rank+'.</div><div class="wr-sub">'+d.total+' veikkaajasta</div>'});
-  cards.push({dur:4000, html:'<div class="wr-label">Pisteet</div><div class="wr-big wr-count" data-target="'+d.pts+'">0</div><div class="wr-sub">pistettä kerätty</div>'});
-  if(d.accuracy!=null) cards.push({dur:4000, html:'<div class="wr-label">Osumatarkkuus</div><div class="wr-emoji">🎯</div><div class="wr-big wr-count" data-target="'+d.accuracy+'" data-suffix="%">0%</div><div class="wr-sub">kohteista oikein ('+d.correct+'/'+d.scorable+')</div>'});
-  if(d.bestMatch && d.bestMatch.pts>0) cards.push({dur:4200, html:'<div class="wr-label">Paras ottelusi</div><div class="wr-emoji">🔥</div><div class="wr-headline">'+esc(d.bestMatch.name)+'</div><div class="wr-sub">'+d.bestMatch.pts+' pistettä yhdestä ottelusta</div>'});
+  cards.push({dur:4500, html:'<div class="wr-label">Kauden kooste</div><div class="wr-emoji">🏒</div><div class="wr-headline">'+esc(d.name)+'</div><div class="wr-sub">Sinun koosteesi, '+esc(d.player)+'</div>'});
+  cards.push({dur:5500, html:'<div class="wr-label">Sijoituksesi</div><div class="wr-emoji">'+(medal||'🎯')+'</div><div class="wr-big">'+d.rank+'.</div><div class="wr-sub">'+d.total+' veikkaajasta</div>'});
+  cards.push({dur:6000, html:'<div class="wr-label">Pisteet</div><div class="wr-big wr-count" data-target="'+d.pts+'">0</div><div class="wr-sub">pistettä kerätty</div>'});
+  cards.push({dur:5500, html:'<div class="wr-label">Ahkeruus</div><div class="wr-emoji">✍️</div><div class="wr-big wr-count" data-target="'+d.predMade+'">0</div><div class="wr-sub">veikkausta tehty kauden aikana</div>'});
+  if(d.accuracy!=null) cards.push({dur:6000, html:'<div class="wr-label">Osumatarkkuus</div><div class="wr-emoji">🎯</div><div class="wr-big wr-count" data-target="'+d.accuracy+'" data-suffix="%">0%</div><div class="wr-sub">kohteista oikein ('+d.correct+'/'+d.scorable+')</div>'});
+  if(d.bestMatch && d.bestMatch.pts>0) cards.push({dur:5500, html:'<div class="wr-label">Paras ottelusi</div><div class="wr-emoji">🔥</div><div class="wr-headline">'+esc(d.bestMatch.name)+'</div><div class="wr-sub">'+d.bestMatch.pts+' pistettä yhdestä ottelusta</div>'});
   if(d.strongest){
     let h='<div class="wr-label">Vahvuutesi</div><div class="wr-emoji">💪</div><div class="wr-headline">'+esc(d.strongest.label)+'</div><div class="wr-sub">osuit '+Math.round(d.strongest.ratio*100)+'% ('+d.strongest.c+'/'+d.strongest.s+')';
     if(d.weakest && d.weakest.label!==d.strongest.label) h+='<br>Heikoin laji: '+esc(d.weakest.label)+' '+Math.round(d.weakest.ratio*100)+'%';
     h+='</div>';
-    cards.push({dur:4800, html:h});
+    cards.push({dur:6500, html:h});
   }
-  if(d.isWinner) cards.push({dur:4200, html:'<div class="wr-label">Mestari</div><div class="wr-emoji">👑</div><div class="wr-headline">Sinä hallitsit kauden!</div><div class="wr-sub">Kukaan ei yltänyt ohitsesi.</div>'});
-  else if(d.above) cards.push({dur:4200, html:'<div class="wr-label">Edelläsi kiri</div><div class="wr-emoji">😤</div><div class="wr-headline">'+esc(d.above)+'</div><div class="wr-sub">'+d.abovePts+' p — ensi kaudella kiinni!</div>'});
+  // Veikkaussielunkumppani (kaikki kohteet)
+  if(d.soulmate) cards.push({dur:6000, html:'<div class="wr-label">Veikkaussielunkumppani</div><div class="wr-emoji">🤝</div><div class="wr-headline">'+esc(d.soulmate.player)+'</div><div class="wr-sub">Veikkasitte samoin '+d.soulmate.count+' kertaa — kaikki kohteet mukana</div>'});
+  // Pelaajakohtainen rankkaus
+  if(d.agreeRanking && d.agreeRanking.length){
+    const lines=d.agreeRanking.map(r=>'<div style="margin:6px 0;display:flex;justify-content:space-between;gap:12px"><span>'+esc(r.player)+'</span><strong>'+r.count+'×</strong></div>').join('');
+    cards.push({dur:7500, html:'<div class="wr-label">Kenen kanssa veikkasit samoin</div><div class="wr-emoji">👯</div><div class="wr-sub" style="text-align:left;line-height:1.4;font-size:clamp(15px,4.6vw,20px);max-width:300px;margin:0 auto">'+lines+'</div><div style="font-size:11px;opacity:0.6;margin-top:12px">samoja veikkauksia kaikkien kohteiden yli</div>'});
+  }
+  // Per-kenttä: ketkä veikkasivat samoin keskeisissä kohteissa
+  const keyFields=['lopputulos','ekan_maalintekija','ekan_jahyn_saaja','ekan_jahyn_syy'];
+  const fLines=keyFields.filter(k=>d.fieldTop&&d.fieldTop[k]).map(k=>{ const ft=d.fieldTop[k]; return '<div style="margin:7px 0">'+esc(ft.label)+': <strong>'+esc(ft.player)+'</strong> · '+ft.count+'×</div>'; }).join('');
+  if(fLines) cards.push({dur:7000, html:'<div class="wr-label">Kohteittain samimmat</div><div class="wr-emoji">🎯</div><div class="wr-sub" style="line-height:1.4;font-size:clamp(15px,4.6vw,20px)">'+fLines+'</div>'});
+  // Turnausinfo
+  cards.push({dur:6000, html:'<div class="wr-label">Turnaus pähkinänkuoressa</div><div class="wr-emoji">🏟️</div><div class="wr-headline">'+d.matchesPlayed+' ottelua</div><div class="wr-sub">Koko perhe keräsi yhteensä '+d.familyTotal+' pistettä</div>'});
+  // Mestari / voittaja
+  if(d.isWinner) cards.push({dur:5500, html:'<div class="wr-label">Mestari</div><div class="wr-emoji">👑</div><div class="wr-headline">Sinä hallitsit kauden!</div><div class="wr-sub">Kukaan ei yltänyt ohitsesi.</div>'});
+  else {
+    let h='<div class="wr-label">Turnauksen voittaja</div><div class="wr-emoji">👑</div><div class="wr-headline">'+esc(d.winner)+'</div><div class="wr-sub">'+d.winnerPts+' pistettä';
+    if(d.above && d.above!==d.winner) h+='<br>Sinua juuri edellä: '+esc(d.above)+' ('+d.abovePts+' p)';
+    h+='</div>';
+    cards.push({dur:6000, html:h});
+  }
   cards.push({dur:99999999, html:'<div class="wr-emoji">🏆</div><div class="wr-headline">Nähdään ensi kaudella!</div><div class="wr-sub">'+esc(d.name)+'</div><button class="wr-share" onclick="event.stopPropagation(); window._wrappedShare()">📤 Jaa kooste</button>'});
   return cards;
 }
