@@ -350,8 +350,6 @@
     .wr-bar-fill.full { width:100%; }
     .wr-bar-fill.run { width:100%; transition:width linear; }
     .wr-close { position:absolute; top:26px; right:18px; z-index:6; background:rgba(0,0,0,0.25); color:#fff; border:none; border-radius:50%; width:38px; height:38px; font-size:20px; cursor:pointer; }
-    .wr-nav { position:absolute; top:0; bottom:0; width:35%; z-index:4; cursor:pointer; }
-    .wr-nav.left { left:0; } .wr-nav.right { right:0; width:65%; }
     .wr-card { position:relative; z-index:3; text-align:center; max-width:480px; width:100%; animation:wrIn 0.5s ease; }
     @keyframes wrIn { from{opacity:0;transform:translateY(18px) scale(0.98)} to{opacity:1;transform:translateY(0) scale(1)} }
     .wr-emoji { font-size:clamp(48px,16vw,96px); line-height:1; margin-bottom:14px; }
@@ -1145,7 +1143,6 @@ let data = {tournaments:[]};
 let pins = {};
 let tid = null; // selected tournament id
 let mid = null; // selected match id
-let viewMode = 'cards';
 let currentUser = null;
 let isSavingStructure = false;
 let saveStructureQueued = false;
@@ -4702,40 +4699,7 @@ document.getElementById('downloadPdfBtn').addEventListener('click', function(){
 <script>
 // ── INTRO ──
 (function(){
-  var SCENES = [
-    ['is1',3000],['is2',6200],['is3',4200],['is4',3600],
-    ['is5',6500],['is6',6200],['is7',5600],['is8',4600],['is9',3500]
-  ];
-  var cur=-1, timer=null;
-
-  function doFlash(){
-    var f=document.getElementById('introFlash');
-    f.style.animation='none'; void f.offsetWidth;
-    f.style.animation='introDoFlash 0.2s ease forwards';
-  }
-
-  function showScene(idx){
-    if(idx>=SCENES.length){ endIntro(); return; }
-    if(cur>=0){
-      var prev=document.getElementById(SCENES[cur][0]);
-      prev.style.transition='opacity 0.7s ease'; prev.style.opacity='0';
-      setTimeout(function(){ prev.style.opacity=''; },750);
-    }
-    if(idx===1) document.getElementById('introScreen').classList.add('expand');
-    if(idx===3||idx===7) doFlash();
-    var el=document.getElementById(SCENES[idx][0]);
-    el.style.transition='opacity 0.9s ease'; el.style.opacity='1';
-    cur=idx;
-    timer=setTimeout(function(){ showScene(idx+1); }, SCENES[idx][1]);
-  }
-
-  function endIntro(){
-    var el=document.getElementById('introScreen');
-    el.style.transition='opacity 1.5s'; el.style.opacity='0';
-    setTimeout(function(){ el.style.display='none'; },1500);
-  }
-
-  window._skipIntro = function(){ clearTimeout(timer); endIntro(); };
+  // (Vanha intro-ohjain poistettu kuolleena – aktiivinen ohjain on window._introPlay.)
 
   // Piilotetaan intro heti - naytetaan VAIN jos Firebase-lippu on asetettu
   document.getElementById('introScreen').style.display='none';
