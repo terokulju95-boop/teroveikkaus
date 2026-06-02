@@ -1543,6 +1543,7 @@ async function saveStructure(){
         const copy={...t};
         delete copy.predictions;
         delete copy.topThreePrediction;
+        delete copy._predSavedAt;
         return copy;
       })
     };
@@ -1575,6 +1576,9 @@ async function savePredictions(player){
       const top3=(t.topThreePrediction||{})[player];
       if(top3) newPlayerData.topThree[t.id]=top3;
     });
+    // Aikaleima: pelaajan oma tallennusaika valittuun otteluun (ei jaettuun rakenteeseen)
+    newPlayerData.savedAt={};
+    if(tid && mid){ newPlayerData.savedAt[String(tid)]={}; newPlayerData.savedAt[String(tid)][String(mid)]=new Date().toISOString(); }
     // KORJAUS: Haetaan ensin Firebasesta vanha data ja yhdistetään –
     // estää vanhojen pelien ylikirjoituksen jos muistissa on vain osa peleistä
     try{
@@ -1589,6 +1593,10 @@ async function savePredictions(player){
         newPlayerData.matches = mergedMatches;
         // Yhdistä topThree samoin
         newPlayerData.topThree = {...(existing.topThree||{}), ...newPlayerData.topThree};
+        // Yhdistä aikaleimat: muiden turnausten/otteluiden leimat säilyvät
+        const mergedSaved={...(existing.savedAt||{})};
+        Object.entries(newPlayerData.savedAt).forEach(([tId,mt])=>{ mergedSaved[tId]={...(mergedSaved[tId]||{}),...mt}; });
+        newPlayerData.savedAt=mergedSaved;
       }
     }catch(mergeErr){ /* jos haku epäonnistuu, tallennetaan mitä muistissa on */ }
     await setDoc(predDoc(player),{json:JSON.stringify(newPlayerData)});
@@ -2389,6 +2397,7 @@ async function loadData(){
         if(existing){
           t.predictions=existing.predictions||{};
           t.topThreePrediction=existing.topThreePrediction||{};
+          t._predSavedAt=existing._predSavedAt||{};
         }
       });
       data=newData;
@@ -2428,6 +2437,11 @@ async function loadData(){
           if(topThree[t.id]){
             t.topThreePrediction=t.topThreePrediction||{};
             t.topThreePrediction[player]=topThree[t.id];
+          }
+          if(pd.savedAt && pd.savedAt[t.id]){
+            t._predSavedAt=t._predSavedAt||{};
+            t._predSavedAt[player]=t._predSavedAt[player]||{};
+            Object.entries(pd.savedAt[t.id]).forEach(([mId,ts])=>{ t._predSavedAt[player][mId]=ts; });
           }
         });
         // Renderöidään vain jos käyttäjä ei ole muokkaamassa kenttää
@@ -2764,8 +2778,8 @@ function renderPredictions(){
           '</div>'+
         '</div>':''
       ;
-      // Muokkaushistoria
-      const hist=((t.editHistory||{})[match.id]||{})[currentUser];
+      // Muokkaushistoria (uusi: pelaajan oma aikaleima; vanha editHistory varalla)
+      const hist=(((t._predSavedAt||{})[currentUser]||{})[match.id]) || ((t.editHistory||{})[match.id]||{})[currentUser];
       const histHTML=hist?
         '<div class="edit-history">Viimeksi muokattu: <span>'+
           new Date(hist).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})+
@@ -2798,8 +2812,11 @@ function renderPredictions(){
     if(btn){ btn.disabled=true; btn.textContent='💾 Tallennetaan…'; }
     try{
       await savePredictions(currentUser);
-      await saveStructure();   // merkitsee pelaajan aikaleiman (editHistory)
-      renderScoreboard();      // näytä päivittynyt aika heti pistetaulussa
+      // Aikaleima tallennettu pelaajan omaan dokumenttiin (savePredictions) – ei kirjoiteta jaettua rakennetta.
+      // Näytetään päivittynyt aika heti pistetaulussa:
+      const tNow=getTournament(), mNow=getMatch();
+      if(tNow && mNow){ tNow._predSavedAt=tNow._predSavedAt||{}; tNow._predSavedAt[currentUser]=tNow._predSavedAt[currentUser]||{}; tNow._predSavedAt[currentUser][mNow.id]=new Date().toISOString(); }
+      renderScoreboard();
       if(msgEl){
         if(missing.length===0){
           msgEl.style.color='#22c55e';
@@ -2896,6 +2913,9 @@ function getLastEditedTime(t, player) {
     const ts = matchHist[player];
     if (ts && (!latest || new Date(ts) > new Date(latest))) latest = ts;
   });
+  // Uusi tapa: pelaajan oma tallennusaika hänen veikkausdokumentistaan (ottelukohtainen)
+  const ps = (t._predSavedAt || {})[player] || {};
+  Object.values(ps).forEach(ts=>{ if (ts && (!latest || new Date(ts) > new Date(latest))) latest = ts; });
   return latest;
 }
 
@@ -2945,7 +2965,8 @@ function renderPlayerStatus(){
     const complete=filled===total;
     const cls=complete?'voted':(filled>0?'partial':'not-voted');
     const icon=complete?'✅':(filled>0?'🟡':'❌');
-    const lastEdit=hist[p]?new Date(hist[p]).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    const ph=(((t._predSavedAt||{})[p]||{})[match.id]) || hist[p];
+    const lastEdit=ph?new Date(ph).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
     return '<div class="player-status-card '+cls+'">'+(locked?'🔒 ':'')+icon+' '+p+
       '<div class="veik-count">'+filled+'/'+total+'</div>'+
       (lastEdit?'<div style="font-size:10px;opacity:0.7;margin-top:2px">'+lastEdit+'</div>':'')+
