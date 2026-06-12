@@ -447,6 +447,64 @@
   .kulju-header{ display:flex; align-items:center; justify-content:center; gap:14px; }
   .kulju-header .kulju-logo{ width:1.5em; height:1.5em; filter:drop-shadow(0 2px 5px rgba(0,0,0,.3)); }
 </style>
+<style>
+/* ===== GLOBAALI YLÄPALKKI ===== */
+.topbar{ position:sticky; top:0; z-index:50; background:var(--bg); border-bottom:1px solid var(--border); margin:-12px -12px 12px; }
+.topbar-inner{ max-width:960px; margin:0 auto; display:flex; align-items:center; gap:10px; padding:8px 12px; }
+.topbar-logo{ flex:0 0 auto; margin:0; }
+.topbar-logo .kulju-title{ font-size:24px; }
+.topbar-logo .kulju-header{ gap:8px; }
+.topbar-tournament{ flex:1 1 auto; min-width:0; }
+.topbar-tournament select{ width:100%; padding:9px 12px; border-radius:10px; font-size:15px; }
+.topbar-actions{ flex:0 0 auto; display:flex; align-items:center; gap:6px; }
+#currentUserBadge{ font-weight:700; font-size:13px; background:var(--card); border:1px solid var(--border); border-radius:999px; padding:7px 11px; cursor:pointer; user-select:none; white-space:nowrap; color:var(--text); }
+.topbar-iconbtn{ position:relative; display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px; border-radius:999px; background:var(--card); border:1px solid var(--border); color:var(--text); cursor:pointer; transition:border-color .15s; }
+.topbar-iconbtn:hover{ border-color:var(--primary); }
+.topbar-badge{ position:absolute; top:-4px; right:-4px; background:#dc2626; color:#fff; border-radius:999px; font-size:10px; font-weight:900; padding:1px 5px; min-width:16px; text-align:center; line-height:1.5; }
+@media(max-width:520px){ .topbar-logo .kulju-title{ font-size:20px; } }
+@media(max-width:430px){ .topbar-logo{ display:none; } }
+
+/* ===== GLOBAALI COUNTDOWN ===== */
+.global-cd{ max-width:960px; margin:0 auto 10px; display:flex; align-items:center; gap:8px; background:linear-gradient(135deg,#1e293b,#0f172a); border:1px solid var(--border); border-left:3px solid var(--primary); border-radius:10px; padding:8px 14px; font-size:13px; font-weight:700; color:var(--text); }
+.global-cd .gcd-label{ color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.5px; font-size:10px; }
+.global-cd .gcd-match{ color:var(--primary); }
+.global-cd .gcd-time{ margin-left:auto; font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+/* ===== ALANAVIGAATIO + LISÄÄ-RUUDUKKO ===== */
+.bottomnav{ display:none; }
+.more-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.more-item{ display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px 10px; border:1px solid var(--border); border-radius:14px; background:var(--card); color:var(--text); cursor:pointer; font-weight:700; font-size:14px; transition:border-color .15s, transform .1s; }
+.more-item:hover{ border-color:var(--primary); }
+.more-item:active{ transform:scale(.97); }
+
+@media(max-width:979px){
+  body{ padding-bottom:78px; }
+  .bottomnav{
+    display:flex; position:fixed; left:0; right:0; bottom:0; z-index:60;
+    background:var(--card); border-top:1px solid var(--border);
+    padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px));
+    box-shadow:0 -2px 16px rgba(0,0,0,.18);
+  }
+  .bottomnav-item{ flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; background:none; border:none; cursor:pointer; padding:6px 2px; color:var(--muted); font-size:11px; font-weight:700; transition:color .15s; }
+  .bottomnav-item svg{ opacity:.85; }
+  .bottomnav-item:active{ transform:scale(.94); }
+  .bottomnav-item.active{ color:var(--primary); }
+  .bottomnav-item.active svg{ opacity:1; }
+
+  /* NÄKYMÄJAKO: piilota ei-aktiivisen näkymän kortit (aktiiviset säilyttävät oman JS-näkyvyytensä) */
+  body[data-tab="veikkaa"]  [data-view]:not([data-view~="veikkaa"]) { display:none !important; }
+  body[data-tab="tulokset"] [data-view]:not([data-view~="tulokset"]){ display:none !important; }
+  body[data-tab="profiili"] [data-view]:not([data-view~="profiili"]){ display:none !important; }
+  body[data-tab="lisaa"]    [data-view]:not([data-view~="lisaa"])   { display:none !important; }
+
+  #night-banner{ bottom:92px; }
+}
+
+/* DESKTOP: säilytetään 2-palstainen layout, kaikki näkymät näkyvissä; profiili-välilehti piiloon (avataan korttia klikkaamalla) */
+@media(min-width:980px){
+  [data-view~="profiili"]{ display:none; }
+}
+</style>
 </head>
 <body>
 
@@ -691,24 +749,33 @@
 
 <!-- PÄÄSOVELLUS -->
 <div id="appScreen" style="display:none">
-  <div style="max-width:960px;margin:0 auto 10px;">
-    <!-- Rivi 1: otsikko -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-      <h1 class="kulju-header" style="margin:0;flex:1;"><span class="kulju-logo"></span><span class="kulju-title" style="font-size:38px;">KULJU CUP</span><span class="kulju-logo"></span></h1>
+  <!-- ══ GLOBAALI YLÄPALKKI ══ -->
+  <div class="topbar">
+    <div class="topbar-inner">
+      <h1 class="kulju-header topbar-logo" style="margin:0;"><span class="kulju-logo"></span><span class="kulju-title">KULJU CUP</span></h1>
+      <div class="topbar-tournament">
+        <select id="tournamentSelect" aria-label="Valitse turnaus"></select>
+      </div>
+      <div class="topbar-actions">
+        <span id="currentUserBadge" ondblclick="window._openPelleCard()" title="Tuplapaina avataksesi salaisuuden 🤫"></span>
+        <button id="adminMsgBtn" class="topbar-iconbtn" onclick="window._openMsgPanel()" aria-label="Viestit" title="Viestit" style="display:none">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H5.2L4 17.5z"/></svg>
+          <span id="msgBadge" class="topbar-badge" style="display:none">0</span>
+        </button>
+        <button id="playerMsgBtn" class="topbar-iconbtn" onclick="window._openPlayerMsgPanel()" aria-label="Viestit" title="Viestit" style="display:none">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H5.2L4 17.5z"/></svg>
+          <span id="playerMsgBadge" class="topbar-badge" style="display:none">0</span>
+        </button>
+        <button class="topbar-iconbtn" onclick="window._logout()" aria-label="Vaihda käyttäjä" title="Vaihda käyttäjä">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg>
+        </button>
+      </div>
     </div>
-    <!-- Rivi 2: napit -->
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-      <span id="currentUserBadge" ondblclick="window._openPelleCard()" style="font-weight:700;font-size:14px;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 14px;cursor:pointer;user-select:none" title="Tuplapaina avataksesi salaisuuden 🤫"></span>
-      <button id="adminMsgBtn" onclick="window._openMsgPanel()" style="display:none;position:relative;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">
-        ✉️ Viestit<span id="msgBadge" style="display:none;position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;font-weight:900;padding:1px 5px;min-width:16px;text-align:center;line-height:1.5">0</span>
-      </button>
-      <button id="playerMsgBtn" onclick="window._openPlayerMsgPanel()" style="display:none;position:relative;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">
-        ✉️ Viestit<span id="playerMsgBadge" style="display:none;position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;font-weight:900;padding:1px 5px;min-width:16px;text-align:center;line-height:1.5">0</span>
-      </button>
-      <button id="adminSettingsBtn" onclick="window._openSettingsPanel()" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:14px;cursor:pointer;color:var(--text)">⚙️ Asetukset</button>
-      <button id="hofBtn" onclick="window._openHallOfFame()" style="background:var(--card);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:700;cursor:pointer;color:var(--text)">🏆 Hall of Fame</button>
-      <button class="btn small secondary" onclick="window._logout()">Vaihda käyttäjä</button>
-    </div>
+  </div>
+  <!-- piilotetut alkup. napit poistettu yläpalkista; HoF & Asetukset siirtyivät Lisää-näkymään -->
+  <div style="display:none">
+    <button id="adminSettingsBtn" onclick="window._openSettingsPanel()"></button>
+    <button id="hofBtn" onclick="window._openHallOfFame()"></button>
   </div>
 
   <!-- ESPN-tyylinen uutispalkki -->
@@ -716,6 +783,9 @@
     <div class="news-ticker-tag" id="newsTickerTag">KULJU</div>
     <div class="news-ticker-viewport"><div class="news-ticker-track" id="newsTickerTrack"></div></div>
   </div>
+
+  <!-- GLOBAALI COUNTDOWN: seuraava lukittuva ottelu (näkyy kaikilla välilehdillä) -->
+  <div id="globalCountdown" class="global-cd" style="display:none"></div>
 
   <!-- KAUDEN KOOSTE (Wrapped) -->
   <div id="wrappedOverlay" onclick="window._wrappedTap(event)">
@@ -966,126 +1036,122 @@
         </button>
       </div>
     </div>
-    <div class="card">
-      <h2>Turnaus</h2>
-      <div class="field">
-        <label>Valitse turnaus</label>
-        <select id="tournamentSelect"></select>
-      </div>
-      <div id="adminTournamentTools" style="display:none">
+    <div class="sidebar-col">
+
+      <!-- VEIKKAA: ottelun valinta -->
+      <div class="card" data-view="veikkaa">
+        <h2>Ottelut</h2>
         <div class="field">
-          <label>Luo uusi turnaus</label>
-          <input id="newTournamentName" type="text" placeholder="Esim. MM 2026" />
+          <label>Valitse ottelu</label>
+          <select id="matchSelect"></select>
         </div>
-        <div class="field">
-          <button id="createTournament" class="btn small" style="width:100%">Luo turnaus</button>
-        </div>
-        <div id="finishTournamentArea" style="display:none">
-          <button id="finishTournament" class="btn small danger" style="width:100%;margin-top:6px">🏁 Päätä turnaus</button>
-          <p class="muted" style="margin-top:4px;font-size:12px">Lukitsee turnauksen kokonaan.</p>
-        </div>
-        <div id="tournamentFinishedBadge" style="display:none">
-          <div style="background:#22c55e;color:#fff;border-radius:10px;padding:10px;text-align:center;font-weight:700;margin-top:6px">✅ Turnaus päättynyt</div>
-        </div>
-        <div class="field" id="deleteTournamentArea" style="display:none;margin-top:6px">
-          <button id="deleteTournament" class="btn small danger" style="width:100%">🗑️ Poista turnaus</button>
-        </div>
-        <div class="separator"></div>
-        <div id="rosterAdminArea" style="display:none">
-          <button type="button" id="rosterToggle" class="btn small secondary" style="width:100%;justify-content:space-between;align-items:center">
-            <span>👥 Turnauksen pelaajat</span>
-            <span id="rosterToggleHint" style="font-weight:700;color:var(--muted);font-size:13px">Näytä</span>
-          </button>
-          <div id="rosterBody" style="display:none;margin-top:10px">
-            <p class="muted" style="margin:0 0 8px;font-size:12px">Näistä veikataan 1. maalintekijä ja 1. jäähyn saaja. Uusi pelaaja menee automaattisesti oman pelipaikkansa ryhmään. Lista on turnauskohtainen.</p>
-            <div id="rosterList" style="display:flex;flex-direction:column;gap:2px;margin-bottom:10px"></div>
-            <div style="display:flex;gap:6px;align-items:stretch">
-              <input id="newPlayerName" type="text" placeholder="Pelaajan nimi" style="flex:1;min-width:0" />
-              <select id="newPlayerRole" style="width:118px;flex:0 0 auto">
-                <option value="H">Hyökkääjä</option>
-                <option value="P">Puolustaja</option>
-                <option value="MV">Maalivahti</option>
-              </select>
+        <div id="adminMatchTools" style="display:none">
+          <div class="field">
+            <label>Luo uusi ottelu</label>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-weight:700;font-size:16px;white-space:nowrap">SUOMI vs</span>
+              <input id="newMatchName" type="text" placeholder="RUOTSI" style="text-transform:uppercase;flex:1" />
             </div>
-            <button id="addPlayerBtn" class="btn small" style="width:100%;margin-top:6px">+ Lisää pelaaja</button>
-            <div id="rosterStatus" class="muted" style="margin-top:6px;font-size:12px;min-height:16px"></div>
+          </div>
+          <div class="field">
+            <label>Pelin alkuaika (veikkaukset lukittuvat)</label>
+            <input id="newMatchTime" type="datetime-local" />
+          </div>
+          <div class="field">
+            <button id="createMatch" class="btn small" style="width:100%">Luo ottelu</button>
+          </div>
+          <div class="field" id="deleteMatchArea" style="display:none;margin-top:4px">
+            <button id="deleteMatch" class="btn small danger" style="width:100%">🗑️ Poista ottelu</button>
           </div>
         </div>
       </div>
 
-      <div class="separator"></div>
-      <h2>Ottelut</h2>
-      <div class="field">
-        <label>Valitse ottelu</label>
-        <select id="matchSelect"></select>
-      </div>
-      <div id="adminMatchTools" style="display:none">
-        <div class="field">
-          <label>Luo uusi ottelu</label>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-weight:700;font-size:16px;white-space:nowrap">SUOMI vs</span>
-            <input id="newMatchName" type="text" placeholder="RUOTSI" style="text-transform:uppercase;flex:1" />
+      <!-- LISÄÄ (admin): turnauksen hallinta -->
+      <div class="card" data-view="lisaa" id="tournamentAdminCard" style="display:none">
+        <h2>Turnauksen hallinta</h2>
+        <div id="adminTournamentTools" style="display:none">
+          <div class="field">
+            <label>Luo uusi turnaus</label>
+            <input id="newTournamentName" type="text" placeholder="Esim. MM 2026" />
+          </div>
+          <div class="field">
+            <button id="createTournament" class="btn small" style="width:100%">Luo turnaus</button>
+          </div>
+          <div id="finishTournamentArea" style="display:none">
+            <button id="finishTournament" class="btn small danger" style="width:100%;margin-top:6px">🏁 Päätä turnaus</button>
+            <p class="muted" style="margin-top:4px;font-size:12px">Lukitsee turnauksen kokonaan.</p>
+          </div>
+          <div id="tournamentFinishedBadge" style="display:none">
+            <div style="background:#22c55e;color:#fff;border-radius:10px;padding:10px;text-align:center;font-weight:700;margin-top:6px">✅ Turnaus päättynyt</div>
+          </div>
+          <div class="field" id="deleteTournamentArea" style="display:none;margin-top:6px">
+            <button id="deleteTournament" class="btn small danger" style="width:100%">🗑️ Poista turnaus</button>
+          </div>
+          <div class="separator"></div>
+          <div id="rosterAdminArea" style="display:none">
+            <button type="button" id="rosterToggle" class="btn small secondary" style="width:100%;justify-content:space-between;align-items:center">
+              <span>👥 Turnauksen pelaajat</span>
+              <span id="rosterToggleHint" style="font-weight:700;color:var(--muted);font-size:13px">Näytä</span>
+            </button>
+            <div id="rosterBody" style="display:none;margin-top:10px">
+              <p class="muted" style="margin:0 0 8px;font-size:12px">Näistä veikataan 1. maalintekijä ja 1. jäähyn saaja. Uusi pelaaja menee automaattisesti oman pelipaikkansa ryhmään. Lista on turnauskohtainen.</p>
+              <div id="rosterList" style="display:flex;flex-direction:column;gap:2px;margin-bottom:10px"></div>
+              <div style="display:flex;gap:6px;align-items:stretch">
+                <input id="newPlayerName" type="text" placeholder="Pelaajan nimi" style="flex:1;min-width:0" />
+                <select id="newPlayerRole" style="width:118px;flex:0 0 auto">
+                  <option value="H">Hyökkääjä</option>
+                  <option value="P">Puolustaja</option>
+                  <option value="MV">Maalivahti</option>
+                </select>
+              </div>
+              <button id="addPlayerBtn" class="btn small" style="width:100%;margin-top:6px">+ Lisää pelaaja</button>
+              <div id="rosterStatus" class="muted" style="margin-top:6px;font-size:12px;min-height:16px"></div>
+            </div>
           </div>
         </div>
-        <div class="field">
-          <label>Pelin alkuaika (veikkaukset lukittuvat)</label>
-          <input id="newMatchTime" type="datetime-local" />
-        </div>
-        <div class="field">
-          <button id="createMatch" class="btn small" style="width:100%">Luo ottelu</button>
-        </div>
-        <div class="field" id="deleteMatchArea" style="display:none;margin-top:4px">
-          <button id="deleteMatch" class="btn small danger" style="width:100%">🗑️ Poista ottelu</button>
-        </div>
       </div>
 
-      <div class="separator"></div>
-      <div class="stack" style="justify-content:space-between;align-items:center">
-        <h2 style="margin:0">Kolmen kärki</h2>
-        <button id="toggleTop3" class="btn small secondary">Piilota</button>
-      </div>
-      <div id="topThreeArea"></div>
-      <div id="saveTop3Row" class="stack" style="margin-top:8px">
-        <button id="saveTopThree" class="btn small">Tallenna veikkaukset</button>
-      </div>
-
-      <div class="separator" id="dataSeparator"></div>
-      <div id="dataSection">
-      <h2>Data</h2>
-      <div class="stack">
-        <button id="exportBtn" class="btn small secondary" style="display:none">Vie JSON</button>
-        <input id="importFile" type="file" accept="application/json" style="display:none" />
-        <button id="importBtn" class="btn small secondary" style="display:none">Tuo JSON</button>
-        <button id="screenshotTableBtn" class="btn small green">📷 Kuva</button>
-        <button id="downloadPdfBtn" class="btn small" style="background:#7c3aed">📄 PDF</button>
-      </div>
-      <p class="muted" style="margin-top:6px">☁️ Data tallentuu Firebase-pilveen</p>
-      <div id="adminPinTools" style="display:none;margin-top:8px">
-        <div class="separator"></div>
-        <div class="stack" style="justify-content:space-between;align-items:center">
-          <h2 style="margin:0">🔐 PIN-koodit</h2>
-          <button id="togglePins" class="btn small secondary">Piilota</button>
+      <!-- LISÄÄ (admin): data -->
+      <div class="card" data-view="lisaa" id="dataCard" style="display:none">
+        <div id="dataSection">
+        <h2>Data</h2>
+        <div class="stack">
+          <button id="exportBtn" class="btn small secondary" style="display:none">Vie JSON</button>
+          <input id="importFile" type="file" accept="application/json" style="display:none" />
+          <button id="importBtn" class="btn small secondary" style="display:none">Tuo JSON</button>
+          <button id="screenshotTableBtn" class="btn small green">📷 Kuva</button>
+          <button id="downloadPdfBtn" class="btn small" style="background:#7c3aed">📄 PDF</button>
         </div>
-        <div id="pinManageArea"></div>
-      </div>
-
-      <div id="adminLoginStats" style="display:none;margin-top:8px">
-        <div class="separator"></div>
-        <div class="stack" style="justify-content:space-between;align-items:center;margin-bottom:8px">
-          <h2 style="margin:0">📊 Käyttökerrat</h2>
-          <div style="display:flex;gap:6px">
-            <button class="btn small secondary" onclick="window._renderLoginStats()">🔄</button>
-            <button class="btn small danger" onclick="window._resetLoginStats()">Nollaa</button>
-            <button class="btn small secondary" onclick="window._toggleLoginStats()">Piilota</button>
+        <p class="muted" style="margin-top:6px">☁️ Data tallentuu Firebase-pilveen</p>
+        <span id="dataSeparator" style="display:none"></span>
+        <div id="adminPinTools" style="display:none;margin-top:8px">
+          <div class="separator"></div>
+          <div class="stack" style="justify-content:space-between;align-items:center">
+            <h2 style="margin:0">🔐 PIN-koodit</h2>
+            <button id="togglePins" class="btn small secondary">Piilota</button>
           </div>
+          <div id="pinManageArea"></div>
         </div>
-        <div id="loginStatsArea" style="display:none"></div>
+
+        <div id="adminLoginStats" style="display:none;margin-top:8px">
+          <div class="separator"></div>
+          <div class="stack" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+            <h2 style="margin:0">📊 Käyttökerrat</h2>
+            <div style="display:flex;gap:6px">
+              <button class="btn small secondary" onclick="window._renderLoginStats()">🔄</button>
+              <button class="btn small danger" onclick="window._resetLoginStats()">Nollaa</button>
+              <button class="btn small secondary" onclick="window._toggleLoginStats()">Piilota</button>
+            </div>
+          </div>
+          <div id="loginStatsArea" style="display:none"></div>
+        </div>
+        </div><!-- /dataSection -->
       </div>
-      </div><!-- /dataSection -->
+
     </div>
 
     <div class="grid">
-      <div class="card">
+      <div class="card" data-view="tulokset">
         <h2>Yhteispisteet</h2>
         <!-- FAQ -->
         <div class="faq-section" style="margin-bottom:12px">
@@ -1122,6 +1188,18 @@
         </div>
       </div>
 
+      <!-- KOLMEN KÄRKI (siirretty tänne Tulokset-näkymään) -->
+      <div class="card" data-view="tulokset">
+        <div class="stack" style="justify-content:space-between;align-items:center">
+          <h2 style="margin:0">Kolmen kärki</h2>
+          <button id="toggleTop3" class="btn small secondary">Piilota</button>
+        </div>
+        <div id="topThreeArea"></div>
+        <div id="saveTop3Row" class="stack" style="margin-top:8px">
+          <button id="saveTopThree" class="btn small">Tallenna veikkaukset</button>
+        </div>
+      </div>
+
       <!-- TIEBREAKER MODAALI (vain admin) -->
       <div id="tiebreakerModal" style="display:none" class="modal-overlay" onclick="if(event.target===this)this.style.display='none'">
         <div class="modal-box" style="max-width:560px">
@@ -1134,17 +1212,17 @@
         </div>
       </div>
 
-      <div class="card" id="statsCard" style="display:none">
+      <div class="card" id="statsCard" data-view="tulokset" style="display:none">
         <h2>🏆 Turnauksen tilastot</h2>
         <div id="statsArea"></div>
       </div>
 
-      <div class="card" id="adminStatusCard" style="display:none">
+      <div class="card" id="adminStatusCard" data-view="veikkaa" style="display:none">
         <h2>👥 Kuka on veikannut?</h2>
         <div id="playerStatusArea"></div>
       </div>
 
-      <div class="card">
+      <div class="card" data-view="veikkaa">
         <div class="stack" style="justify-content:space-between;margin-bottom:8px">
           <h2 style="margin:0">Ottelun veikkaukset</h2>
         </div>
@@ -1154,7 +1232,7 @@
       </div>
 
       <!-- VIESTI TEROLLE -->
-      <div class="card" id="messageCard">
+      <div class="card" id="messageCard" data-view="lisaa">
         <h2>✉️ Viesti Terolle</h2>
 
         <!-- Pelaajan näkymä -->
@@ -1171,15 +1249,55 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" data-view="veikkaa">
         <h2>Ottelun tulos (faktat)</h2>
         <div id="actualsArea"><p class="muted">Valitse ottelu.</p></div>
         <div style="margin-top:10px;display:flex;justify-content:flex-end">
           <button id="refreshCheck" class="btn small">Päivitä & tarkasta</button>
         </div>
       </div>
+
+      <!-- PROFIILI-NÄKYMÄ -->
+      <div class="card" data-view="profiili">
+        <div id="profileTabContent"><p class="muted">Ladataan profiilia…</p></div>
+      </div>
+
+      <!-- LISÄÄ-NÄKYMÄ: navigointinapit -->
+      <div class="card" data-view="lisaa">
+        <h2>Lisää</h2>
+        <div class="more-grid">
+          <button class="more-item" onclick="window._openHallOfFame()">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M5 4H3v2a3 3 0 0 0 3 3M19 4h2v2a3 3 0 0 1-3 3"/></svg>
+            <span>Hall of Fame</span>
+          </button>
+          <button class="more-item" id="moreSettingsBtn" onclick="window._openSettingsPanel()" style="display:none">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+            <span>Asetukset</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
+
+  <!-- ══ ALANAVIGAATIO (mobiili) ══ -->
+  <nav class="bottomnav" id="bottomnav" aria-label="Päänavigaatio">
+    <button class="bottomnav-item" data-tab="veikkaa" onclick="window._setTab('veikkaa')" aria-label="Veikkaa">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17l3-9 4 3 4-7 3 13z"/><path d="M4 21h16"/></svg>
+      <span>Veikkaa</span>
+    </button>
+    <button class="bottomnav-item" data-tab="tulokset" onclick="window._setTab('tulokset')" aria-label="Tulokset">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M5 4H3v2a3 3 0 0 0 3 3M19 4h2v2a3 3 0 0 1-3 3"/></svg>
+      <span>Tulokset</span>
+    </button>
+    <button class="bottomnav-item" data-tab="profiili" onclick="window._setTab('profiili')" aria-label="Profiili">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+      <span>Profiili</span>
+    </button>
+    <button class="bottomnav-item" data-tab="lisaa" onclick="window._setTab('lisaa')" aria-label="Lisää">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+      <span>Lisää</span>
+    </button>
+  </nav>
 </div>
 
 <script type="module">
@@ -1574,6 +1692,22 @@ window._toggleFaq2 = function(btn) {
 // PELAAJAN PROFIILISIVU
 // ============================
 window.showPlayerProfile = function(player) {
+  const html = window._buildProfileHTML(player);
+  if(html==null) return;
+  document.getElementById('playerProfileContent').innerHTML = html;
+  document.getElementById('playerProfileModal').style.display = 'flex';
+};
+
+// Renderöi oman profiilin Profiili-välilehteen (sama sisältö kuin modaalissa)
+window._renderProfileTab = function(){
+  const el = document.getElementById('profileTabContent');
+  if(!el) return;
+  if(!currentUser){ el.innerHTML = '<p class="muted">Kirjaudu nähdäksesi profiilisi.</p>'; return; }
+  const html = window._buildProfileHTML(currentUser);
+  el.innerHTML = (html==null) ? '<p class="muted">Valitse turnaus nähdäksesi profiilisi.</p>' : html;
+};
+
+window._buildProfileHTML = function(player) {
   const t = getTournament();
   if (!t) return;
   const totals = calcTotals(t);
@@ -1645,8 +1779,7 @@ window.showPlayerProfile = function(player) {
     ${matchRows ? `<div style="font-weight:700;margin-bottom:6px;font-size:14px">📊 Ottelukohtaiset pisteet</div>${matchRows}` : '<p class="muted" style="font-size:13px">Ei otteluita vielä.</p>'}
   `;
 
-  document.getElementById('playerProfileContent').innerHTML = html;
-  document.getElementById('playerProfileModal').style.display = 'flex';
+  return html;
 };
 
 // Tallenna/palauta valinnat
@@ -3385,6 +3518,8 @@ function render(){
   checkLoserMessage();
   if(currentUser===ADMIN) checkUnreadMessages();
   else checkPlayerUnread();
+  // Päivitä profiilivälilehti jos se on auki
+  if(document.body.dataset.tab==='profiili' && window._renderProfileTab) window._renderProfileTab();
 }
 
 // ============================
@@ -3816,9 +3951,11 @@ function doLogin(name){
   $('currentUserBadge').textContent=(name===ADMIN?'👑 ':'')+name;
   const isAdmin=name===ADMIN;
   // Turnaus/ottelu/status-työkalut vain adminille
-  ['adminTournamentTools','adminMatchTools','adminStatusCard','tiebreakerBtnWrap'].forEach(id=>{
+  ['adminTournamentTools','adminMatchTools','adminStatusCard','tiebreakerBtnWrap','tournamentAdminCard','dataCard'].forEach(id=>{
     const el=$(id); if(el) el.style.display=isAdmin?'':'none';
   });
+  // Asetukset-nappi (Lisää-näkymä) vain adminille
+  const moreSet=$('moreSettingsBtn'); if(moreSet) moreSet.style.display=isAdmin?'':'none';
   // PIN-koodit ja Käyttökerrat piilotetaan aina — ne ovat Asetukset-modaalissa
   ['adminPinTools','adminLoginStats'].forEach(id=>{
     const el=$(id); if(el) el.style.display='none';
@@ -3853,6 +3990,9 @@ function doLogin(name){
   trackLoginEvent(name);
   loadData();
   applyMaintenance();
+
+  // Näkymät: alusta välilehti hashista (oletus veikkaa) + käynnistä globaali countdown
+  if(window._initViews) window._initViews();
 }
 
 window._logout=function(){
@@ -4770,6 +4910,84 @@ document.addEventListener('blur', function() {
 
 const savedUser=localStorage.getItem('tv_user');
 if(savedUser && PLAYERS.includes(savedUser)) doLogin(savedUser);
+
+// ============================
+// NÄKYMÄT: alapalkki + hash-reititys + globaali countdown
+// ============================
+const _TABS = ['veikkaa','tulokset','profiili','lisaa'];
+
+function _applyTab(tab){
+  if(!_TABS.includes(tab)) tab = 'veikkaa';
+  document.body.dataset.tab = tab;
+  document.querySelectorAll('.bottomnav-item').forEach(b=>{
+    b.classList.toggle('active', b.dataset.tab===tab);
+  });
+  if(tab==='profiili' && window._renderProfileTab) window._renderProfileTab();
+  window.scrollTo(0,0);
+}
+
+// Navigointi napista: muuttaa hashia → syntyy historiamerkintä → selaimen takaisin-nappi toimii
+window._setTab = function(tab){
+  if(!_TABS.includes(tab)) tab = 'veikkaa';
+  if(location.hash !== '#'+tab){ location.hash = tab; }  // laukaisee hashchange → _applyTab
+  else { _applyTab(tab); }
+};
+
+function _handleHash(){
+  const h = (location.hash||'').replace('#','').trim();
+  _applyTab(_TABS.includes(h) ? h : 'veikkaa');
+}
+window.addEventListener('hashchange', _handleHash);
+
+// ----- GLOBAALI COUNTDOWN: seuraava lukittuva ottelu -----
+let _gcdTimer = null;
+function _nextLockingMatch(){
+  const t = getTournament(); if(!t) return null;
+  const now = Date.now();
+  const future = (t.matches||[])
+    .filter(m=>m.startTime && new Date(m.startTime).getTime() > now)
+    .sort((a,b)=>new Date(a.startTime)-new Date(b.startTime));
+  return future[0]||null;
+}
+function _updateGlobalCountdown(){
+  const box = document.getElementById('globalCountdown');
+  if(!box) return;
+  const m = _nextLockingMatch();
+  if(!m){ box.style.display='none'; box.innerHTML=''; return; }
+  const diff = new Date(m.startTime).getTime() - Date.now();
+  if(diff <= 0){ box.style.display='none'; box.innerHTML=''; return; }
+  const totalS = Math.floor(diff/1000);
+  const d = Math.floor(totalS/86400);
+  const h = Math.floor((totalS%86400)/3600);
+  const mi = Math.floor((totalS%3600)/60);
+  const s = totalS%60;
+  const pad = n=>String(n).padStart(2,'0');
+  let time;
+  if(d>0)       time = d+'pv '+pad(h)+':'+pad(mi)+':'+pad(s);
+  else if(h>0)  time = pad(h)+':'+pad(mi)+':'+pad(s);
+  else          time = pad(mi)+':'+pad(s);
+  const name = (m.name||'').toString();
+  box.style.display='flex';
+  box.innerHTML =
+    '<span class="gcd-label">⏳ Seuraava lukitus</span>'+
+    '<span class="gcd-match">'+ (name? ('SUOMI–'+name) : 'Ottelu') +'</span>'+
+    '<span class="gcd-time">'+ time +'</span>';
+}
+window._startGlobalCountdown = function(){
+  if(_gcdTimer) clearInterval(_gcdTimer);
+  _updateGlobalCountdown();
+  _gcdTimer = setInterval(_updateGlobalCountdown, 1000);
+};
+
+window._initViews = function(){
+  _handleHash();              // aseta välilehti hashista (oletus veikkaa)
+  window._startGlobalCountdown();
+};
+
+// Jos käyttäjä oli jo kirjautuneena (sessio), varmista välilehti
+if(document.getElementById('appScreen') && document.getElementById('appScreen').style.display !== 'none'){
+  window._initViews();
+}
 
 // ============================
 // NAPIT
