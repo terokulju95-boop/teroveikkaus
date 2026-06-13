@@ -218,6 +218,8 @@
     .score-card { transition:transform 0.15s, box-shadow 0.15s; cursor:pointer; }
     .score-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.13); }
     .score-card-first { border-color:#f59e0b !important; box-shadow:0 0 18px rgba(245,158,11,0.55), 0 0 5px rgba(245,158,11,0.7) !important; }
+    .score-card-second { border-color:#c0c0c0 !important; box-shadow:0 0 18px rgba(192,192,192,0.55), 0 0 5px rgba(192,192,192,0.7) !important; }
+    .score-card-third { border-color:#cd7f32 !important; box-shadow:0 0 18px rgba(205,127,50,0.55), 0 0 5px rgba(205,127,50,0.7) !important; }
     /* Admin alert overlay */
     .alert-overlay { position:fixed;inset:0;z-index:99997;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeInOverlay 0.3s ease; }
     .alert-box { background:var(--card);border-radius:20px;padding:28px 24px;max-width:360px;width:100%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.5);animation:slideUpModal 0.3s ease; }
@@ -3297,7 +3299,9 @@ function renderScoreboard(){
     const timeStr=lastEdit?new Date(lastEdit).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):null;
     const isLast=i===lastIdx;
     const isFirst=i===0 && topPts>0;
-    return `<div class="score-card${isFirst?' score-card-first':''}${isLast?' score-card-last':''}" style="cursor:${isLast?'pointer':'default'}" data-player="${n}" onclick="window._scoreCardClick(this,'${n}',${isLast})">
+    const isSecond=i===1 && pts>0;
+    const isThird=i===2 && pts>0;
+    return `<div class="score-card${isFirst?' score-card-first':''}${isSecond?' score-card-second':''}${isThird?' score-card-third':''}${isLast?' score-card-last':''}" style="cursor:${isLast?'pointer':'default'}" data-player="${n}" onclick="window._scoreCardClick(this,'${n}',${isLast})">
       <div class="name">${icon(rank)} ${n}</div>
       <div class="pts">${pts} p</div>
       ${timeStr?`<div style="font-size:10px;color:var(--muted);margin-top:3px">⏱ ${timeStr}</div>`:''}
