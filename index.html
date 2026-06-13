@@ -494,15 +494,14 @@
   /* NÄKYMÄJAKO: piilota ei-aktiivisen näkymän kortit (aktiiviset säilyttävät oman JS-näkyvyytensä) */
   body[data-tab="veikkaa"]  [data-view]:not([data-view~="veikkaa"]) { display:none !important; }
   body[data-tab="tulokset"] [data-view]:not([data-view~="tulokset"]){ display:none !important; }
-  body[data-tab="profiili"] [data-view]:not([data-view~="profiili"]){ display:none !important; }
+  body[data-tab="kolmenkarki"] [data-view]:not([data-view~="kolmenkarki"]){ display:none !important; }
   body[data-tab="lisaa"]    [data-view]:not([data-view~="lisaa"])   { display:none !important; }
 
   #night-banner{ bottom:92px; }
 }
 
-/* DESKTOP: säilytetään 2-palstainen layout, kaikki näkymät näkyvissä; profiili-välilehti piiloon (avataan korttia klikkaamalla) */
+/* DESKTOP: säilytetään 2-palstainen layout, kaikki näkymät näkyvissä */
 @media(min-width:980px){
-  [data-view~="profiili"]{ display:none; }
 }
 </style>
 </head>
@@ -1188,12 +1187,13 @@
         </div>
       </div>
 
-      <!-- KOLMEN KÄRKI (siirretty tänne Tulokset-näkymään) -->
-      <div class="card" data-view="tulokset">
+      <!-- KOLMEN KÄRKI – oma välilehti -->
+      <div class="card" data-view="kolmenkarki">
         <div class="stack" style="justify-content:space-between;align-items:center">
-          <h2 style="margin:0">Kolmen kärki</h2>
+          <h2 style="margin:0">🏆 Kolmen kärki</h2>
           <button id="toggleTop3" class="btn small secondary">Piilota</button>
         </div>
+        <p class="muted" style="margin:4px 0 8px;font-size:13px">Veikkaa turnauksen lopullinen kolmen kärki. Oikea joukkue oikealla sijalla = 2 p/sija.</p>
         <div id="topThreeArea"></div>
         <div id="saveTop3Row" class="stack" style="margin-top:8px">
           <button id="saveTopThree" class="btn small">Tallenna veikkaukset</button>
@@ -1257,15 +1257,14 @@
         </div>
       </div>
 
-      <!-- PROFIILI-NÄKYMÄ -->
-      <div class="card" data-view="profiili">
-        <div id="profileTabContent"><p class="muted">Ladataan profiilia…</p></div>
-      </div>
-
       <!-- LISÄÄ-NÄKYMÄ: navigointinapit -->
       <div class="card" data-view="lisaa">
         <h2>Lisää</h2>
         <div class="more-grid">
+          <button class="more-item" onclick="window._openMyProfile()">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+            <span>Profiili</span>
+          </button>
           <button class="more-item" onclick="window._openHallOfFame()">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M5 4H3v2a3 3 0 0 0 3 3M19 4h2v2a3 3 0 0 1-3 3"/></svg>
             <span>Hall of Fame</span>
@@ -1289,9 +1288,9 @@
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M5 4H3v2a3 3 0 0 0 3 3M19 4h2v2a3 3 0 0 1-3 3"/></svg>
       <span>Tulokset</span>
     </button>
-    <button class="bottomnav-item" data-tab="profiili" onclick="window._setTab('profiili')" aria-label="Profiili">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
-      <span>Profiili</span>
+    <button class="bottomnav-item" data-tab="kolmenkarki" onclick="window._setTab('kolmenkarki')" aria-label="Kolmen kärki">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><rect x="9" y="9" width="6" height="12"/><rect x="3" y="13" width="6" height="8"/><rect x="15" y="5" width="6" height="16"/></svg>
+      <span>Kolmen kärki</span>
     </button>
     <button class="bottomnav-item" data-tab="lisaa" onclick="window._setTab('lisaa')" aria-label="Lisää">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
@@ -1696,6 +1695,14 @@ window.showPlayerProfile = function(player) {
   if(html==null) return;
   document.getElementById('playerProfileContent').innerHTML = html;
   document.getElementById('playerProfileModal').style.display = 'flex';
+};
+
+// Avaa oman profiilin (Lisää-välilehden Profiili-nappi) – sama modaali kuin pistetaulua klikatessa
+window._openMyProfile = function(){
+  if(!currentUser) return;
+  const t = getTournament();
+  if(!t){ alert('Valitse ensin turnaus.'); return; }
+  window.showPlayerProfile(currentUser);
 };
 
 // Renderöi oman profiilin Profiili-välilehteen (sama sisältö kuin modaalissa)
@@ -3518,8 +3525,6 @@ function render(){
   checkLoserMessage();
   if(currentUser===ADMIN) checkUnreadMessages();
   else checkPlayerUnread();
-  // Päivitä profiilivälilehti jos se on auki
-  if(document.body.dataset.tab==='profiili' && window._renderProfileTab) window._renderProfileTab();
 }
 
 // ============================
@@ -4914,7 +4919,7 @@ if(savedUser && PLAYERS.includes(savedUser)) doLogin(savedUser);
 // ============================
 // NÄKYMÄT: alapalkki + hash-reititys + globaali countdown
 // ============================
-const _TABS = ['veikkaa','tulokset','profiili','lisaa'];
+const _TABS = ['veikkaa','tulokset','kolmenkarki','lisaa'];
 
 function _applyTab(tab){
   if(!_TABS.includes(tab)) tab = 'veikkaa';
@@ -4922,7 +4927,6 @@ function _applyTab(tab){
   document.querySelectorAll('.bottomnav-item').forEach(b=>{
     b.classList.toggle('active', b.dataset.tab===tab);
   });
-  if(tab==='profiili' && window._renderProfileTab) window._renderProfileTab();
   window.scrollTo(0,0);
 }
 
