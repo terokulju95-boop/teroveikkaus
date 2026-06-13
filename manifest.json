@@ -1,10 +1,10 @@
 {
-  "name": "Iskä Veikkaukset",
-  "short_name": "Iskä",
+  "name": "KULJU CUP",
+  "short_name": "KULJU",
   "start_url": "./",
   "scope": ".",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "orientation": "portrait",
   "icons": [
