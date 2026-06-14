@@ -75,6 +75,10 @@
     .kv-row:last-child{ border-bottom:none; }
     @media(max-width:380px){ .kv-row{ grid-template-columns:minmax(0,120px) minmax(0,1fr) } }
     .kv-label{ font-weight:600 }
+    .info-btn{ display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-left:6px; padding:0; border:none; border-radius:50%; background:var(--muted); color:#fff; font-size:11px; font-weight:700; font-style:italic; font-family:Georgia,serif; line-height:1; cursor:pointer; vertical-align:middle; flex:0 0 auto; }
+    .info-btn:active{ transform:scale(0.9); }
+    .field-info-pop{ position:fixed; z-index:99990; max-width:260px; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:13px; font-weight:500; line-height:1.4; box-shadow:0 6px 24px rgba(0,0,0,.3); opacity:0; transform:translateY(-4px); pointer-events:none; transition:opacity .12s, transform .12s; }
+    .field-info-pop.show{ opacity:1; transform:translateY(0); }
     .kv-row.correct { background-color:#86efac !important; border-radius:8px; padding:10px 6px; }
     .kv-row.incorrect { background-color:#fca5a5 !important; border-radius:8px; padding:10px 6px; }
     .kv-row.correct input, .kv-row.correct select { background-color:#86efac !important; color:#000 !important; }
@@ -1416,6 +1420,29 @@ const FIELDS = [
   {key:'era2',label:'2. erä'},{key:'valmentaja_haasto',label:'Valmentajan haasto'},{key:'maali_tyhjiin',label:'Maali tyhjään'},
   {key:'yv_av_maali',label:'YV/AV maali'},{key:'jatkoaika_tai_rankkarit',label:'JA tai VL'}
 ];
+// Kenttäkohtaiset vihjeet (i-painike). 'lopputulos' jätetty tarkoituksella pois (ei infoa).
+const FIELD_INFO = {
+  ekan_maalintekija:'Kuka tekee Suomen ensimmäisen maalin',
+  ekan_maali_aika:'Mihin aikaan Suomen ensimmäinen maali syntyy',
+  kumpi_tekee_ekan_maalin:'Kumpi joukkue tekee ensimmäisen maalin',
+  voittomaalin_tekija:'Kuka tekee Suomen viimeisen maalin',
+  ekan_jahyn_saaja:'Kuka ottaa Suomen ensimmäisen jäähyn',
+  ekan_jahyn_syy:'Mikä on Suomen ensimmäisen jäähyn syy',
+  montako_jahyja:'Montako jäähyä Suomi saa ottelussa',
+  yli_alle_maalit:'Montako maalia ottelussa tulee yhteensä',
+  parempi_laukasu:'Kummalla joukkueella on parempi laukausprosentti',
+  parempi_alotus:'Kummalla joukkueella on parempi aloitusprosentti',
+  parempi_torjunta:'Kummalla joukkueella on parempi torjuntaprosentti',
+  parempi_alivoima:'Kummalla joukkueella on parempi alivoimaprosentti',
+  parempi_ylivoima:'Kummalla joukkueella on parempi ylivoimaprosentti',
+  era1:'Kumpi tekee ensimmäisessä erässä enemmän maaleja',
+  era2:'Kumpi tekee toisessa erässä enemmän maaleja',
+  valmentaja_haasto:'Tuleeko ottelussa valmentajan haasto',
+  maali_tyhjiin:'Tuleeko ottelussa maali tyhjään maaliin',
+  yv_av_maali:'Tuleeko ottelussa ylivoima- tai alivoimamaali',
+  jatkoaika_tai_rankkarit:'Meneekö ottelu jatkoajalle tai voittolaukauskisaan'
+};
+function infoBtn(key){ var t=(typeof FIELD_INFO!=='undefined')&&FIELD_INFO[key]; return t?`<button type="button" class="info-btn" onclick="window._fieldInfo(event,'${key}')" aria-label="Tietoa kentästä">i</button>`:''; }
 const ONE_X_TWO = new Set(['parempi_laukasu','parempi_alotus','parempi_torjunta','parempi_alivoima','parempi_ylivoima','era1','era2','kumpi_tekee_ekan_maalin']);
 const KYLLA_EI = new Set(['valmentaja_haasto','maali_tyhjiin','yv_av_maali','jatkoaika_tai_rankkarit']);
 const NUMBER_K = new Set(['montako_jahyja']);
@@ -2955,7 +2982,7 @@ function predCardHTML(t, match, player, showColors, forceEdit){
     const w = widget(f.key, v, player+':'+f.key, !canEdit, false);
     const delay = showColors && (ok||bad) ? `animation-delay:${fi*40}ms` : '';
     return `<div class="kv-row ${ok?'correct':''} ${bad?'incorrect':''}" style="${delay}">`+
-           `<div class="kv-label">${f.label}</div>${w}</div>`;
+           `<div class="kv-label">${f.label}${infoBtn(f.key)}</div>${w}</div>`;
   }).join('');
   return `<div class="person-card"><div class="card-head">`+
          `<div class="person-title">${player===ADMIN?'👑 ':''}${player}</div>`+
@@ -3281,7 +3308,7 @@ function renderActuals(){
   t.actuals[match.id]=t.actuals[match.id]||{};
   const act=t.actuals[match.id];
   const isAdmin=currentUser===ADMIN;
-  const rows=FIELDS.map(f=>'<div class="kv-row"><div class="kv-label">'+f.label+'</div>'+widget(f.key,act[f.key]||'',f.key,!isAdmin,true)+'</div>').join('');
+  const rows=FIELDS.map(f=>'<div class="kv-row"><div class="kv-label">'+f.label+infoBtn(f.key)+'</div>'+widget(f.key,act[f.key]||'',f.key,!isAdmin,true)+'</div>').join('');
   el.innerHTML='<div class="person-card actuals-card"><div class="card-head"><div class="person-title">Faktat</div>'+
     '<div class="pill">'+(isAdmin?'Muokattavissa':'Vain luku')+'</div></div><div class="kv">'+rows+'</div></div>';
   if(isAdmin) attachActualListeners(el,t,match.id);
@@ -3348,6 +3375,26 @@ window._segPick = function(btn, val){
   group.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active', b===btn && !willClear));
   sel.dispatchEvent(new Event('change', { bubbles:true }));
 };
+
+// Kenttävihjeen popover: tap näyttää selityksen, tap uudestaan/muualle sulkee.
+window._fieldInfo = function(ev, key){
+  ev.stopPropagation();
+  var txt = (typeof FIELD_INFO!=='undefined') ? FIELD_INFO[key] : null;
+  if(!txt) return;
+  var pop = document.getElementById('fieldInfoPop');
+  if(!pop){ pop=document.createElement('div'); pop.id='fieldInfoPop'; pop.className='field-info-pop'; document.body.appendChild(pop); }
+  if(pop.classList.contains('show') && pop.dataset.key===key){ pop.classList.remove('show'); return; }
+  pop.textContent = txt; pop.dataset.key = key; pop.classList.add('show');
+  var r = ev.currentTarget.getBoundingClientRect();
+  pop.style.top = (r.bottom + 8) + 'px';
+  var left = r.left + r.width/2 - 130;
+  left = Math.max(8, Math.min(left, window.innerWidth - 268));
+  pop.style.left = left + 'px';
+};
+document.addEventListener('click', function(e){
+  var pop=document.getElementById('fieldInfoPop');
+  if(pop && pop.classList.contains('show') && !e.target.closest('.info-btn')){ pop.classList.remove('show'); }
+});
 
 // ============================
 // RENDER: PLAYER STATUS (admin)
