@@ -85,6 +85,18 @@
     .score-combo{ display:flex; align-items:center; gap:6px } .score-combo input{ width:64px; text-align:center } .dash{ font-weight:800 }
     .time-combo{ display:flex; align-items:center; gap:6px; }
     .time-combo input{ width:64px; text-align:center; }
+    /* Segmenttipainikkeet (kuori natiiville <select>:lle – arvo tallentuu selectistä) */
+    .seg-native{ display:none; }
+    .seg-group{ display:flex; gap:6px; width:100%; }
+    .seg-btn{ flex:1 1 0; min-width:0; padding:12px 4px; border:1px solid var(--border); border-radius:10px; background:var(--card); color:var(--text); font-size:16px; font-weight:700; line-height:1.1; cursor:pointer; transition:background .12s, border-color .12s, color .12s, transform .08s; -webkit-tap-highlight-color:transparent; }
+    .seg-btn:hover:not(:disabled){ border-color:var(--primary); }
+    .seg-btn:active:not(:disabled){ transform:scale(0.97); }
+    .seg-btn.active{ background:var(--primary); border-color:var(--primary); color:#fff; }
+    .seg-group.disabled .seg-btn, .seg-btn:disabled{ cursor:default; }
+    .seg-group.disabled .seg-btn:not(.active){ opacity:0.45; }
+    /* Oikein/väärin-väritys segmenttipainikkeelle (korvaa input/select-värityksen) */
+    .kv-row.correct .seg-btn.active{ background-color:#86efac !important; border-color:#22c55e !important; color:#000 !important; }
+    .kv-row.incorrect .seg-btn.active{ background-color:#fca5a5 !important; border-color:#ef4444 !important; color:#000 !important; }
     .colon{ font-weight:800; }
     .pts-badge{ display:inline-block; background:#111827; color:#fff; font-weight:800; font-size:12px; padding:4px 8px; border-radius:999px; }
     .card-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
@@ -2899,13 +2911,20 @@ function widget(key, value, dataset, disabled, isAct){
     return `<div class="time-combo"><input type="number" inputmode="numeric" ${mAttr} value="${m}" placeholder="00" ${dis}/><span class="colon">:</span><input type="number" inputmode="numeric" ${sAttr} value="${s}" placeholder="00" ${dis}/></div>`;
   }
   const makeSelect = opts => `<select ${ds} ${dis}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o||'—'}</option>`).join('')}</select>`;
+  // Segmenttipainikkeet: piilotettu natiivi <select> säilyttää tallennuslogiikan ennallaan,
+  // painikkeet vain ohjaavat sitä (sama tallennettava arvo, eri syöttötapa).
+  const makeSeg = opts => {
+    const sel = `<select class="seg-native" ${ds} ${dis} tabindex="-1" aria-hidden="true">${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o||'—'}</option>`).join('')}</select>`;
+    const btns = opts.filter(o=>o!=='').map(o=>`<button type="button" class="seg-btn${o===value?' active':''}" ${dis} onclick="window._segPick(this,'${o}')">${o}</button>`).join('');
+    return `<div class="seg-group${disabled?' disabled':''}">${sel}${btns}</div>`;
+  };
   if(key==='ekan_maalintekija') return makeSelect(scorerOptions(getTournament(), value));
   if(key==='voittomaalin_tekija') return makeSelect(scorerOptions(getTournament(), value));
   if(key==='ekan_jahyn_saaja') return makeSelect(penaltyTakerOptions(getTournament(), value));
   if(key==='ekan_jahyn_syy') return makeSelect(['', ...PENALTY_REASONS]);
-  if(ONE_X_TWO.has(key)) return makeSelect(['','1','X','2']);
-  if(YLI_ALLE.has(key)) return makeSelect(['','Yli','Alle']);
-  if(KYLLA_EI.has(key)) return makeSelect(['','Kyllä','Ei']);
+  if(ONE_X_TWO.has(key)) return makeSeg(['','1','X','2']);
+  if(YLI_ALLE.has(key)) return makeSeg(['','Yli','Alle']);
+  if(KYLLA_EI.has(key)) return makeSeg(['','Kyllä','Ei']);
   if(NUMBER_K.has(key)) return `<input type="number" inputmode="numeric" ${ds} value="${value||''}" placeholder="0" ${dis}/>`;
   return `<input type="text" ${ds} value="${value||''}" placeholder="…" ${dis}/>`;
 }
@@ -3314,6 +3333,20 @@ function renderScoreboard(){
 
 window._scoreCardClick = function(el, player, isLast) {
   showPlayerProfile(player);
+};
+
+// Segmenttipainikkeen klikkaus: asettaa piilo-selectin arvon ja laukaisee saman
+// change-eventin kuin natiivi <select>. Toggle: aktiivisen painikkeen uudelleenpainallus
+// nollaa arvon takaisin tyhjäksi (''). Tallennuslogiikkaa ei kosketa.
+window._segPick = function(btn, val){
+  const group = btn.closest('.seg-group');
+  if(!group || group.classList.contains('disabled')) return;
+  const sel = group.querySelector('select.seg-native');
+  if(!sel || sel.disabled) return;
+  const willClear = btn.classList.contains('active');
+  sel.value = willClear ? '' : val;
+  group.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active', b===btn && !willClear));
+  sel.dispatchEvent(new Event('change', { bubbles:true }));
 };
 
 // ============================
