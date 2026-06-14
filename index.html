@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>KULJU CUP</title>
   <style>
-    :root { --bg:#f7f7fb; --card:#ffffff; --text:#111827; --muted:#6b7280; --primary:#f97316; --primary-hover:#ea580c; --border:#e5e7eb; --ok:#22c55e; --dark:#111827; }
+    :root { color-scheme:dark; --bg:#f7f7fb; --card:#ffffff; --text:#111827; --muted:#6b7280; --primary:#f97316; --primary-hover:#ea580c; --border:#e5e7eb; --ok:#22c55e; --dark:#111827; }
     *{ box-sizing:border-box } html,body{ margin:0; padding:0; overflow-x:hidden }
     body{ background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; line-height:1.5; padding:12px }
 
@@ -34,7 +34,7 @@
 
     /* Vihjaustila-nappi */
     /* hint-btn poistettu */
-    @media (prefers-color-scheme: dark) {
+    @media all { /* Tumma teema pakotettu aina päälle, ei seuraa puhelimen prefers-color-scheme -asetusta */
       .score-card { background:#ffffff !important; color:#000000 !important; }
       .score-card .name { color:#000000 !important; font-weight:700; }
       :root { --bg:#0b1020; --card:#111727; --text:#e5e7eb; --muted:#9aa3b2; --border:#243047; --primary:#fb8a3c; --primary-hover:#ec6f17; --dark:#e5e7eb; }
