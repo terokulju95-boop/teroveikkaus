@@ -27,6 +27,14 @@
       background-repeat:no-repeat; }
     /* Kortit erottuvat revontulesta selkeämmällä varjolla + hiushohdolla */
     .card, .person-card, .score-card{ box-shadow:0 8px 26px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04); }
+    /* Näkymien sivuttaisliuku välilehteä vaihtaessa */
+    @keyframes viewSlideR{ from{ opacity:0; transform:translateX(28px); } to{ opacity:1; transform:translateX(0); } }
+    @keyframes viewSlideL{ from{ opacity:0; transform:translateX(-28px); } to{ opacity:1; transform:translateX(0); } }
+    body.vslide-r [data-view]{ animation:viewSlideR .30s cubic-bezier(.22,.61,.36,1) both; }
+    body.vslide-l [data-view]{ animation:viewSlideL .30s cubic-bezier(.22,.61,.36,1) both; }
+    @media (prefers-reduced-motion: reduce){
+      body.vslide-r [data-view], body.vslide-l [data-view]{ animation:none !important; }
+    }
     .aurora-v-btn.active{ background:var(--primary) !important; border-color:var(--primary) !important; color:#1a1207 !important; }
     .aurora-sld{ display:flex; align-items:center; gap:10px; margin:6px 0; }
     .aurora-sld label{ font-size:13px; color:var(--muted); white-space:nowrap; min-width:88px; }
@@ -5127,11 +5135,24 @@ const _TABS = ['veikkaa','tulokset','kolmenkarki','lisaa'];
 
 function _applyTab(tab){
   if(!_TABS.includes(tab)) tab = 'veikkaa';
+  var prev = document.body.dataset.tab;
+  var dir = 0;
+  if(prev && prev!==tab){ dir = _TABS.indexOf(tab) > _TABS.indexOf(prev) ? 1 : -1; }
   document.body.dataset.tab = tab;
   document.querySelectorAll('.bottomnav-item').forEach(b=>{
     b.classList.toggle('active', b.dataset.tab===tab);
   });
   window.scrollTo(0,0);
+  if(dir!==0) _animateViewSlide(dir);
+}
+var _vslideT = null;
+function _animateViewSlide(dir){
+  var b = document.body;
+  b.classList.remove('vslide-r','vslide-l');
+  void b.offsetWidth;              // pakota reflow → animaatio re-triggeröityy joka vaihdolla
+  b.classList.add(dir>0 ? 'vslide-r' : 'vslide-l');
+  clearTimeout(_vslideT);
+  _vslideT = setTimeout(function(){ b.classList.remove('vslide-r','vslide-l'); }, 340);
 }
 
 // Navigointi napista: muuttaa hashia → syntyy historiamerkintä → selaimen takaisin-nappi toimii
