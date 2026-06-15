@@ -9,7 +9,7 @@
 // tarvitsee koskea. Kasvata VERSIONia vain jos haluat pakottaa kaiken
 // uudelleenlatauksen (esim. ikonit tai tiedostolista muuttuivat).
 
-const VERSION = 'v11';
+const VERSION = 'v12';
 const CACHE   = 'kulju-' + VERSION;
 
 // Suhteelliset polut – toimivat sekä juuressa että alipolussa (GitHub Pages).

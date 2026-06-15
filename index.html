@@ -28,10 +28,10 @@
     /* Kortit erottuvat revontulesta selkeämmällä varjolla + hiushohdolla */
     .card, .person-card, .score-card{ box-shadow:0 8px 26px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04); }
     /* Näkymien sivuttaisliuku välilehteä vaihtaessa */
-    @keyframes viewSlideR{ from{ opacity:0; transform:translateX(28px); } to{ opacity:1; transform:translateX(0); } }
-    @keyframes viewSlideL{ from{ opacity:0; transform:translateX(-28px); } to{ opacity:1; transform:translateX(0); } }
-    body.vslide-r [data-view]{ animation:viewSlideR .30s cubic-bezier(.22,.61,.36,1) both; }
-    body.vslide-l [data-view]{ animation:viewSlideL .30s cubic-bezier(.22,.61,.36,1) both; }
+    @keyframes viewSlideR{ from{ opacity:0; transform:translateX(40px); } to{ opacity:1; transform:translateX(0); } }
+    @keyframes viewSlideL{ from{ opacity:0; transform:translateX(-40px); } to{ opacity:1; transform:translateX(0); } }
+    body.vslide-r [data-view]{ animation:viewSlideR .55s cubic-bezier(.22,.61,.36,1) both; }
+    body.vslide-l [data-view]{ animation:viewSlideL .55s cubic-bezier(.22,.61,.36,1) both; }
     @media (prefers-reduced-motion: reduce){
       body.vslide-r [data-view], body.vslide-l [data-view]{ animation:none !important; }
     }
@@ -5152,7 +5152,7 @@ function _animateViewSlide(dir){
   void b.offsetWidth;              // pakota reflow → animaatio re-triggeröityy joka vaihdolla
   b.classList.add(dir>0 ? 'vslide-r' : 'vslide-l');
   clearTimeout(_vslideT);
-  _vslideT = setTimeout(function(){ b.classList.remove('vslide-r','vslide-l'); }, 340);
+  _vslideT = setTimeout(function(){ b.classList.remove('vslide-r','vslide-l'); }, 600);
 }
 
 // Navigointi napista: muuttaa hashia → syntyy historiamerkintä → selaimen takaisin-nappi toimii
