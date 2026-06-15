@@ -12,6 +12,26 @@
 
     /* Elävä jäätausta */
     #ice-canvas{ position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0.18; }
+    /* Revontuli-tausta */
+    #aurora-bg{ position:fixed; inset:0; z-index:-1; width:100vw; height:100vh; pointer-events:none; filter:blur(28px) saturate(140%); }
+    body::before{ content:''; position:fixed; inset:0; z-index:-2; pointer-events:none;
+      background:
+        radial-gradient(1px 1px at 18% 25%, rgba(255,255,255,.55), transparent),
+        radial-gradient(1px 1px at 68% 14%, rgba(255,255,255,.45), transparent),
+        radial-gradient(1.4px 1.4px at 42% 62%, rgba(255,255,255,.4), transparent),
+        radial-gradient(1px 1px at 83% 50%, rgba(255,255,255,.5), transparent),
+        radial-gradient(1px 1px at 53% 30%, rgba(255,255,255,.35), transparent),
+        radial-gradient(1.3px 1.3px at 12% 72%, rgba(255,255,255,.45), transparent),
+        radial-gradient(1px 1px at 91% 78%, rgba(255,255,255,.4), transparent),
+        radial-gradient(1px 1px at 30% 88%, rgba(255,255,255,.35), transparent);
+      background-repeat:no-repeat; }
+    /* Kortit erottuvat revontulesta selkeämmällä varjolla + hiushohdolla */
+    .card, .person-card, .score-card{ box-shadow:0 8px 26px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04); }
+    .aurora-v-btn.active{ background:var(--primary) !important; border-color:var(--primary) !important; color:#1a1207 !important; }
+    .aurora-sld{ display:flex; align-items:center; gap:10px; margin:6px 0; }
+    .aurora-sld label{ font-size:13px; color:var(--muted); white-space:nowrap; min-width:88px; }
+    .aurora-sld input[type=range]{ flex:1; accent-color:var(--primary); }
+    .aurora-sld span{ font-size:12px; color:var(--muted); width:44px; text-align:right; }
     #appScreen, #loginScreen { position:relative; z-index:1; }
     #fb-status { z-index:9999; }
 
@@ -525,6 +545,7 @@
 </style>
 </head>
 <body>
+<canvas id="aurora-bg"></canvas>
 
 
 <!-- ══ INTRO SCREEN ══ -->
@@ -879,6 +900,21 @@
           <button id="fieldInfoToggleBtn" class="btn small secondary" onclick="window._toggleFieldInfo()">Päällä</button>
         </div>
         <p class="muted" style="margin-top:6px">Näytä tai piilota kenttien i-painikkeet kaikilta pelaajilta. Päivittyy reaaliajassa.</p>
+      </div>
+
+      <!-- Revontuli-tausta -->
+      <div style="margin-top:12px">
+        <div class="separator"></div>
+        <h2 style="margin:8px 0">🌌 Revontuli-tausta</h2>
+        <div class="stack" style="gap:6px;margin-bottom:10px">
+          <button class="aurora-v-btn btn small secondary" data-v="0" onclick="window._auroraSetVariant(0)">Täysi</button>
+          <button class="aurora-v-btn btn small secondary" data-v="1" onclick="window._auroraSetVariant(1)">Vihreä</button>
+          <button class="aurora-v-btn btn small secondary" data-v="2" onclick="window._auroraSetVariant(2)">Hillitty</button>
+        </div>
+        <div class="aurora-sld"><label>Voimakkuus</label><input id="auroraStrength" type="range" min="20" max="260" value="180" oninput="window._auroraPreview('strength',this.value)" onchange="window._auroraCommit('strength',this.value)"><span id="auroraStrengthPct">180%</span></div>
+        <div class="aurora-sld"><label>Aallon koko</label><input id="auroraAmp" type="range" min="50" max="320" value="260" oninput="window._auroraPreview('amp',this.value)" onchange="window._auroraCommit('amp',this.value)"><span id="auroraAmpPct">260%</span></div>
+        <div class="aurora-sld"><label>Nopeus</label><input id="auroraSpeed" type="range" min="40" max="380" value="320" oninput="window._auroraPreview('speed',this.value)" onchange="window._auroraCommit('speed',this.value)"><span id="auroraSpeedPct">320%</span></div>
+        <p class="muted" style="margin-top:6px;font-size:12px">Muutos näkyy kaikille pelaajille reaaliajassa.</p>
       </div>
 
       <!-- PIN-koodit -->
@@ -3431,6 +3467,53 @@ onSnapshot(FIELDINFO_DOC, function(snap){
   var enabled = true; // oletus: päällä jos dokumenttia ei vielä ole
   if(snap && snap.exists()){ var d=snap.data(); if(d && d.enabled===false) enabled=false; }
   _applyFieldInfo(enabled);
+});
+
+// Revontuli-taustan globaali asetus (admin säätää, näkyy kaikille reaaliajassa). Vain visuaalinen.
+const AURORA_DOC = doc(db, "app", "aurora");
+const AURORA_DEF = { v:0, strength:1.8, amp:2.6, speed:3.2 };
+const AURORA_PCT = { strength:'auroraStrengthPct', amp:'auroraAmpPct', speed:'auroraSpeedPct' };
+const AURORA_SLD = { strength:'auroraStrength', amp:'auroraAmp', speed:'auroraSpeed' };
+function _syncAuroraUI(){
+  var c = window._auroraCfg || AURORA_DEF;
+  ['strength','amp','speed'].forEach(function(k){
+    var pct=Math.round((c[k]||AURORA_DEF[k])*100);
+    var sl=document.getElementById(AURORA_SLD[k]); if(sl) sl.value=pct;
+    var pe=document.getElementById(AURORA_PCT[k]); if(pe) pe.textContent=pct+'%';
+  });
+  document.querySelectorAll('.aurora-v-btn').forEach(function(b){ b.classList.toggle('active', parseInt(b.dataset.v,10)===(c.v||0)); });
+}
+function _applyAurora(cfg){
+  window._auroraCfg = { v:cfg.v, strength:cfg.strength, amp:cfg.amp, speed:cfg.speed };
+  if(window._auroraRedraw) window._auroraRedraw();
+  _syncAuroraUI();
+}
+window._auroraPreview = function(key, val){
+  var c = Object.assign({}, AURORA_DEF, window._auroraCfg||{});
+  c[key] = val/100; window._auroraCfg = c;
+  if(window._auroraRedraw) window._auroraRedraw();
+  var pe=document.getElementById(AURORA_PCT[key]); if(pe) pe.textContent=val+'%';
+};
+window._auroraCommit = function(key, val){
+  if(currentUser !== ADMIN) return;
+  var c = Object.assign({}, AURORA_DEF, window._auroraCfg||{});
+  c[key] = val/100;
+  setDoc(AURORA_DOC, { v:c.v, strength:c.strength, amp:c.amp, speed:c.speed, ts:Date.now() })
+    .catch(function(e){ alert('Revontuli-asetuksen tallennus epäonnistui: ' + (e && e.message || e)); });
+};
+window._auroraSetVariant = function(v){
+  if(currentUser !== ADMIN) return;
+  var c = Object.assign({}, AURORA_DEF, window._auroraCfg||{});
+  c.v = v;
+  setDoc(AURORA_DOC, { v:c.v, strength:c.strength, amp:c.amp, speed:c.speed, ts:Date.now() })
+    .catch(function(e){ alert('Revontuli-asetuksen tallennus epäonnistui: ' + (e && e.message || e)); });
+};
+onSnapshot(AURORA_DOC, function(snap){
+  var cfg = Object.assign({}, AURORA_DEF);
+  if(snap && snap.exists()){ var d=snap.data()||{};
+    if(d.v!=null) cfg.v=d.v; if(d.strength!=null) cfg.strength=d.strength;
+    if(d.amp!=null) cfg.amp=d.amp; if(d.speed!=null) cfg.speed=d.speed; }
+  _applyAurora(cfg);
 });
 
 // ============================
@@ -6886,5 +6969,50 @@ window._introPlay=function(idx){
 window._skipIntro=function(){ clearTimeout(window._introTimer); window._introStopMusic(); window._introFxStop(); var el=document.getElementById('introScreen'); el.style.transition='opacity 1.5s'; el.style.opacity='0'; setTimeout(function(){ el.style.display='none'; },1500); };
 </script>
 
+<script>
+/* ===== REVONTULI-TAUSTA (visuaalinen; ei kosketa pisteytykseen/dataan) ===== */
+window._auroraCfg = window._auroraCfg || { v:0, strength:1.8, amp:2.6, speed:3.2 };
+(function(){
+  var cvs=document.getElementById('aurora-bg'); if(!cvs) return;
+  var ctx=cvs.getContext('2d');
+  var dpr=Math.min(window.devicePixelRatio||1,2), W=0,H=0;
+  var reduce=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var SPECTRUM=[
+    { col:[ 64,255,150], baseY:0.50, amp:0.060, h:0.40, f1:0.0016, f2:0.0041, s1:0.10, s2:0.17, ph:0.0, alpha:0.42 },
+    { col:[ 40,235,190], baseY:0.45, amp:0.075, h:0.42, f1:0.0013, f2:0.0037, s1:0.08, s2:0.14, ph:1.1, alpha:0.40 },
+    { col:[ 34,211,238], baseY:0.39, amp:0.085, h:0.44, f1:0.0019, f2:0.0033, s1:0.12, s2:0.19, ph:2.3, alpha:0.36 },
+    { col:[ 70,140,255], baseY:0.33, amp:0.095, h:0.46, f1:0.0011, f2:0.0029, s1:0.07, s2:0.12, ph:3.5, alpha:0.32 },
+    { col:[150, 95,245], baseY:0.27, amp:0.105, h:0.48, f1:0.0015, f2:0.0044, s1:0.10, s2:0.16, ph:4.6, alpha:0.28 },
+    { col:[225, 80,210], baseY:0.21, amp:0.115, h:0.50, f1:0.0012, f2:0.0026, s1:0.06, s2:0.11, ph:5.8, alpha:0.22 }
+  ];
+  var VARIANTS=[ {idx:[0,1,2,3,4,5],mul:1.0}, {idx:[0,1,2,3],mul:1.05}, {idx:[0,2,3,4],mul:0.62} ];
+  function resize(){ W=cvs.width=Math.floor(window.innerWidth*dpr); H=cvs.height=Math.floor(window.innerHeight*dpr); cvs.style.width=window.innerWidth+'px'; cvs.style.height=window.innerHeight+'px'; }
+  window.addEventListener('resize',resize); resize();
+  function curtain(b,time,strength,ampMul,speedMul,mul){
+    var t=time/1000;
+    function topY(x){ return H*b.baseY + Math.sin(x*b.f1+t*b.s1*speedMul+b.ph)*H*b.amp*ampMul + Math.sin(x*b.f2+t*b.s2*0.8*speedMul+b.ph*1.6)*H*b.amp*0.5*ampMul + Math.sin(t*0.05*speedMul+b.ph)*H*0.015; }
+    var breathe=0.78+0.22*Math.sin(t*0.18+b.ph);
+    var a=b.alpha*strength*mul*breathe, curtainH=H*b.h, step=Math.max(6,Math.floor(W/120));
+    ctx.beginPath(); ctx.moveTo(0,topY(0));
+    for(var x=step;x<=W;x+=step) ctx.lineTo(x,topY(x));
+    ctx.lineTo(W,topY(W)+curtainH);
+    for(var x2=W;x2>=0;x2-=step) ctx.lineTo(x2,topY(x2)+curtainH);
+    ctx.closePath();
+    var yC=H*b.baseY, g=ctx.createLinearGradient(0,yC-H*b.amp,0,yC+curtainH), c=b.col.join(',');
+    g.addColorStop(0,'rgba('+c+',0)'); g.addColorStop(0.10,'rgba('+c+','+(a*0.95)+')');
+    g.addColorStop(0.45,'rgba('+c+','+(a*0.45)+')'); g.addColorStop(1,'rgba('+c+',0)');
+    ctx.fillStyle=g; ctx.fill();
+  }
+  function frame(time){
+    var cfg=window._auroraCfg||{v:0,strength:1.8,amp:2.6,speed:3.2};
+    var V=VARIANTS[cfg.v]||VARIANTS[0];
+    ctx.clearRect(0,0,W,H); ctx.globalCompositeOperation='lighter';
+    for(var i=0;i<V.idx.length;i++) curtain(SPECTRUM[V.idx[i]],time,cfg.strength,cfg.amp,cfg.speed,V.mul);
+    if(!reduce) raf=requestAnimationFrame(frame);
+  }
+  var raf=requestAnimationFrame(frame);
+  window._auroraRedraw=function(){ if(reduce){ cancelAnimationFrame(raf); requestAnimationFrame(frame); } };
+})();
+</script>
 </body>
 </html>
