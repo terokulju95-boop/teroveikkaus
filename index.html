@@ -74,6 +74,30 @@
     .chat-input-row{ display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--border); flex:0 0 auto; }
     .chat-input{ flex:1; min-width:0; padding:12px; border-radius:22px; border:1px solid var(--border); background:#0d1424; color:var(--text); font-size:15px; }
     .chat-send{ flex:0 0 auto; width:44px; height:44px; border:none; border-radius:50%; background:var(--primary); color:#1a1207; font-size:18px; cursor:pointer; }
+    /* Vaihe 4A: päiväotsikot, system, reply, reaktiot, valikko */
+    .chat-day{ align-self:center; font-size:11px; color:var(--muted); background:rgba(255,255,255,0.05); padding:3px 12px; border-radius:10px; margin:6px auto; }
+    .chat-typing{ font-size:12px; color:var(--muted); font-style:italic; padding:2px 14px 6px; flex:0 0 auto; }
+    .chat-sys{ align-self:center; font-size:12px; color:var(--muted); font-style:italic; text-align:center; margin:4px 12px; }
+    .chat-bubble{ cursor:pointer; }
+    .chat-reply-quote{ border-left:3px solid var(--primary); padding:2px 8px; margin-bottom:4px; font-size:12px; color:var(--muted); opacity:0.9; }
+    .chat-reply-from{ display:block; font-weight:700; color:var(--primary); }
+    .chat-deleted{ font-style:italic; opacity:0.6; }
+    .chat-reacts{ display:flex; gap:4px; flex-wrap:wrap; margin-top:3px; }
+    .chat-msg.mine .chat-reacts{ justify-content:flex-end; }
+    .chat-react{ background:rgba(255,255,255,0.08); border:1px solid var(--border); border-radius:10px; padding:1px 7px; font-size:12px; }
+    .chat-react.me{ background:rgba(251,138,60,0.2); border-color:var(--primary); }
+    .chat-reply-banner{ display:flex; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid var(--border); background:rgba(255,255,255,0.03); }
+    .chat-reply-text{ flex:1; min-width:0; font-size:13px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .chat-reply-x{ background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; flex:0 0 auto; }
+    .msg-menu-overlay{ position:fixed; inset:0; z-index:100003; background:rgba(0,0,0,0.45); display:none; align-items:flex-end; justify-content:center; }
+    .msg-menu{ background:var(--card); width:100%; max-width:480px; border-radius:18px 18px 0 0; padding:14px; box-shadow:0 -8px 30px rgba(0,0,0,0.5); }
+    @media(min-width:600px){ .msg-menu-overlay{ align-items:center; } .msg-menu{ border-radius:18px; } }
+    .msg-menu-reactions{ display:flex; justify-content:space-around; gap:6px; padding:6px 0 12px; border-bottom:1px solid var(--border); margin-bottom:8px; }
+    .msg-menu-reactions button{ font-size:28px; background:none; border:none; cursor:pointer; padding:6px; border-radius:10px; }
+    .msg-menu-reactions button:active{ background:rgba(255,255,255,0.08); }
+    .msg-menu-act{ display:block; width:100%; text-align:left; padding:14px; border:none; background:none; color:var(--text); font-size:15px; font-weight:600; cursor:pointer; border-radius:10px; }
+    .msg-menu-act:active{ background:rgba(255,255,255,0.05); }
+    .msg-menu-act.danger{ color:#f87171; }
     /* Vaihe 3: lukematon-merkit, nähty, kuplat */
     .chat-unread-badge{ background:#ef4444 !important; color:#fff !important; }
     .chat-unread{ margin-left:auto; background:#ef4444; color:#fff; font-size:11px; font-weight:700; min-width:20px; height:20px; border-radius:10px; display:flex; align-items:center; justify-content:center; padding:0 6px; flex:0 0 auto; }
@@ -605,6 +629,20 @@
 <body>
 <canvas id="aurora-bg"></canvas>
 <div id="chatHeadX" class="chat-head-x">✕</div>
+<div id="msgMenu" class="msg-menu-overlay" style="display:none" onclick="window._closeMsgMenu(event)">
+  <div class="msg-menu">
+    <div class="msg-menu-reactions">
+      <button onclick="window._reactMsg('👍')">👍</button>
+      <button onclick="window._reactMsg('❤️')">❤️</button>
+      <button onclick="window._reactMsg('😂')">😂</button>
+      <button onclick="window._reactMsg('😮')">😮</button>
+      <button onclick="window._reactMsg('😢')">😢</button>
+      <button onclick="window._reactMsg('🔥')">🔥</button>
+    </div>
+    <button class="msg-menu-act" onclick="window._replyMsg()">↩️ Vastaa</button>
+    <button class="msg-menu-act danger" id="msgMenuDelete" onclick="window._deleteMsg()">🗑️ Poista viesti</button>
+  </div>
+</div>
 <!-- UUSI CHAT (vaihe 2) -->
 <div id="chatOverlay" class="chat-overlay">
   <div class="chat-panel">
@@ -616,8 +654,13 @@
     <div id="chatListView" class="chat-list"></div>
     <div id="chatConvView" class="chat-conv">
       <div id="chatMessages" class="chat-messages"></div>
+      <div id="chatTyping" class="chat-typing" style="display:none"></div>
+      <div id="chatReplyBanner" class="chat-reply-banner" style="display:none">
+        <span id="chatReplyText" class="chat-reply-text"></span>
+        <button class="chat-reply-x" onclick="window._clearReply()" aria-label="Peru vastaus">✕</button>
+      </div>
       <div class="chat-input-row">
-        <input id="chatInput" class="chat-input" placeholder="Kirjoita viesti…" maxlength="500" onkeydown="window._chatInputKey(event)">
+        <input id="chatInput" class="chat-input" placeholder="Kirjoita viesti…" maxlength="500" onkeydown="window._chatInputKey(event)" oninput="window._chatTyping()">
         <button class="chat-send" onclick="window._sendChat()" aria-label="Lähetä">➤</button>
       </div>
     </div>
@@ -2049,6 +2092,7 @@ async function saveStructure(){
     };
     await setDoc(DATA_DOC,{json:JSON.stringify(toSave)});
     showStatus('✅ Tallennettu','#22c55e'); hideStatus();
+    try{ if(currentUser===ADMIN && typeof _maybeSysMsg==='function') _maybeSysMsg(); }catch(e){}
   }catch(e){ showStatus('❌ Tallennus epäonnistui','#dc2626'); }
   isSavingStructure=false;
   if(saveStructureQueued){ saveStructureQueued=false; saveStructure(); }
@@ -3702,6 +3746,7 @@ window._closeChat = function(){
 };
 window._backToChatList = function(){
   if(_chatUnsub){ _chatUnsub(); _chatUnsub=null; }
+  if(window._clearReply) window._clearReply();
   _chatCurrent=null;
   var cv=document.getElementById('chatConvView'); if(cv) cv.style.display='none';
   var lv=document.getElementById('chatListView'); if(lv) lv.style.display='block';
@@ -3726,6 +3771,7 @@ function _renderChatList(){
 }
 window._openConversation = function(convId, title, avatar, isGroup){
   _chatCurrent = { convId:convId, title:title, avatar:avatar, isGroup:isGroup };
+  _typingLastSent=0; if(window._clearReply) window._clearReply();
   var lv=document.getElementById('chatListView'); if(lv) lv.style.display='none';
   var cv=document.getElementById('chatConvView'); if(cv) cv.style.display='flex';
   var bb=document.getElementById('chatBackBtn'); if(bb) bb.style.display='block';
@@ -3735,26 +3781,55 @@ window._openConversation = function(convId, title, avatar, isGroup){
   else { var box=document.getElementById('chatMessages'); if(box) box.innerHTML='<p class="chat-empty">Ladataan…</p>'; }
   setTimeout(function(){ var inp=document.getElementById('chatInput'); if(inp) inp.focus(); }, 120);
 };
+function _chatDayLabel(ts){
+  try{
+    var d=new Date(ts), now=new Date();
+    var dd=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+    var nn=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    var diff=Math.round((nn-dd)/86400000);
+    if(diff===0) return 'Tänään';
+    if(diff===1) return 'Eilen';
+    return d.toLocaleDateString('fi-FI',{weekday:'short',day:'numeric',month:'numeric'});
+  }catch(e){ return ''; }
+}
+function _renderReactions(m){
+  if(!m.reactions) return '';
+  var parts=[];
+  Object.keys(m.reactions).forEach(function(e){
+    var arr=m.reactions[e]||[];
+    if(arr.length) parts.push('<span class="chat-react'+(arr.indexOf(currentUser)>=0?' me':'')+'" title="'+_chatEsc(arr.join(', '))+'">'+e+' '+arr.length+'</span>');
+  });
+  return parts.length ? '<div class="chat-reacts">'+parts.join('')+'</div>' : '';
+}
 function _renderChatMessages(msgs){
   var box=document.getElementById('chatMessages'); if(!box) return;
   if(!msgs.length){ box.innerHTML='<p class="chat-empty">Ei viestejä vielä. Aloita keskustelu! 👋</p>'; return; }
   var isGroup = _chatCurrent && _chatCurrent.isGroup;
   var convId = _chatCurrent && _chatCurrent.convId;
   var reads = (convId && _chatData[convId] && _chatData[convId].reads) || {};
-  var myMsgs = msgs.filter(function(m){ return m.from===currentUser; });
+  var myMsgs = msgs.filter(function(m){ return m.from===currentUser && !m.system; });
   var lastMineTs = myMsgs.length ? (myMsgs[myMsgs.length-1].ts||0) : 0;
   var seenBy = [];
   if(lastMineTs){ Object.keys(reads).forEach(function(pl){ if(pl!==currentUser && (reads[pl]||0)>=lastMineTs) seenBy.push(pl); }); }
-  var html = msgs.map(function(m){
-    var mine = (m.from===currentUser);
-    var av = window._getAvatar(m.from);
-    var time = '';
-    try{ time = new Date(m.ts).toLocaleString('fi-FI',{hour:'2-digit',minute:'2-digit'}); }catch(e){}
+  var html=''; var lastDay=null;
+  msgs.forEach(function(m){
+    var day=_chatDayLabel(m.ts);
+    if(day && day!==lastDay){ html+='<div class="chat-day">'+day+'</div>'; lastDay=day; }
+    if(m.system){ html+='<div class="chat-sys">'+_chatEsc(m.text)+'</div>'; return; }
+    var mine=(m.from===currentUser);
+    var av=window._getAvatar(m.from);
+    var time=''; try{ time=new Date(m.ts).toLocaleString('fi-FI',{hour:'2-digit',minute:'2-digit'}); }catch(e){}
+    var replyHtml='';
+    if(m.replyTo){ replyHtml='<div class="chat-reply-quote"><span class="chat-reply-from">'+_chatEsc(m.replyTo.from)+'</span>'+_chatEsc((m.replyTo.text||'').slice(0,80))+'</div>'; }
+    var textHtml = m.deleted ? '<div class="chat-text chat-deleted">Viesti poistettu</div>' : '<div class="chat-text">'+_chatEsc(m.text)+'</div>';
+    var reactHtml = m.deleted ? '' : _renderReactions(m);
+    var tap = m.deleted ? '' : ' onclick="window._openMsgMenu(\''+m.id+'\')"';
     if(mine){
-      return '<div class="chat-msg mine"><div class="chat-bubble mine"><div class="chat-text">'+_chatEsc(m.text)+'</div><div class="chat-time">'+time+'</div></div></div>';
+      html+='<div class="chat-msg mine"><div class="chat-bubble mine"'+tap+'>'+replyHtml+textHtml+'<div class="chat-time">'+time+'</div></div>'+reactHtml+'</div>';
+    } else {
+      html+='<div class="chat-msg"><span class="chat-msg-ava">'+av+'</span><div class="chat-bubble"'+tap+'>'+(isGroup?'<div class="chat-from">'+_chatEsc(m.from)+'</div>':'')+replyHtml+textHtml+'<div class="chat-time">'+time+'</div></div>'+reactHtml+'</div>';
     }
-    return '<div class="chat-msg"><span class="chat-msg-ava">'+av+'</span><div class="chat-bubble">'+(isGroup?'<div class="chat-from">'+_chatEsc(m.from)+'</div>':'')+'<div class="chat-text">'+_chatEsc(m.text)+'</div><div class="chat-time">'+time+'</div></div></div>';
-  }).join('');
+  });
   if(seenBy.length){
     var seenTxt = isGroup ? ('Nähnyt: '+seenBy.join(', ')) : 'Nähty ✓✓';
     html += '<div class="chat-seen">'+_chatEsc(seenTxt)+'</div>';
@@ -3767,14 +3842,113 @@ window._sendChat = async function(){
   var text=(inp.value||'').trim(); if(!text) return;
   inp.value='';
   var msg = { id: Date.now()+'_'+Math.random().toString(36).slice(2,7), from: currentUser, text: text, ts: Date.now() };
+  if(_replyTo){ msg.replyTo = _replyTo; }
+  window._clearReply();
   try{
     var ref=_chatRef(_chatCurrent.convId);
     var snap=await getDoc(ref);
     var msgs = (snap.exists() ? (snap.data().messages||[]) : []);
     msgs.push(msg);
-    await setDoc(ref, { messages: msgs, updated: Date.now() }, { merge:true });
+    await setDoc(ref, { messages: msgs, updated: Date.now(), typing:_chatMakeObj(currentUser,0) }, { merge:true });
   }catch(e){ alert('Viestin lähetys epäonnistui: '+(e&&e.message||e)); inp.value=text; }
 };
+// ===== Vaihe 4A: viestivalikko, reaktiot, vastaa, poisto =====
+var _msgMenuId=null;
+var _replyTo=null;
+window._openMsgMenu=function(msgId){
+  if(!_chatCurrent) return;
+  _msgMenuId=msgId;
+  var conv=_chatData[_chatCurrent.convId];
+  var m=conv && (conv.messages||[]).filter(function(x){return x.id===msgId;})[0];
+  var del=document.getElementById('msgMenuDelete');
+  if(del) del.style.display=(m && m.from===currentUser)?'block':'none';
+  var ov=document.getElementById('msgMenu'); if(ov) ov.style.display='flex';
+};
+window._closeMsgMenu=function(ev){
+  if(ev && ev.target && ev.target.id!=='msgMenu') return;
+  var ov=document.getElementById('msgMenu'); if(ov) ov.style.display='none';
+  _msgMenuId=null;
+};
+async function _chatMutateMsg(convId, msgId, fn){
+  try{
+    var ref=_chatRef(convId); var snap=await getDoc(ref);
+    var msgs=(snap.exists()?(snap.data().messages||[]):[]);
+    var m=msgs.filter(function(x){return x.id===msgId;})[0]; if(!m) return;
+    fn(m, msgs);
+    await setDoc(ref,{messages:msgs,updated:Date.now()},{merge:true});
+  }catch(e){}
+}
+window._reactMsg=function(emoji){
+  var id=_msgMenuId, conv=_chatCurrent&&_chatCurrent.convId; window._closeMsgMenu();
+  if(!id||!conv) return;
+  _chatMutateMsg(conv, id, function(m){
+    m.reactions=m.reactions||{};
+    var arr=m.reactions[emoji]||[]; var i=arr.indexOf(currentUser);
+    if(i>=0) arr.splice(i,1); else arr.push(currentUser);
+    if(arr.length) m.reactions[emoji]=arr; else delete m.reactions[emoji];
+  });
+};
+window._deleteMsg=function(){
+  var id=_msgMenuId, conv=_chatCurrent&&_chatCurrent.convId; window._closeMsgMenu();
+  if(!id||!conv) return;
+  _chatMutateMsg(conv, id, function(m){
+    if(m.from!==currentUser) return;
+    m.deleted=true; m.text=''; m.reactions={}; m.replyTo=null;
+  });
+};
+window._replyMsg=function(){
+  var id=_msgMenuId, conv=_chatCurrent&&_chatData[_chatCurrent.convId]; window._closeMsgMenu();
+  if(!id||!conv) return;
+  var m=(conv.messages||[]).filter(function(x){return x.id===id;})[0]; if(!m||m.deleted) return;
+  _replyTo={ from:m.from, text:(m.text||'').slice(0,120) };
+  var banner=document.getElementById('chatReplyBanner');
+  var txt=document.getElementById('chatReplyText');
+  if(txt) txt.textContent='↩️ '+m.from+': '+(m.text||'').slice(0,50);
+  if(banner) banner.style.display='flex';
+  var inp=document.getElementById('chatInput'); if(inp) inp.focus();
+};
+window._clearReply=function(){
+  _replyTo=null;
+  var banner=document.getElementById('chatReplyBanner'); if(banner) banner.style.display='none';
+};
+// ===== Vaihe 4B: "kirjoittaa…" + järjestelmäviestit =====
+var _typingLastSent=0;
+window._chatTyping=function(){
+  if(!_chatCurrent) return;
+  var now=Date.now();
+  if(now-_typingLastSent < 3000) return;
+  _typingLastSent=now;
+  setDoc(_chatRef(_chatCurrent.convId), { typing:_chatMakeObj(currentUser, now) }, {merge:true}).catch(function(e){});
+};
+function _renderTyping(typing){
+  var el=document.getElementById('chatTyping'); if(!el) return;
+  typing=typing||{}; var now=Date.now();
+  var who=Object.keys(typing).filter(function(pl){ return pl!==currentUser && (now-(typing[pl]||0))<6000; });
+  if(who.length){ el.textContent = who.length===1 ? (who[0]+' kirjoittaa…') : (who.join(', ')+' kirjoittavat…'); el.style.display='block'; }
+  else { el.style.display='none'; }
+}
+setInterval(function(){
+  if(_chatCurrent && _chatOverlayOpen()){
+    var d=_chatData[_chatCurrent.convId];
+    if(d) _renderTyping(d.typing);
+  }
+}, 2500);
+window._sendSystemMessage=async function(text){
+  try{
+    var ref=_chatRef(CHAT_GROUP_ID); var snap=await getDoc(ref);
+    var msgs=(snap.exists()?(snap.data().messages||[]):[]);
+    msgs.push({ id:Date.now()+'_sys', from:'__system__', text:text, ts:Date.now(), system:true });
+    await setDoc(ref,{messages:msgs,updated:Date.now()},{merge:true});
+  }catch(e){}
+};
+function _maybeSysMsg(){
+  try{
+    var last=parseInt(localStorage.getItem('sysMsgLast')||'0',10), now=Date.now();
+    if(now-last < 300000) return;
+    localStorage.setItem('sysMsgLast', String(now));
+    window._sendSystemMessage('🏒 '+currentUser+' päivitti tuloksia');
+  }catch(e){}
+}
 window._chatInputKey = function(ev){ if(ev && ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); window._sendChat(); } };
 
 // ===== VAIHE 3: lukutila, kuplat, lukukuittaukset =====
@@ -3907,14 +4081,14 @@ function _startChatListeners(){
   _chatAllConvs().forEach(function(c){
     var unsub = onSnapshot(_chatRef(c.id), function(snap){
       var data = snap.exists()? snap.data() : {};
-      _chatData[c.id] = { messages: data.messages||[], reads: data.reads||{} };
+      _chatData[c.id] = { messages: data.messages||[], reads: data.reads||{}, typing: data.typing||{} };
       var msgs = _chatData[c.id].messages;
       var myRead = (_chatData[c.id].reads[currentUser])||0;
       var unread = msgs.filter(function(m){ return m.from!==currentUser && (m.ts||0)>myRead; });
       _chatUnread[c.id] = unread.length;
       _updateChatBadge();
       var openHere = _chatCurrent && _chatCurrent.convId===c.id && _chatOverlayOpen();
-      if(openHere){ _renderChatMessages(msgs); _markRead(c.id); }
+      if(openHere){ _renderChatMessages(msgs); _markRead(c.id); _renderTyping(_chatData[c.id].typing); }
       else if(_chatOverlayOpen() && !_chatCurrent){ _renderChatList(); }
       if(!_chatFirstSnap[c.id]){ _chatFirstSnap[c.id]=true; return; }   // ensisnapshot: ei kuplaa
       if(!openHere && unread.length){
