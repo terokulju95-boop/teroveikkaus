@@ -604,10 +604,6 @@
 </head>
 <body>
 <canvas id="aurora-bg"></canvas>
-<div id="chatHead" class="chat-head" onclick="return false">
-  <span id="chatHeadAva" class="chat-head-ava">💬</span>
-  <span id="chatHeadBadge" class="chat-head-badge" style="display:none">0</span>
-</div>
 <div id="chatHeadX" class="chat-head-x">✕</div>
 <!-- UUSI CHAT (vaihe 2) -->
 <div id="chatOverlay" class="chat-overlay">
@@ -3696,11 +3692,13 @@ window._openChat = function(){
   var ov=document.getElementById('chatOverlay'); if(!ov) return;
   ov.style.display='flex';
   _backToChatList();
+  if(typeof _updateChatHeads==='function') _updateChatHeads();
 };
 window._closeChat = function(){
   var ov=document.getElementById('chatOverlay'); if(ov) ov.style.display='none';
   if(_chatUnsub){ _chatUnsub(); _chatUnsub=null; }
   _chatCurrent=null;
+  if(typeof _updateChatHeads==='function') _updateChatHeads();
 };
 window._backToChatList = function(){
   if(_chatUnsub){ _chatUnsub(); _chatUnsub=null; }
@@ -3797,7 +3795,7 @@ function _updateChatBadge(){
   var total=0; for(var k in _chatUnread){ total+=(_chatUnread[k]||0); }
   var b=document.getElementById('chatUnreadBadge');
   if(b){ if(total>0){ b.textContent=total>99?'99+':String(total); b.style.display='flex'; } else b.style.display='none'; }
-  if(typeof _updateChatHead==='function') _updateChatHead();
+  if(typeof _updateChatHeads==='function') _updateChatHeads();
 }
 function _markRead(convId){
   if(!currentUser) return;
@@ -3810,70 +3808,90 @@ function _markRead(convId){
   data.reads = data.reads||{}; data.reads[currentUser]=latestTs;
   setDoc(_chatRef(convId), { reads: _chatMakeObj(currentUser, latestTs) }, { merge:true }).catch(function(e){});
 }
-// ===== Messenger-tyylinen kelluva chat head =====
-var _chatHeadHidden = false;
-var _chatHeadLatest = null;   // {convId,title,avatar,isGroup}
-var _chatHeadPos = null;      // {x,y} muistettu sijainti
-var _chatHeadDragReady = false;
-function _totalUnread(){ var t=0; for(var k in _chatUnread){ t+=(_chatUnread[k]||0); } return t; }
-function _updateChatHead(){
-  var head=document.getElementById('chatHead'); if(!head) return;
-  var total=_totalUnread();
-  var show = total>0 && !_chatHeadHidden && !_chatOverlayOpen() && !!currentUser;
-  if(!show){ head.style.display='none'; return; }
-  var ava=document.getElementById('chatHeadAva');
-  if(ava) ava.textContent = _chatHeadLatest ? _chatHeadLatest.avatar : '💬';
-  var b=document.getElementById('chatHeadBadge');
-  if(b){ b.textContent = total>99?'99+':String(total); b.style.display = total>1?'flex':'flex'; }
-  if(_chatHeadPos){ head.style.left=_chatHeadPos.x+'px'; head.style.top=_chatHeadPos.y+'px'; head.style.right='auto'; }
-  head.style.display='flex';
-  _initChatHeadDrag();
-}
-window._chatHeadOpen = function(){
-  window._openChat();
-  if(_chatHeadLatest){ window._openConversation(_chatHeadLatest.convId, _chatHeadLatest.title, _chatHeadLatest.avatar, _chatHeadLatest.isGroup); }
-};
+// ===== Messenger-tyyliset kelluvat chat headit (useita, per keskustelu) =====
+var _chatHeads = {};   // convId -> { el, pos:{x,y}, meta }
 function _chatHeadXEl(){ return document.getElementById('chatHeadX'); }
 function _chatHeadOverX(cx, cy){
   var x=_chatHeadXEl(); if(!x) return false;
   var r=x.getBoundingClientRect();
   return cx>r.left-40 && cx<r.right+40 && cy>r.top-40;
 }
-function _initChatHeadDrag(){
-  if(_chatHeadDragReady) return;
-  var head=document.getElementById('chatHead'); if(!head) return;
-  _chatHeadDragReady=true;
-  var startX=0,startY=0,origX=0,origY=0,dragging=false,moved=false;
-  head.addEventListener('pointerdown', function(e){
-    dragging=true; moved=false;
-    var r=head.getBoundingClientRect(); origX=r.left; origY=r.top;
-    startX=e.clientX; startY=e.clientY;
-    try{ head.setPointerCapture(e.pointerId); }catch(err){}
-    head.style.transition='none';
+function _chatHeadDefaultPos(){
+  var n=Object.keys(_chatHeads).length;
+  return { x: window.innerWidth - 60 - 12, y: 96 + n*70 };
+}
+function _addChatHead(convId, meta){
+  if(_chatOverlayOpen() && _chatCurrent && _chatCurrent.convId===convId) return;
+  if(!currentUser) return;
+  if(_chatHeads[convId]){ _chatHeads[convId].meta=meta; _updateChatHeadBadge(convId); return; }
+  var el=document.createElement('div');
+  el.className='chat-head';
+  el.innerHTML='<span class="chat-head-ava">'+(meta.avatar||'💬')+'</span><span class="chat-head-badge" style="display:none">0</span>';
+  document.body.appendChild(el);
+  var pos=_chatHeadDefaultPos();
+  el.style.left=pos.x+'px'; el.style.top=pos.y+'px'; el.style.right='auto'; el.style.display='flex';
+  _chatHeads[convId]={ el:el, pos:pos, meta:meta };
+  _makeChatHeadDraggable(el, convId);
+  _updateChatHeadBadge(convId);
+  try{ if(navigator.vibrate) navigator.vibrate(40); }catch(e){}
+}
+function _removeChatHead(convId){
+  var h=_chatHeads[convId]; if(!h) return;
+  if(h.el && h.el.parentNode) h.el.parentNode.removeChild(h.el);
+  delete _chatHeads[convId];
+}
+function _updateChatHeadBadge(convId){
+  var h=_chatHeads[convId]; if(!h) return;
+  var n=_chatUnread[convId]||0;
+  var b=h.el.querySelector('.chat-head-badge');
+  if(b){ if(n>0){ b.textContent=n>99?'99+':String(n); b.style.display='flex'; } else b.style.display='none'; }
+  var a=h.el.querySelector('.chat-head-ava'); if(a && h.meta) a.textContent=h.meta.avatar||'💬';
+}
+function _updateChatHeads(){
+  var hide=_chatOverlayOpen();
+  Object.keys(_chatHeads).forEach(function(convId){
+    var h=_chatHeads[convId]; if(!h||!h.el) return;
+    h.el.style.display = hide ? 'none' : 'flex';
+    _updateChatHeadBadge(convId);
   });
-  head.addEventListener('pointermove', function(e){
+}
+function _openChatHead(convId){
+  var h=_chatHeads[convId]; var meta=h?h.meta:null;
+  window._openChat();
+  if(meta){ window._openConversation(convId, meta.title, meta.avatar, meta.isGroup); }
+  // kupla EI poistu (jää pysyväksi pikakuvakkeeksi)
+}
+function _makeChatHeadDraggable(el, convId){
+  var startX=0,startY=0,origX=0,origY=0,dragging=false,moved=false;
+  el.addEventListener('pointerdown', function(e){
+    dragging=true; moved=false;
+    var r=el.getBoundingClientRect(); origX=r.left; origY=r.top;
+    startX=e.clientX; startY=e.clientY;
+    try{ el.setPointerCapture(e.pointerId); }catch(err){}
+    el.style.transition='none'; el.style.zIndex='100002';
+  });
+  el.addEventListener('pointermove', function(e){
     if(!dragging) return;
     var dx=e.clientX-startX, dy=e.clientY-startY;
     if(Math.abs(dx)>6||Math.abs(dy)>6){ if(!moved){ moved=true; var x=_chatHeadXEl(); if(x) x.style.display='flex'; } }
-    head.style.left=(origX+dx)+'px'; head.style.top=(origY+dy)+'px'; head.style.right='auto';
+    el.style.left=(origX+dx)+'px'; el.style.top=(origY+dy)+'px'; el.style.right='auto';
     var x2=_chatHeadXEl(); if(x2) x2.classList.toggle('over', _chatHeadOverX(e.clientX,e.clientY));
   });
   function endDrag(e){
     if(!dragging) return; dragging=false;
-    head.style.transition='';
+    el.style.transition=''; el.style.zIndex='';
     var x=_chatHeadXEl(); if(x){ x.style.display='none'; x.classList.remove('over'); }
-    if(!moved){ window._chatHeadOpen(); return; }
-    if(_chatHeadOverX(e.clientX, e.clientY)){ _chatHeadHidden=true; _updateChatHead(); return; }
-    // snap lähimpään pystyreunaan + muista sijainti
-    var r=head.getBoundingClientRect(), vw=window.innerWidth, vh=window.innerHeight;
-    var snapLeft = (r.left + r.width/2) < vw/2;
-    var nx = snapLeft ? 12 : (vw - r.width - 12);
-    var ny = Math.max(70, Math.min(vh - r.height - 96, r.top));
-    head.style.left=nx+'px'; head.style.top=ny+'px'; head.style.right='auto';
-    _chatHeadPos={x:nx,y:ny};
+    if(!moved){ _openChatHead(convId); return; }
+    if(_chatHeadOverX(e.clientX, e.clientY)){ _removeChatHead(convId); return; }
+    var r=el.getBoundingClientRect(), vw=window.innerWidth, vh=window.innerHeight;
+    var snapLeft=(r.left+r.width/2)<vw/2;
+    var nx=snapLeft?12:(vw-r.width-12);
+    var ny=Math.max(70, Math.min(vh-r.height-96, r.top));
+    el.style.left=nx+'px'; el.style.top=ny+'px'; el.style.right='auto';
+    if(_chatHeads[convId]) _chatHeads[convId].pos={x:nx,y:ny};
   }
-  head.addEventListener('pointerup', endDrag);
-  head.addEventListener('pointercancel', endDrag);
+  el.addEventListener('pointerup', endDrag);
+  el.addEventListener('pointercancel', endDrag);
 }
 function _startChatListeners(){
   _stopChatListeners();
@@ -3892,11 +3910,8 @@ function _startChatListeners(){
       else if(_chatOverlayOpen() && !_chatCurrent){ _renderChatList(); }
       if(!_chatFirstSnap[c.id]){ _chatFirstSnap[c.id]=true; return; }   // ensisnapshot: ei kuplaa
       if(!openHere && unread.length){
-        var _lm = unread[unread.length-1];
-        _chatHeadLatest = { convId:c.id, title:c.title, avatar:(c.isGroup ? window._getAvatar(_lm.from) : c.avatar), isGroup:c.isGroup };
-        _chatHeadHidden = false;
-        _updateChatHead();
-        try{ if(navigator.vibrate) navigator.vibrate(40); }catch(e){}
+        var _meta = { convId:c.id, title:c.title, avatar:(c.isGroup ? '💬' : c.avatar), isGroup:c.isGroup };
+        _addChatHead(c.id, _meta);
       }
     }, function(err){});
     _chatGlobalUnsubs.push(unsub);
