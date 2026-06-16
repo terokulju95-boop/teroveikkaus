@@ -44,6 +44,36 @@
     .avatar-prev{ font-size:24px; width:30px; text-align:center; flex:0 0 auto; }
     .avatar-name{ flex:0 0 64px; font-size:13px; font-weight:600; }
     .avatar-inp{ flex:1; min-width:0; padding:8px; border-radius:8px; border:1px solid var(--border); background:#0d1424; color:var(--text); font-size:18px; text-align:center; }
+    /* ===== CHAT (vaihe 2) ===== */
+    .chat-overlay{ position:fixed; inset:0; z-index:99998; background:rgba(0,0,0,0.55); display:none; align-items:flex-end; justify-content:center; }
+    .chat-panel{ background:var(--card); width:100%; max-width:560px; height:88vh; border-radius:18px 18px 0 0; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 -8px 40px rgba(0,0,0,0.55); }
+    @media(min-width:600px){ .chat-overlay{ align-items:center; } .chat-panel{ height:82vh; border-radius:18px; } }
+    .chat-header{ display:flex; align-items:center; gap:8px; padding:14px 16px; border-bottom:1px solid var(--border); font-weight:800; font-size:16px; flex:0 0 auto; }
+    .chat-back{ background:none; border:none; color:var(--text); font-size:28px; line-height:1; cursor:pointer; padding:0 4px; }
+    #chatTitle{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .chat-close{ margin-left:auto; background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; }
+    .chat-list{ overflow-y:auto; padding:8px; flex:1; }
+    .chat-list-label{ font-size:12px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.5px; padding:12px 10px 6px; }
+    .chat-conv-item{ display:flex; align-items:center; gap:12px; width:100%; padding:12px; border:none; background:none; color:var(--text); cursor:pointer; border-radius:12px; text-align:left; }
+    .chat-conv-item:active{ background:rgba(255,255,255,0.06); }
+    .chat-ava{ font-size:24px; width:42px; height:42px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.06); border-radius:50%; flex:0 0 auto; }
+    .chat-conv-name{ font-weight:700; font-size:15px; }
+    .chat-conv-sub{ font-size:12px; color:var(--muted); margin-left:auto; }
+    .chat-conv{ display:none; flex-direction:column; flex:1; overflow:hidden; }
+    .chat-messages{ flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:8px; }
+    .chat-empty{ text-align:center; color:var(--muted); font-size:14px; margin:auto; }
+    .chat-msg{ display:flex; align-items:flex-end; gap:8px; max-width:82%; }
+    .chat-msg.mine{ align-self:flex-end; flex-direction:row-reverse; }
+    .chat-msg-ava{ font-size:22px; flex:0 0 auto; }
+    .chat-bubble{ background:#1c2538; border-radius:16px; padding:9px 13px; }
+    .chat-bubble.mine{ background:var(--primary); color:#1a1207; }
+    .chat-from{ font-size:11px; font-weight:700; color:var(--muted); margin-bottom:2px; }
+    .chat-text{ font-size:14px; line-height:1.4; word-break:break-word; white-space:pre-wrap; }
+    .chat-time{ font-size:10px; color:var(--muted); margin-top:2px; text-align:right; }
+    .chat-bubble.mine .chat-time{ color:rgba(26,18,7,0.55); }
+    .chat-input-row{ display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--border); flex:0 0 auto; }
+    .chat-input{ flex:1; min-width:0; padding:12px; border-radius:22px; border:1px solid var(--border); background:#0d1424; color:var(--text); font-size:15px; }
+    .chat-send{ flex:0 0 auto; width:44px; height:44px; border:none; border-radius:50%; background:var(--primary); color:#1a1207; font-size:18px; cursor:pointer; }
     #appScreen, #loginScreen { position:relative; z-index:1; }
     #fb-status { z-index:9999; }
 
@@ -562,6 +592,24 @@
 </head>
 <body>
 <canvas id="aurora-bg"></canvas>
+<!-- UUSI CHAT (vaihe 2) -->
+<div id="chatOverlay" class="chat-overlay">
+  <div class="chat-panel">
+    <div class="chat-header">
+      <button id="chatBackBtn" class="chat-back" onclick="window._backToChatList()" style="display:none" aria-label="Takaisin">‹</button>
+      <span id="chatTitle">💬 Viestit</span>
+      <button class="chat-close" onclick="window._closeChat()" aria-label="Sulje">✕</button>
+    </div>
+    <div id="chatListView" class="chat-list"></div>
+    <div id="chatConvView" class="chat-conv">
+      <div id="chatMessages" class="chat-messages"></div>
+      <div class="chat-input-row">
+        <input id="chatInput" class="chat-input" placeholder="Kirjoita viesti…" maxlength="500" onkeydown="window._chatInputKey(event)">
+        <button class="chat-send" onclick="window._sendChat()" aria-label="Lähetä">➤</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 
 <!-- ══ INTRO SCREEN ══ -->
@@ -813,6 +861,9 @@
       </div>
       <div class="topbar-actions">
         <span id="currentUserBadge" ondblclick="window._openPelleCard()" title="Tuplapaina avataksesi salaisuuden 🤫"></span>
+        <button id="chatOpenBtn" class="topbar-iconbtn" onclick="window._openChat()" aria-label="Chat" title="Chat" style="display:none">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.6-.8L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>
+        </button>
         <button id="adminMsgBtn" class="topbar-iconbtn" onclick="window._openMsgPanel()" aria-label="Viestit" title="Viestit" style="display:none">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H5.2L4 17.5z"/></svg>
           <span id="msgBadge" class="topbar-badge" style="display:none">0</span>
@@ -3610,6 +3661,97 @@ onSnapshot(AVATAR_DOC, function(snap){
   _applyAvatars(av);
 });
 
+// ============================================================
+//  UUSI CHAT-JÄRJESTELMÄ (vaihe 2): ryhmächat + yksityisviestit
+//  Keskustelupohjainen malli: conversations/{convId}
+//  convId: 'ryhma' = ryhmächat | 'NimiA__NimiB' (aakkosjärj.) = yksityinen
+//  Ei kosketa pisteytykseen/veikkauksiin – täysin erillinen data.
+// ============================================================
+const CHAT_GROUP_ID = 'ryhma';
+function _chatConvId(a, b){ return [a, b].sort(function(x,y){ return x.localeCompare(y,'fi'); }).join('__'); }
+function _chatRef(convId){ return doc(db, 'conversations', convId); }
+function _chatEsc(t){ return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+var _chatUnsub = null;
+var _chatCurrent = null;
+
+window._openChat = function(){
+  var ov=document.getElementById('chatOverlay'); if(!ov) return;
+  ov.style.display='flex';
+  _backToChatList();
+};
+window._closeChat = function(){
+  var ov=document.getElementById('chatOverlay'); if(ov) ov.style.display='none';
+  if(_chatUnsub){ _chatUnsub(); _chatUnsub=null; }
+  _chatCurrent=null;
+};
+window._backToChatList = function(){
+  if(_chatUnsub){ _chatUnsub(); _chatUnsub=null; }
+  _chatCurrent=null;
+  var cv=document.getElementById('chatConvView'); if(cv) cv.style.display='none';
+  var lv=document.getElementById('chatListView'); if(lv) lv.style.display='block';
+  var bb=document.getElementById('chatBackBtn'); if(bb) bb.style.display='none';
+  var tt=document.getElementById('chatTitle'); if(tt) tt.textContent='💬 Viestit';
+  _renderChatList();
+};
+function _renderChatList(){
+  var el=document.getElementById('chatListView'); if(!el) return;
+  var others = PLAYERS.filter(function(pl){ return pl!==currentUser; });
+  var html = '<button class="chat-conv-item" onclick="window._openConversation(\''+CHAT_GROUP_ID+'\',\'Ryhmächat\',\'💬\',true)">'+
+    '<span class="chat-ava">💬</span><span class="chat-conv-name">Ryhmächat</span><span class="chat-conv-sub">koko porukka</span></button>';
+  html += '<div class="chat-list-label">Yksityisviestit</div>';
+  html += others.map(function(pl){
+    var a=window._getAvatar(pl);
+    var cid=_chatConvId(currentUser, pl);
+    return '<button class="chat-conv-item" onclick="window._openConversation(\''+cid+'\',\''+pl+'\',\''+a+'\',false)">'+
+      '<span class="chat-ava">'+a+'</span><span class="chat-conv-name">'+pl+'</span></button>';
+  }).join('');
+  el.innerHTML = html;
+}
+window._openConversation = function(convId, title, avatar, isGroup){
+  _chatCurrent = { convId:convId, title:title, avatar:avatar, isGroup:isGroup };
+  var lv=document.getElementById('chatListView'); if(lv) lv.style.display='none';
+  var cv=document.getElementById('chatConvView'); if(cv) cv.style.display='flex';
+  var bb=document.getElementById('chatBackBtn'); if(bb) bb.style.display='block';
+  var tt=document.getElementById('chatTitle'); if(tt) tt.textContent=(isGroup?'💬 ':avatar+' ')+title;
+  var box=document.getElementById('chatMessages'); if(box) box.innerHTML='<p class="chat-empty">Ladataan…</p>';
+  if(_chatUnsub){ _chatUnsub(); _chatUnsub=null; }
+  _chatUnsub = onSnapshot(_chatRef(convId), function(snap){
+    var msgs = (snap.exists() ? (snap.data().messages||[]) : []);
+    _renderChatMessages(msgs);
+  }, function(err){ var b=document.getElementById('chatMessages'); if(b) b.innerHTML='<p class="chat-empty">Virhe viestien haussa.</p>'; });
+  setTimeout(function(){ var inp=document.getElementById('chatInput'); if(inp) inp.focus(); }, 120);
+};
+function _renderChatMessages(msgs){
+  var box=document.getElementById('chatMessages'); if(!box) return;
+  if(!msgs.length){ box.innerHTML='<p class="chat-empty">Ei viestejä vielä. Aloita keskustelu! 👋</p>'; return; }
+  var isGroup = _chatCurrent && _chatCurrent.isGroup;
+  box.innerHTML = msgs.map(function(m){
+    var mine = (m.from===currentUser);
+    var av = window._getAvatar(m.from);
+    var time = '';
+    try{ time = new Date(m.ts).toLocaleString('fi-FI',{hour:'2-digit',minute:'2-digit'}); }catch(e){}
+    if(mine){
+      return '<div class="chat-msg mine"><div class="chat-bubble mine"><div class="chat-text">'+_chatEsc(m.text)+'</div><div class="chat-time">'+time+'</div></div></div>';
+    }
+    return '<div class="chat-msg"><span class="chat-msg-ava">'+av+'</span><div class="chat-bubble">'+(isGroup?'<div class="chat-from">'+_chatEsc(m.from)+'</div>':'')+'<div class="chat-text">'+_chatEsc(m.text)+'</div><div class="chat-time">'+time+'</div></div></div>';
+  }).join('');
+  box.scrollTop = box.scrollHeight;
+}
+window._sendChat = async function(){
+  var inp=document.getElementById('chatInput'); if(!inp || !_chatCurrent) return;
+  var text=(inp.value||'').trim(); if(!text) return;
+  inp.value='';
+  var msg = { id: Date.now()+'_'+Math.random().toString(36).slice(2,7), from: currentUser, text: text, ts: Date.now() };
+  try{
+    var ref=_chatRef(_chatCurrent.convId);
+    var snap=await getDoc(ref);
+    var msgs = (snap.exists() ? (snap.data().messages||[]) : []);
+    msgs.push(msg);
+    await setDoc(ref, { messages: msgs, updated: Date.now() }, { merge:true });
+  }catch(e){ alert('Viestin lähetys epäonnistui: '+(e&&e.message||e)); inp.value=text; }
+};
+window._chatInputKey = function(ev){ if(ev && ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); window._sendChat(); } };
+
 // ============================
 // RENDER: PLAYER STATUS (admin)
 // ============================
@@ -4274,6 +4416,7 @@ function doLogin(name){
   const setBtn=$('adminSettingsBtn'); if(setBtn) setBtn.style.display=isAdmin?'':'none';
   // Pelaajan viesti-nappi yläpalkissa
   const pMsgBtn=$('playerMsgBtn'); if(pMsgBtn) pMsgBtn.style.display=!isAdmin?'':'none';
+  const cOpenBtn=$('chatOpenBtn'); if(cOpenBtn) cOpenBtn.style.display=currentUser?'':'none';
 
   // Viesti Terolle -kortti: piilotetaan adminilta
   const msgCard=$('messageCard'); if(msgCard) msgCard.style.display=isAdmin?'none':'';
