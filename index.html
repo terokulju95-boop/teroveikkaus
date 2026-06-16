@@ -40,6 +40,10 @@
     .aurora-sld label{ font-size:13px; color:var(--muted); white-space:nowrap; min-width:88px; }
     .aurora-sld input[type=range]{ flex:1; accent-color:var(--primary); }
     .aurora-sld span{ font-size:12px; color:var(--muted); width:44px; text-align:right; }
+    .avatar-row{ display:flex; align-items:center; gap:8px; margin:6px 0; }
+    .avatar-prev{ font-size:24px; width:30px; text-align:center; flex:0 0 auto; }
+    .avatar-name{ flex:0 0 64px; font-size:13px; font-weight:600; }
+    .avatar-inp{ flex:1; min-width:0; padding:8px; border-radius:8px; border:1px solid var(--border); background:#0d1424; color:var(--text); font-size:18px; text-align:center; }
     #appScreen, #loginScreen { position:relative; z-index:1; }
     #fb-status { z-index:9999; }
 
@@ -927,6 +931,14 @@
         <div class="aurora-sld"><label>Aallon koko</label><input id="auroraAmp" type="range" min="50" max="320" value="260" oninput="window._auroraPreview('amp',this.value)" onchange="window._auroraCommit('amp',this.value)"><span id="auroraAmpPct">260%</span></div>
         <div class="aurora-sld"><label>Nopeus</label><input id="auroraSpeed" type="range" min="40" max="380" value="320" oninput="window._auroraPreview('speed',this.value)" onchange="window._auroraCommit('speed',this.value)"><span id="auroraSpeedPct">320%</span></div>
         <p class="muted" style="margin-top:6px;font-size:12px">Muutos näkyy kaikille pelaajille reaaliajassa.</p>
+      </div>
+
+      <!-- Pelaajien avatarit -->
+      <div style="margin-top:12px">
+        <div class="separator"></div>
+        <h2 style="margin:8px 0">😀 Pelaajien avatarit</h2>
+        <p class="muted" style="font-size:12px;margin-bottom:8px">Vaihda kenen tahansa avatar (emoji). Näkyy kaikille heti.</p>
+        <div id="avatarAdminList"></div>
       </div>
 
       <!-- PIN-koodit -->
@@ -1855,8 +1867,7 @@ window._buildProfileHTML = function(player) {
     ? new Date(lastEdit).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})
     : '–';
 
-  const avatarMap = {'Roosa':'🌸','Timo':'🧔','Tero':'👑','Tiina':'💁','Tepa':'🤘','Äiti':'👩','Iskä':'👨'};
-  const avatar = avatarMap[player] || '🏒';
+  const avatar = (window._getAvatar ? window._getAvatar(player) : '🏒');
 
   const html = `
     <div class="profile-header">
@@ -3559,6 +3570,44 @@ onSnapshot(AURORA_DOC, function(snap){
     if(d.v!=null) cfg.v=d.v; if(d.strength!=null) cfg.strength=d.strength;
     if(d.amp!=null) cfg.amp=d.amp; if(d.speed!=null) cfg.speed=d.speed; }
   _applyAurora(cfg);
+});
+
+// ===== PELAAJIEN AVATARIT (globaali; admin vaihtaa, näkyy kaikille). Vain visuaalinen. =====
+const AVATAR_DOC = doc(db, "app", "avatars");
+const DEFAULT_AVATARS = {'Roosa':'🌸','Timo':'😎','Tero':'👑','Tiina':'💁','Tepa':'🤘','Äiti':'👩','Iskä':'🧓'};
+window._avatars = Object.assign({}, DEFAULT_AVATARS);
+window._getAvatar = function(player){ return (window._avatars && window._avatars[player]) || DEFAULT_AVATARS[player] || '🏒'; };
+function _renderAvatarAdmin(){
+  var el=document.getElementById('avatarAdminList'); if(!el) return;
+  el.innerHTML = PLAYERS.map(function(pl){
+    var a=window._getAvatar(pl);
+    return '<div class="avatar-row">'+
+      '<span id="avatarPreview_'+pl+'" class="avatar-prev">'+a+'</span>'+
+      '<span class="avatar-name">'+(pl===ADMIN?'👑 ':'')+pl+'</span>'+
+      '<input id="avatarInput_'+pl+'" class="avatar-inp" value="'+a+'" maxlength="8">'+
+      '<button class="btn small secondary" onclick="window._saveAvatar(\''+pl+'\')">Tallenna</button>'+
+    '</div>';
+  }).join('');
+}
+function _applyAvatars(av){
+  window._avatars = Object.assign({}, DEFAULT_AVATARS, av||{});
+  _renderAvatarAdmin();
+  try{ if(typeof renderProfileHeader==='function') renderProfileHeader(); }catch(e){}
+  try{ if(typeof render==='function') render(); }catch(e){}
+}
+window._saveAvatar = function(player){
+  if(currentUser !== ADMIN) return;
+  var inp=document.getElementById('avatarInput_'+player); if(!inp) return;
+  var val=(inp.value||'').trim() || DEFAULT_AVATARS[player] || '🏒';
+  var next=Object.assign({}, window._avatars); next[player]=val;
+  setDoc(AVATAR_DOC, { avatars: next, ts: Date.now() })
+    .then(function(){ showStatus('✅ '+player+':n avatar päivitetty','#22c55e'); if(typeof hideStatus==='function') hideStatus(); })
+    .catch(function(e){ alert('Avatarin tallennus epäonnistui: '+(e&&e.message||e)); });
+};
+onSnapshot(AVATAR_DOC, function(snap){
+  var av = {};
+  if(snap && snap.exists()){ var d=snap.data()||{}; av = d.avatars||{}; }
+  _applyAvatars(av);
 });
 
 // ============================
