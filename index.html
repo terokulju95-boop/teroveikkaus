@@ -3880,9 +3880,11 @@ function _makeChatHeadDraggable(el, convId){
   function endDrag(e){
     if(!dragging) return; dragging=false;
     el.style.transition=''; el.style.zIndex='';
+    // Tarkista X-osuma ENNEN kuin X piilotetaan (piilotetun rect on 0,0)
+    var overX = moved && _chatHeadOverX(e.clientX, e.clientY);
     var x=_chatHeadXEl(); if(x){ x.style.display='none'; x.classList.remove('over'); }
-    if(!moved){ _openChatHead(convId); return; }
-    if(_chatHeadOverX(e.clientX, e.clientY)){ _removeChatHead(convId); return; }
+    if(!moved) return;                       // tap hoidetaan click-tapahtumassa (estää haamuklikkauksen)
+    if(overX){ _removeChatHead(convId); return; }
     var r=el.getBoundingClientRect(), vw=window.innerWidth, vh=window.innerHeight;
     var snapLeft=(r.left+r.width/2)<vw/2;
     var nx=snapLeft?12:(vw-r.width-12);
@@ -3892,6 +3894,12 @@ function _makeChatHeadDraggable(el, convId){
   }
   el.addEventListener('pointerup', endDrag);
   el.addEventListener('pointercancel', endDrag);
+  // Avaus click-tapahtumassa: klikkaus kohdistuu kuplaan eikä vuoda juuri auenneeseen chattiin
+  el.addEventListener('click', function(e){
+    e.preventDefault(); e.stopPropagation();
+    if(moved){ moved=false; return; }        // raahaus, ei avausta
+    _openChatHead(convId);
+  });
 }
 function _startChatListeners(){
   _stopChatListeners();
