@@ -78,13 +78,14 @@
     .chat-unread-badge{ background:#ef4444 !important; color:#fff !important; }
     .chat-unread{ margin-left:auto; background:#ef4444; color:#fff; font-size:11px; font-weight:700; min-width:20px; height:20px; border-radius:10px; display:flex; align-items:center; justify-content:center; padding:0 6px; flex:0 0 auto; }
     .chat-seen{ align-self:flex-end; font-size:11px; color:var(--muted); margin-top:-2px; padding-right:4px; }
-    .chat-bubble-host{ position:fixed; top:64px; left:0; right:0; z-index:99999; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; padding:0 12px; }
-    .chat-pop{ pointer-events:auto; cursor:pointer; width:100%; max-width:420px; background:var(--card); border:1px solid var(--primary); border-radius:14px; padding:10px 12px; display:flex; align-items:center; gap:10px; box-shadow:0 10px 30px rgba(0,0,0,0.55); transform:translateY(-20px); opacity:0; transition:transform .3s cubic-bezier(.22,1,.36,1), opacity .3s; }
-    .chat-pop.show{ transform:translateY(0); opacity:1; }
-    .chat-pop-ava{ font-size:24px; width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.06); border-radius:50%; flex:0 0 auto; }
-    .chat-pop-body{ display:flex; flex-direction:column; min-width:0; flex:1; }
-    .chat-pop-name{ font-weight:700; font-size:13px; }
-    .chat-pop-text{ font-size:13px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    /* Messenger-tyylinen kelluva chat head */
+    .chat-head{ position:fixed; top:96px; right:12px; z-index:100000; width:60px; height:60px; border-radius:50%; background:var(--card); border:2px solid var(--primary); box-shadow:0 8px 24px rgba(0,0,0,0.55); display:none; align-items:center; justify-content:center; cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none; animation:chatHeadPop .35s cubic-bezier(.34,1.56,.64,1); }
+    .chat-head:active{ cursor:grabbing; }
+    @keyframes chatHeadPop{ from{ transform:scale(0); } to{ transform:scale(1); } }
+    .chat-head-ava{ font-size:32px; pointer-events:none; }
+    .chat-head-badge{ position:absolute; top:-5px; right:-5px; min-width:22px; height:22px; border-radius:11px; background:#ef4444; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; padding:0 5px; border:2px solid var(--bg); pointer-events:none; }
+    .chat-head-x{ position:fixed; bottom:88px; left:50%; transform:translateX(-50%); z-index:99999; width:58px; height:58px; border-radius:50%; background:rgba(40,42,54,0.92); color:#fff; font-size:24px; display:none; align-items:center; justify-content:center; pointer-events:none; box-shadow:0 6px 20px rgba(0,0,0,0.5); transition:transform .15s ease, background .15s ease; }
+    .chat-head-x.over{ background:#ef4444; transform:translateX(-50%) scale(1.35); }
     #appScreen, #loginScreen { position:relative; z-index:1; }
     #fb-status { z-index:9999; }
 
@@ -603,7 +604,11 @@
 </head>
 <body>
 <canvas id="aurora-bg"></canvas>
-<div id="chatBubbleHost" class="chat-bubble-host"></div>
+<div id="chatHead" class="chat-head" onclick="return false">
+  <span id="chatHeadAva" class="chat-head-ava">💬</span>
+  <span id="chatHeadBadge" class="chat-head-badge" style="display:none">0</span>
+</div>
+<div id="chatHeadX" class="chat-head-x">✕</div>
 <!-- UUSI CHAT (vaihe 2) -->
 <div id="chatOverlay" class="chat-overlay">
   <div class="chat-panel">
@@ -3792,6 +3797,7 @@ function _updateChatBadge(){
   var total=0; for(var k in _chatUnread){ total+=(_chatUnread[k]||0); }
   var b=document.getElementById('chatUnreadBadge');
   if(b){ if(total>0){ b.textContent=total>99?'99+':String(total); b.style.display='flex'; } else b.style.display='none'; }
+  if(typeof _updateChatHead==='function') _updateChatHead();
 }
 function _markRead(convId){
   if(!currentUser) return;
@@ -3804,18 +3810,70 @@ function _markRead(convId){
   data.reads = data.reads||{}; data.reads[currentUser]=latestTs;
   setDoc(_chatRef(convId), { reads: _chatMakeObj(currentUser, latestTs) }, { merge:true }).catch(function(e){});
 }
-function _showChatBubble(conv, msg){
-  var host=document.getElementById('chatBubbleHost'); if(!host) return;
-  var el=document.createElement('div'); el.className='chat-pop';
-  var av = conv.isGroup ? '💬' : window._getAvatar(msg.from);
-  var who = conv.isGroup ? (msg.from+' · Ryhmächat') : msg.from;
-  el.innerHTML='<span class="chat-pop-ava">'+av+'</span><span class="chat-pop-body"><span class="chat-pop-name">'+_chatEsc(who)+'</span><span class="chat-pop-text">'+_chatEsc(msg.text)+'</span></span>';
-  el.onclick=function(){ window._openChat(); window._openConversation(conv.id, conv.title, conv.avatar, conv.isGroup); if(el.parentNode) el.remove(); };
-  host.appendChild(el);
-  while(host.children.length>3) host.removeChild(host.firstChild);
-  requestAnimationFrame(function(){ el.classList.add('show'); });
-  setTimeout(function(){ el.classList.remove('show'); setTimeout(function(){ if(el.parentNode) el.remove(); },300); }, 5000);
-  try{ if(navigator.vibrate) navigator.vibrate(40); }catch(e){}
+// ===== Messenger-tyylinen kelluva chat head =====
+var _chatHeadHidden = false;
+var _chatHeadLatest = null;   // {convId,title,avatar,isGroup}
+var _chatHeadPos = null;      // {x,y} muistettu sijainti
+var _chatHeadDragReady = false;
+function _totalUnread(){ var t=0; for(var k in _chatUnread){ t+=(_chatUnread[k]||0); } return t; }
+function _updateChatHead(){
+  var head=document.getElementById('chatHead'); if(!head) return;
+  var total=_totalUnread();
+  var show = total>0 && !_chatHeadHidden && !_chatOverlayOpen() && !!currentUser;
+  if(!show){ head.style.display='none'; return; }
+  var ava=document.getElementById('chatHeadAva');
+  if(ava) ava.textContent = _chatHeadLatest ? _chatHeadLatest.avatar : '💬';
+  var b=document.getElementById('chatHeadBadge');
+  if(b){ b.textContent = total>99?'99+':String(total); b.style.display = total>1?'flex':'flex'; }
+  if(_chatHeadPos){ head.style.left=_chatHeadPos.x+'px'; head.style.top=_chatHeadPos.y+'px'; head.style.right='auto'; }
+  head.style.display='flex';
+  _initChatHeadDrag();
+}
+window._chatHeadOpen = function(){
+  window._openChat();
+  if(_chatHeadLatest){ window._openConversation(_chatHeadLatest.convId, _chatHeadLatest.title, _chatHeadLatest.avatar, _chatHeadLatest.isGroup); }
+};
+function _chatHeadXEl(){ return document.getElementById('chatHeadX'); }
+function _chatHeadOverX(cx, cy){
+  var x=_chatHeadXEl(); if(!x) return false;
+  var r=x.getBoundingClientRect();
+  return cx>r.left-40 && cx<r.right+40 && cy>r.top-40;
+}
+function _initChatHeadDrag(){
+  if(_chatHeadDragReady) return;
+  var head=document.getElementById('chatHead'); if(!head) return;
+  _chatHeadDragReady=true;
+  var startX=0,startY=0,origX=0,origY=0,dragging=false,moved=false;
+  head.addEventListener('pointerdown', function(e){
+    dragging=true; moved=false;
+    var r=head.getBoundingClientRect(); origX=r.left; origY=r.top;
+    startX=e.clientX; startY=e.clientY;
+    try{ head.setPointerCapture(e.pointerId); }catch(err){}
+    head.style.transition='none';
+  });
+  head.addEventListener('pointermove', function(e){
+    if(!dragging) return;
+    var dx=e.clientX-startX, dy=e.clientY-startY;
+    if(Math.abs(dx)>6||Math.abs(dy)>6){ if(!moved){ moved=true; var x=_chatHeadXEl(); if(x) x.style.display='flex'; } }
+    head.style.left=(origX+dx)+'px'; head.style.top=(origY+dy)+'px'; head.style.right='auto';
+    var x2=_chatHeadXEl(); if(x2) x2.classList.toggle('over', _chatHeadOverX(e.clientX,e.clientY));
+  });
+  function endDrag(e){
+    if(!dragging) return; dragging=false;
+    head.style.transition='';
+    var x=_chatHeadXEl(); if(x){ x.style.display='none'; x.classList.remove('over'); }
+    if(!moved){ window._chatHeadOpen(); return; }
+    if(_chatHeadOverX(e.clientX, e.clientY)){ _chatHeadHidden=true; _updateChatHead(); return; }
+    // snap lähimpään pystyreunaan + muista sijainti
+    var r=head.getBoundingClientRect(), vw=window.innerWidth, vh=window.innerHeight;
+    var snapLeft = (r.left + r.width/2) < vw/2;
+    var nx = snapLeft ? 12 : (vw - r.width - 12);
+    var ny = Math.max(70, Math.min(vh - r.height - 96, r.top));
+    head.style.left=nx+'px'; head.style.top=ny+'px'; head.style.right='auto';
+    _chatHeadPos={x:nx,y:ny};
+  }
+  head.addEventListener('pointerup', endDrag);
+  head.addEventListener('pointercancel', endDrag);
 }
 function _startChatListeners(){
   _stopChatListeners();
@@ -3833,7 +3891,13 @@ function _startChatListeners(){
       if(openHere){ _renderChatMessages(msgs); _markRead(c.id); }
       else if(_chatOverlayOpen() && !_chatCurrent){ _renderChatList(); }
       if(!_chatFirstSnap[c.id]){ _chatFirstSnap[c.id]=true; return; }   // ensisnapshot: ei kuplaa
-      if(!openHere && unread.length){ _showChatBubble(c, unread[unread.length-1]); }
+      if(!openHere && unread.length){
+        var _lm = unread[unread.length-1];
+        _chatHeadLatest = { convId:c.id, title:c.title, avatar:(c.isGroup ? window._getAvatar(_lm.from) : c.avatar), isGroup:c.isGroup };
+        _chatHeadHidden = false;
+        _updateChatHead();
+        try{ if(navigator.vibrate) navigator.vibrate(40); }catch(e){}
+      }
     }, function(err){});
     _chatGlobalUnsubs.push(unsub);
   });
