@@ -74,6 +74,17 @@
     .chat-input-row{ display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--border); flex:0 0 auto; }
     .chat-input{ flex:1; min-width:0; padding:12px; border-radius:22px; border:1px solid var(--border); background:#0d1424; color:var(--text); font-size:15px; }
     .chat-send{ flex:0 0 auto; width:44px; height:44px; border:none; border-radius:50%; background:var(--primary); color:#1a1207; font-size:18px; cursor:pointer; }
+    /* Vaihe 3: lukematon-merkit, nähty, kuplat */
+    .chat-unread-badge{ background:#ef4444 !important; color:#fff !important; }
+    .chat-unread{ margin-left:auto; background:#ef4444; color:#fff; font-size:11px; font-weight:700; min-width:20px; height:20px; border-radius:10px; display:flex; align-items:center; justify-content:center; padding:0 6px; flex:0 0 auto; }
+    .chat-seen{ align-self:flex-end; font-size:11px; color:var(--muted); margin-top:-2px; padding-right:4px; }
+    .chat-bubble-host{ position:fixed; top:64px; left:0; right:0; z-index:99999; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; padding:0 12px; }
+    .chat-pop{ pointer-events:auto; cursor:pointer; width:100%; max-width:420px; background:var(--card); border:1px solid var(--primary); border-radius:14px; padding:10px 12px; display:flex; align-items:center; gap:10px; box-shadow:0 10px 30px rgba(0,0,0,0.55); transform:translateY(-20px); opacity:0; transition:transform .3s cubic-bezier(.22,1,.36,1), opacity .3s; }
+    .chat-pop.show{ transform:translateY(0); opacity:1; }
+    .chat-pop-ava{ font-size:24px; width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.06); border-radius:50%; flex:0 0 auto; }
+    .chat-pop-body{ display:flex; flex-direction:column; min-width:0; flex:1; }
+    .chat-pop-name{ font-weight:700; font-size:13px; }
+    .chat-pop-text{ font-size:13px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     #appScreen, #loginScreen { position:relative; z-index:1; }
     #fb-status { z-index:9999; }
 
@@ -592,6 +603,7 @@
 </head>
 <body>
 <canvas id="aurora-bg"></canvas>
+<div id="chatBubbleHost" class="chat-bubble-host"></div>
 <!-- UUSI CHAT (vaihe 2) -->
 <div id="chatOverlay" class="chat-overlay">
   <div class="chat-panel">
@@ -863,6 +875,7 @@
         <span id="currentUserBadge" ondblclick="window._openPelleCard()" title="Tuplapaina avataksesi salaisuuden 🤫"></span>
         <button id="chatOpenBtn" class="topbar-iconbtn" onclick="window._openChat()" aria-label="Chat" title="Chat" style="display:none">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.6-.8L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>
+          <span id="chatUnreadBadge" class="topbar-badge chat-unread-badge" style="display:none">0</span>
         </button>
         <button id="adminMsgBtn" class="topbar-iconbtn" onclick="window._openMsgPanel()" aria-label="Viestit" title="Viestit" style="display:none">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H5.2L4 17.5z"/></svg>
@@ -3696,14 +3709,15 @@ window._backToChatList = function(){
 function _renderChatList(){
   var el=document.getElementById('chatListView'); if(!el) return;
   var others = PLAYERS.filter(function(pl){ return pl!==currentUser; });
+  function badge(cid){ var n=_chatUnread[cid]||0; return n>0 ? '<span class="chat-unread">'+(n>99?'99+':n)+'</span>' : ''; }
   var html = '<button class="chat-conv-item" onclick="window._openConversation(\''+CHAT_GROUP_ID+'\',\'Ryhmächat\',\'💬\',true)">'+
-    '<span class="chat-ava">💬</span><span class="chat-conv-name">Ryhmächat</span><span class="chat-conv-sub">koko porukka</span></button>';
+    '<span class="chat-ava">💬</span><span class="chat-conv-name">Ryhmächat</span><span class="chat-conv-sub">koko porukka</span>'+badge(CHAT_GROUP_ID)+'</button>';
   html += '<div class="chat-list-label">Yksityisviestit</div>';
   html += others.map(function(pl){
     var a=window._getAvatar(pl);
     var cid=_chatConvId(currentUser, pl);
     return '<button class="chat-conv-item" onclick="window._openConversation(\''+cid+'\',\''+pl+'\',\''+a+'\',false)">'+
-      '<span class="chat-ava">'+a+'</span><span class="chat-conv-name">'+pl+'</span></button>';
+      '<span class="chat-ava">'+a+'</span><span class="chat-conv-name">'+pl+'</span>'+badge(cid)+'</button>';
   }).join('');
   el.innerHTML = html;
 }
@@ -3713,19 +3727,22 @@ window._openConversation = function(convId, title, avatar, isGroup){
   var cv=document.getElementById('chatConvView'); if(cv) cv.style.display='flex';
   var bb=document.getElementById('chatBackBtn'); if(bb) bb.style.display='block';
   var tt=document.getElementById('chatTitle'); if(tt) tt.textContent=(isGroup?'💬 ':avatar+' ')+title;
-  var box=document.getElementById('chatMessages'); if(box) box.innerHTML='<p class="chat-empty">Ladataan…</p>';
-  if(_chatUnsub){ _chatUnsub(); _chatUnsub=null; }
-  _chatUnsub = onSnapshot(_chatRef(convId), function(snap){
-    var msgs = (snap.exists() ? (snap.data().messages||[]) : []);
-    _renderChatMessages(msgs);
-  }, function(err){ var b=document.getElementById('chatMessages'); if(b) b.innerHTML='<p class="chat-empty">Virhe viestien haussa.</p>'; });
+  var data=_chatData[convId];
+  if(data){ _renderChatMessages(data.messages); _markRead(convId); }
+  else { var box=document.getElementById('chatMessages'); if(box) box.innerHTML='<p class="chat-empty">Ladataan…</p>'; }
   setTimeout(function(){ var inp=document.getElementById('chatInput'); if(inp) inp.focus(); }, 120);
 };
 function _renderChatMessages(msgs){
   var box=document.getElementById('chatMessages'); if(!box) return;
   if(!msgs.length){ box.innerHTML='<p class="chat-empty">Ei viestejä vielä. Aloita keskustelu! 👋</p>'; return; }
   var isGroup = _chatCurrent && _chatCurrent.isGroup;
-  box.innerHTML = msgs.map(function(m){
+  var convId = _chatCurrent && _chatCurrent.convId;
+  var reads = (convId && _chatData[convId] && _chatData[convId].reads) || {};
+  var myMsgs = msgs.filter(function(m){ return m.from===currentUser; });
+  var lastMineTs = myMsgs.length ? (myMsgs[myMsgs.length-1].ts||0) : 0;
+  var seenBy = [];
+  if(lastMineTs){ Object.keys(reads).forEach(function(pl){ if(pl!==currentUser && (reads[pl]||0)>=lastMineTs) seenBy.push(pl); }); }
+  var html = msgs.map(function(m){
     var mine = (m.from===currentUser);
     var av = window._getAvatar(m.from);
     var time = '';
@@ -3735,6 +3752,11 @@ function _renderChatMessages(msgs){
     }
     return '<div class="chat-msg"><span class="chat-msg-ava">'+av+'</span><div class="chat-bubble">'+(isGroup?'<div class="chat-from">'+_chatEsc(m.from)+'</div>':'')+'<div class="chat-text">'+_chatEsc(m.text)+'</div><div class="chat-time">'+time+'</div></div></div>';
   }).join('');
+  if(seenBy.length){
+    var seenTxt = isGroup ? ('Nähnyt: '+seenBy.join(', ')) : 'Nähty ✓✓';
+    html += '<div class="chat-seen">'+_chatEsc(seenTxt)+'</div>';
+  }
+  box.innerHTML = html;
   box.scrollTop = box.scrollHeight;
 }
 window._sendChat = async function(){
@@ -3751,6 +3773,76 @@ window._sendChat = async function(){
   }catch(e){ alert('Viestin lähetys epäonnistui: '+(e&&e.message||e)); inp.value=text; }
 };
 window._chatInputKey = function(ev){ if(ev && ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); window._sendChat(); } };
+
+// ===== VAIHE 3: lukutila, kuplat, lukukuittaukset =====
+var _chatGlobalUnsubs = [];
+var _chatUnread = {};
+var _chatData = {};          // convId -> {messages, reads}
+var _chatFirstSnap = {};
+function _chatOverlayOpen(){ var ov=document.getElementById('chatOverlay'); return !!(ov && ov.style.display==='flex'); }
+function _chatMakeObj(k,v){ var o={}; o[k]=v; return o; }
+function _chatAllConvs(){
+  var list=[{id:CHAT_GROUP_ID, title:'Ryhmächat', avatar:'💬', isGroup:true}];
+  PLAYERS.filter(function(pl){ return pl!==currentUser; }).forEach(function(pl){
+    list.push({id:_chatConvId(currentUser,pl), title:pl, avatar:window._getAvatar(pl), isGroup:false});
+  });
+  return list;
+}
+function _updateChatBadge(){
+  var total=0; for(var k in _chatUnread){ total+=(_chatUnread[k]||0); }
+  var b=document.getElementById('chatUnreadBadge');
+  if(b){ if(total>0){ b.textContent=total>99?'99+':String(total); b.style.display='flex'; } else b.style.display='none'; }
+}
+function _markRead(convId){
+  if(!currentUser) return;
+  var data=_chatData[convId]; if(!data) return;
+  var msgs=data.messages||[]; if(!msgs.length){ _chatUnread[convId]=0; _updateChatBadge(); return; }
+  var latestTs = msgs[msgs.length-1].ts || Date.now();
+  var cur = (data.reads||{})[currentUser]||0;
+  _chatUnread[convId]=0; _updateChatBadge();
+  if(latestTs<=cur) return;
+  data.reads = data.reads||{}; data.reads[currentUser]=latestTs;
+  setDoc(_chatRef(convId), { reads: _chatMakeObj(currentUser, latestTs) }, { merge:true }).catch(function(e){});
+}
+function _showChatBubble(conv, msg){
+  var host=document.getElementById('chatBubbleHost'); if(!host) return;
+  var el=document.createElement('div'); el.className='chat-pop';
+  var av = conv.isGroup ? '💬' : window._getAvatar(msg.from);
+  var who = conv.isGroup ? (msg.from+' · Ryhmächat') : msg.from;
+  el.innerHTML='<span class="chat-pop-ava">'+av+'</span><span class="chat-pop-body"><span class="chat-pop-name">'+_chatEsc(who)+'</span><span class="chat-pop-text">'+_chatEsc(msg.text)+'</span></span>';
+  el.onclick=function(){ window._openChat(); window._openConversation(conv.id, conv.title, conv.avatar, conv.isGroup); if(el.parentNode) el.remove(); };
+  host.appendChild(el);
+  while(host.children.length>3) host.removeChild(host.firstChild);
+  requestAnimationFrame(function(){ el.classList.add('show'); });
+  setTimeout(function(){ el.classList.remove('show'); setTimeout(function(){ if(el.parentNode) el.remove(); },300); }, 5000);
+  try{ if(navigator.vibrate) navigator.vibrate(40); }catch(e){}
+}
+function _startChatListeners(){
+  _stopChatListeners();
+  if(!currentUser) return;
+  _chatAllConvs().forEach(function(c){
+    var unsub = onSnapshot(_chatRef(c.id), function(snap){
+      var data = snap.exists()? snap.data() : {};
+      _chatData[c.id] = { messages: data.messages||[], reads: data.reads||{} };
+      var msgs = _chatData[c.id].messages;
+      var myRead = (_chatData[c.id].reads[currentUser])||0;
+      var unread = msgs.filter(function(m){ return m.from!==currentUser && (m.ts||0)>myRead; });
+      _chatUnread[c.id] = unread.length;
+      _updateChatBadge();
+      var openHere = _chatCurrent && _chatCurrent.convId===c.id && _chatOverlayOpen();
+      if(openHere){ _renderChatMessages(msgs); _markRead(c.id); }
+      else if(_chatOverlayOpen() && !_chatCurrent){ _renderChatList(); }
+      if(!_chatFirstSnap[c.id]){ _chatFirstSnap[c.id]=true; return; }   // ensisnapshot: ei kuplaa
+      if(!openHere && unread.length){ _showChatBubble(c, unread[unread.length-1]); }
+    }, function(err){});
+    _chatGlobalUnsubs.push(unsub);
+  });
+}
+function _stopChatListeners(){
+  _chatGlobalUnsubs.forEach(function(u){ try{u();}catch(e){} });
+  _chatGlobalUnsubs=[]; _chatUnread={}; _chatData={}; _chatFirstSnap={};
+  _updateChatBadge();
+}
 
 // ============================
 // RENDER: PLAYER STATUS (admin)
@@ -4417,6 +4509,7 @@ function doLogin(name){
   // Pelaajan viesti-nappi yläpalkissa
   const pMsgBtn=$('playerMsgBtn'); if(pMsgBtn) pMsgBtn.style.display=!isAdmin?'':'none';
   const cOpenBtn=$('chatOpenBtn'); if(cOpenBtn) cOpenBtn.style.display=currentUser?'':'none';
+  if(currentUser && !_chatGlobalUnsubs.length){ try{ _startChatListeners(); }catch(e){} }
 
   // Viesti Terolle -kortti: piilotetaan adminilta
   const msgCard=$('messageCard'); if(msgCard) msgCard.style.display=isAdmin?'none':'';
@@ -4442,6 +4535,7 @@ function doLogin(name){
 }
 
 window._logout=function(){
+  try{ _stopChatListeners(); if(window._closeChat) window._closeChat(); }catch(e){}
   currentUser=null; localStorage.removeItem('tv_user');
   pinBuffer=''; pendingName='';
   stopCountdown();
