@@ -233,6 +233,10 @@
     .save-pred-btn:active{ opacity:.8; }
     .save-pred-btn:disabled{ opacity:.6; cursor:default; }
     .save-pred-msg{ font-size:13px; font-weight:600; text-align:center; min-height:18px; }
+    /* Hauska vahvistus-toast veikkauksen tallennuksesta */
+    .save-confirm-toast{ position:fixed; left:50%; top:20%; transform:translate(-50%,-12px) scale(0.92); z-index:100000; max-width:88vw; background:linear-gradient(135deg,#16223a,#0e1730); border:1.5px solid var(--primary); border-radius:18px; padding:18px 24px; font-size:17px; font-weight:800; line-height:1.35; color:#fff; text-align:center; box-shadow:0 18px 55px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05); opacity:0; pointer-events:none; transition:opacity .25s ease, transform .3s cubic-bezier(.22,1,.36,1); }
+    .save-confirm-toast.show{ opacity:1; transform:translate(-50%,0) scale(1); }
+    @media (prefers-reduced-motion: reduce){ .save-confirm-toast{ transition:opacity .2s ease; } }
     .edit-history span{ background:var(--border); border-radius:4px; padding:2px 6px; }
     .open-banner{ background:#22c55e; color:#fff; border-radius:10px; padding:10px 14px; font-weight:700; text-align:center; margin-bottom:10px; }
     #countdown{ margin-bottom:10px; }
@@ -1898,6 +1902,39 @@ function restoreSelections(){
 // ============================
 // STATUS BAR
 // ============================
+// 20 hauskaa vahvistusviestiä veikkauksen tallennukseen
+const CONFIRM_MSGS = [
+  'Veikkaus tallessa kuin kiekko verkossa! 🥅',
+  'Pukit purkissa – veikkaus tallennettu! 🏒',
+  'Nappiin meni! Veikkaus lukittu ja ladattu 💪',
+  'Veikkaus jäissä, odotellaan tuloksia ❄️',
+  'Boom! Veikkauksesi on kirjattu kovaa kyytiä 🚀',
+  'Tallennettu! Nyt vain peli päälle 🚨',
+  'Veikkaus matkalla maalille – perille meni! 🥅',
+  'Siisti veto! Veikkaus on nyt turvassa 🔒',
+  'Kiekko on sinun – veikkaus tallennettu! 🏒',
+  'Maalivahti ei pysäyttänyt tätä – tallennettu! ✅',
+  'Veikkaus pakastimessa, valmiina kisaan 🧊',
+  'Hyvä veto! Veikkauksesi on nyt kirjoissa 📒',
+  'Veikkaus tallessa – nyt sormet ristiin! 🤞',
+  'Täydellinen syöttö – veikkaus perille! 🏒',
+  'Veikkaus lukittu kuin halli pelin jälkeen 🔐',
+  'Mahtavaa! Veikkauksesi luistaa jo jäällä ⛸️',
+  'Tallennettu! Saunan jälkeen tulokset 🧖',
+  'Veikkaus napsahti talteen – hyvä sinä! 👏',
+  'Kiekko kaukalossa, veikkaus tallessa 🏟️',
+  'Done! Veikkauksesi odottaa vihellystä 📣'
+];
+window._showSaveConfirm = function(){
+  var msg = CONFIRM_MSGS[Math.floor(Math.random()*CONFIRM_MSGS.length)];
+  var t = document.getElementById('saveConfirmToast');
+  if(!t){ t=document.createElement('div'); t.id='saveConfirmToast'; t.className='save-confirm-toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+  try{ if(navigator.vibrate) navigator.vibrate(30); }catch(e){}
+  clearTimeout(window._saveConfirmT);
+  window._saveConfirmT = setTimeout(function(){ t.classList.remove('show'); }, 2800);
+};
 function showStatus(msg, color){
   const el=$('fb-status'); if(!el) return;
   el.textContent=msg; el.style.background=color||'#f97316'; el.style.color='#fff'; el.style.opacity='1';
@@ -3284,15 +3321,15 @@ function renderPredictions(){
       const tNow=getTournament(), mNow=getMatch();
       if(tNow && mNow){ tNow._predSavedAt=tNow._predSavedAt||{}; tNow._predSavedAt[currentUser]=tNow._predSavedAt[currentUser]||{}; tNow._predSavedAt[currentUser][mNow.id]=new Date().toISOString(); }
       renderScoreboard();
+      window._showSaveConfirm();
       if(msgEl){
         if(missing.length===0){
-          msgEl.style.color='#22c55e';
-          msgEl.textContent='✅ Kaikki veikkaukset tallennettu!';
+          msgEl.textContent='';
         } else {
           msgEl.style.color='#f59e0b';
-          msgEl.textContent='⚠️ Tallennettu, mutta täyttämättä: '+missing.join(', ');
+          msgEl.textContent='⚠️ Vielä täyttämättä: '+missing.join(', ');
+          setTimeout(()=>{ if(msgEl) msgEl.textContent=''; },4000);
         }
-        setTimeout(()=>{ if(msgEl) msgEl.textContent=''; },4000);
       }
     }catch(e){
       if(msgEl){ msgEl.style.color='#dc2626'; msgEl.textContent='❌ Tallennus epäonnistui'; }
