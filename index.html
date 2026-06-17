@@ -77,6 +77,19 @@
     /* Vaihe 4A: päiväotsikot, system, reply, reaktiot, valikko */
     .chat-day{ align-self:center; font-size:11px; color:var(--muted); background:rgba(255,255,255,0.05); padding:3px 12px; border-radius:10px; margin:6px auto; }
     .chat-typing{ font-size:12px; color:var(--muted); font-style:italic; padding:2px 14px 6px; flex:0 0 auto; }
+    /* Vaihe 5A: admin-valvonta */
+    .chat-monitor-overlay{ position:fixed; inset:0; z-index:100004; background:rgba(0,0,0,0.5); display:none; align-items:center; justify-content:center; padding:0; }
+    .chat-monitor{ background:var(--bg); width:100%; max-width:560px; height:100%; max-height:100%; display:flex; flex-direction:column; }
+    @media(min-width:600px){ .chat-monitor{ height:90vh; border-radius:16px; overflow:hidden; } }
+    .chat-monitor-head{ display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border); flex:0 0 auto; }
+    .chat-monitor-title{ flex:1; font-weight:700; font-size:16px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .chat-monitor-back, .chat-monitor-close{ background:none; border:none; color:var(--text); font-size:22px; cursor:pointer; padding:0 4px; flex:0 0 auto; }
+    .chat-monitor-list{ flex:1; overflow-y:auto; padding:8px; }
+    .chat-monitor-item{ display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:12px 14px; background:var(--card); border:1px solid var(--border); border-radius:12px; margin-bottom:8px; cursor:pointer; color:var(--text); }
+    .chat-monitor-ava{ font-size:20px; flex:0 0 auto; }
+    .chat-monitor-name{ flex:1; font-weight:600; font-size:14px; }
+    .chat-monitor-arrow{ color:var(--muted); font-size:20px; flex:0 0 auto; }
+    .chat-monitor-conv{ flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
     .chat-sys{ align-self:center; font-size:12px; color:var(--muted); font-style:italic; text-align:center; margin:4px 12px; }
     .chat-bubble{ cursor:pointer; }
     .chat-reply-quote{ border-left:3px solid var(--primary); padding:2px 8px; margin-bottom:4px; font-size:12px; color:var(--muted); opacity:0.9; }
@@ -629,6 +642,17 @@
 <body>
 <canvas id="aurora-bg"></canvas>
 <div id="chatHeadX" class="chat-head-x">✕</div>
+<div id="chatMonitor" class="chat-monitor-overlay" style="display:none">
+  <div class="chat-monitor">
+    <div class="chat-monitor-head">
+      <button id="monitorBack" class="chat-monitor-back" onclick="window._backToMonitorList()" style="display:none" aria-label="Takaisin">‹</button>
+      <span id="monitorTitle" class="chat-monitor-title">📋 Kaikkien viestit</span>
+      <button class="chat-monitor-close" onclick="window._closeChatMonitor()" aria-label="Sulje">✕</button>
+    </div>
+    <div id="monitorList" class="chat-monitor-list"></div>
+    <div id="monitorConv" class="chat-monitor-conv" style="display:none"></div>
+  </div>
+</div>
 <div id="msgMenu" class="msg-menu-overlay" style="display:none" onclick="window._closeMsgMenu(event)">
   <div class="msg-menu">
     <div class="msg-menu-reactions">
@@ -1465,6 +1489,10 @@
           <button class="more-item" onclick="window._openHallOfFame()">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M5 4H3v2a3 3 0 0 0 3 3M19 4h2v2a3 3 0 0 1-3 3"/></svg>
             <span>Hall of Fame</span>
+          </button>
+          <button class="more-item" id="moreMonitorBtn" onclick="window._openChatMonitor()" style="display:none">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+            <span>Kaikkien viestit</span>
           </button>
           <button class="more-item" id="moreSettingsBtn" onclick="window._openSettingsPanel()" style="display:none">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -3965,6 +3993,67 @@ function _chatAllConvs(){
   });
   return list;
 }
+// ===== Vaihe 5A: admin-valvonta (kaikki keskustelut, luku) =====
+function _chatAdminConvs(){
+  var list=[{id:CHAT_GROUP_ID, title:'Ryhmächat', isGroup:true}];
+  for(var i=0;i<PLAYERS.length;i++){
+    for(var j=i+1;j<PLAYERS.length;j++){
+      list.push({ id:_chatConvId(PLAYERS[i],PLAYERS[j]), title:PLAYERS[i]+' ↔ '+PLAYERS[j], a:PLAYERS[i], b:PLAYERS[j], isGroup:false });
+    }
+  }
+  return list;
+}
+window._openChatMonitor=function(){
+  if(currentUser!==ADMIN) return;
+  var ov=document.getElementById('chatMonitor'); if(ov) ov.style.display='flex';
+  window._backToMonitorList();
+};
+window._closeChatMonitor=function(){
+  var ov=document.getElementById('chatMonitor'); if(ov) ov.style.display='none';
+};
+window._backToMonitorList=function(){
+  var c=document.getElementById('monitorConv'); if(c) c.style.display='none';
+  var l=document.getElementById('monitorList'); if(l) l.style.display='block';
+  var b=document.getElementById('monitorBack'); if(b) b.style.display='none';
+  var t=document.getElementById('monitorTitle'); if(t) t.textContent='📋 Kaikkien viestit';
+  _renderMonitorList();
+};
+function _renderMonitorList(){
+  var box=document.getElementById('monitorList'); if(!box) return;
+  box.innerHTML=_chatAdminConvs().map(function(c){
+    var av = c.isGroup ? '💬' : (window._getAvatar(c.a)+window._getAvatar(c.b));
+    return '<button class="chat-monitor-item" onclick="window._openMonitorConv(\''+c.id+'\',\''+_chatEsc(c.title)+'\','+(c.isGroup?'true':'false')+')"><span class="chat-monitor-ava">'+av+'</span><span class="chat-monitor-name">'+_chatEsc(c.title)+'</span><span class="chat-monitor-arrow">›</span></button>';
+  }).join('');
+}
+window._openMonitorConv=async function(convId, title, isGroup){
+  var l=document.getElementById('monitorList'); if(l) l.style.display='none';
+  var conv=document.getElementById('monitorConv'); if(!conv) return;
+  conv.style.display='block';
+  var b=document.getElementById('monitorBack'); if(b) b.style.display='block';
+  var t=document.getElementById('monitorTitle'); if(t) t.textContent=title;
+  conv.innerHTML='<p class="chat-empty">Ladataan…</p>';
+  try{
+    var snap=await getDoc(_chatRef(convId));
+    var msgs=(snap.exists()?(snap.data().messages||[]):[]);
+    _renderMonitorMessages(conv, msgs, isGroup);
+  }catch(e){ conv.innerHTML='<p class="chat-empty">Lataus epäonnistui.</p>'; }
+};
+function _renderMonitorMessages(box, msgs, isGroup){
+  if(!msgs.length){ box.innerHTML='<p class="chat-empty">Ei viestejä tässä keskustelussa.</p>'; return; }
+  var html=''; var lastDay=null;
+  msgs.forEach(function(m){
+    var day=_chatDayLabel(m.ts);
+    if(day && day!==lastDay){ html+='<div class="chat-day">'+day+'</div>'; lastDay=day; }
+    if(m.system){ html+='<div class="chat-sys">'+_chatEsc(m.text)+'</div>'; return; }
+    var av=window._getAvatar(m.from);
+    var time=''; try{ time=new Date(m.ts).toLocaleString('fi-FI',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){}
+    var replyHtml = m.replyTo ? '<div class="chat-reply-quote"><span class="chat-reply-from">'+_chatEsc(m.replyTo.from)+'</span>'+_chatEsc((m.replyTo.text||'').slice(0,80))+'</div>' : '';
+    var textHtml = m.deleted ? '<div class="chat-text chat-deleted">Viesti poistettu</div>' : '<div class="chat-text">'+_chatEsc(m.text)+'</div>';
+    var reactHtml = m.deleted ? '' : _renderReactions(m);
+    html+='<div class="chat-msg"><span class="chat-msg-ava">'+av+'</span><div class="chat-bubble"><div class="chat-from">'+_chatEsc(m.from)+'</div>'+replyHtml+textHtml+'<div class="chat-time">'+time+'</div></div>'+reactHtml+'</div>';
+  });
+  box.innerHTML=html;
+}
 function _updateChatBadge(){
   var total=0; for(var k in _chatUnread){ total+=(_chatUnread[k]||0); }
   var b=document.getElementById('chatUnreadBadge');
@@ -4754,6 +4843,7 @@ function doLogin(name){
   });
   // Asetukset-nappi (Lisää-näkymä) vain adminille
   const moreSet=$('moreSettingsBtn'); if(moreSet) moreSet.style.display=isAdmin?'':'none';
+  const moreMon=$('moreMonitorBtn'); if(moreMon) moreMon.style.display=isAdmin?'':'none';
   // PIN-koodit ja Käyttökerrat piilotetaan aina — ne ovat Asetukset-modaalissa
   ['adminPinTools','adminLoginStats'].forEach(id=>{
     const el=$(id); if(el) el.style.display='none';
