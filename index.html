@@ -1161,20 +1161,6 @@
         </div>
       </div>
 
-      <div class="separator"></div>
-
-      <!-- Viesti yksittäiselle pelaajalle -->
-      <div style="margin-bottom:12px">
-        <div style="font-weight:700;font-size:13px;margin-bottom:8px">👤 Viesti yksittäiselle pelaajalle</div>
-        <div style="margin-bottom:8px">
-          <select id="dmTargetSelect" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;font-size:15px;background:var(--card);color:var(--text);margin-bottom:8px">
-            <option value="">Valitse pelaaja…</option>
-          </select>
-          <textarea id="dmInput" rows="2" placeholder="Kirjoita yksityisviesti…" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:var(--card);color:var(--text);resize:vertical;font-family:inherit;margin-bottom:8px"></textarea>
-          <button class="btn small" style="width:100%;background:#0ea5e9" onclick="window._sendDM()">📩 Lähetä yksityisviesti</button>
-        </div>
-        <div id="dmStatus" style="font-size:13px;color:var(--muted);min-height:18px;margin-top:4px"></div>
-      </div>
 
       <div class="separator"></div>
 
@@ -1190,17 +1176,6 @@
         </div>
       </div>
 
-      <div class="separator"></div>
-
-      <!-- Saapuneet viestit -->
-      <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 8px">
-        <span style="font-weight:700;font-size:13px">📬 Saapuneet viestit</span>
-        <div style="display:flex;gap:6px">
-          <button class="btn small secondary" onclick="window._loadMsgs2()">🔄</button>
-          <button class="btn small danger" onclick="window._clearMsgs2()">🗑️</button>
-        </div>
-      </div>
-      <div id="msgList2"><p class="muted" style="font-size:13px">Ladataan…</p></div>
     </div>
   </div>
 
@@ -1210,37 +1185,12 @@
       <button class="modal-close" onclick="document.getElementById('playerMsgPanel').style.display='none'">✕</button>
       <h2 style="margin:0 0 16px">✉️ Viestit</h2>
 
-      <!-- Lähetä viesti Terolle suoraan modaalista -->
-      <div style="margin-bottom:12px">
-        <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--muted)">📨 Lähetä viesti Terolle</div>
-        <textarea id="playerMsgInput" rows="3" placeholder="Kirjoita viestisi…" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;font-size:15px;background:var(--card);color:var(--text);resize:vertical;font-family:inherit;margin-bottom:8px"></textarea>
-        <button class="btn small" style="width:100%" onclick="window._sendMsgFromPanel()">📨 Lähetä</button>
-        <div id="playerMsgPanelStatus" style="margin-top:6px;font-size:13px;color:var(--muted);min-height:16px"></div>
-      </div>
-
-      <div class="separator"></div>
-
       <!-- Adminin joukkoviestit -->
       <div id="playerBroadcastSection" style="margin:12px 0">
         <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--muted)">📢 Viimeinen yleisviesti</div>
         <div id="playerBroadcastContent" style="font-size:14px;color:var(--muted)">Ei viestejä.</div>
       </div>
 
-      <div class="separator"></div>
-
-      <!-- Adminilta tulleet yksityisviestit -->
-      <div style="margin:12px 0">
-        <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--muted)">👑 Yksityisviestit Terolta</div>
-        <div id="playerDMList" style="font-size:14px;color:var(--muted)">Ei viestejä.</div>
-      </div>
-
-      <div class="separator"></div>
-
-      <!-- Omat viestit Terolle -->
-      <div style="margin-top:12px">
-        <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--muted)">📬 Omat viestisi Terolle</div>
-        <div id="playerSentList" style="font-size:14px;color:var(--muted)">Ei viestejä.</div>
-      </div>
     </div>
   </div>
 
@@ -5494,7 +5444,6 @@ const DM_DOC_PREFIX = 'dm_'; // DM-viestit tallennetaan Firebaseen omaan dokumen
 
 window._openMsgPanel = async function() {
   $('msgPanel').style.display = 'flex';
-  await window._loadMsgs2();
   await refreshBroadcastAdminUI2();
 };
 
