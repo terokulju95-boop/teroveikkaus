@@ -653,6 +653,7 @@
     <div class="chat-monitor-head">
       <button id="monitorBack" class="chat-monitor-back" onclick="window._backToMonitorList()" style="display:none" aria-label="Takaisin">‹</button>
       <span id="monitorTitle" class="chat-monitor-title">📋 Kaikkien viestit</span>
+      <button id="monitorClear" class="chat-monitor-back" onclick="window._clearMonitorConv()" style="display:none" aria-label="Tyhjennä keskustelu" title="Tyhjennä keskustelu">🗑️</button>
       <button class="chat-monitor-close" onclick="window._closeChatMonitor()" aria-label="Sulje">✕</button>
     </div>
     <div id="monitorList" class="chat-monitor-list"></div>
@@ -3779,6 +3780,15 @@ function _presenceLabel(pl){
   try{ return 'viimeksi '+new Date(ls).toLocaleDateString('fi-FI',{day:'numeric',month:'numeric'}); }catch(e){ return 'kauan sitten'; }
 }
 document.addEventListener('visibilitychange', function(){ if(!document.hidden) _presenceBeat(); });
+// ===== Vaihe 6B: viestien 2 viikon vanheneminen =====
+var CHAT_MAX_AGE = 14*24*60*60*1000;
+async function _pruneOldMessages(convId, msgs){
+  if(!msgs || !msgs.length) return;
+  var cut=Date.now()-CHAT_MAX_AGE;
+  if(!msgs.some(function(m){ return (m.ts||0)<cut; })) return;
+  var kept=msgs.filter(function(m){ return (m.ts||0)>=cut; });
+  try{ await setDoc(_chatRef(convId), { messages:kept, updated:Date.now() }, {merge:true}); }catch(e){}
+}
 function _renderChatList(){
   var el=document.getElementById('chatListView'); if(!el) return;
   var others = PLAYERS.filter(function(pl){ return pl!==currentUser; });
@@ -3805,7 +3815,7 @@ window._openConversation = function(convId, title, avatar, isGroup){
   var bb=document.getElementById('chatBackBtn'); if(bb) bb.style.display='block';
   var tt=document.getElementById('chatTitle'); if(tt) tt.textContent=(isGroup?'💬 ':avatar+' ')+title;
   var data=_chatData[convId];
-  if(data){ _renderChatMessages(data.messages); _markRead(convId); }
+  if(data){ _renderChatMessages(data.messages); _markRead(convId); _pruneOldMessages(convId, data.messages); }
   else { var box=document.getElementById('chatMessages'); if(box) box.innerHTML='<p class="chat-empty">Ladataan…</p>'; }
   setTimeout(function(){ var inp=document.getElementById('chatInput'); if(inp) inp.focus(); }, 120);
 };
@@ -3831,6 +3841,7 @@ function _renderReactions(m){
 }
 function _renderChatMessages(msgs){
   var box=document.getElementById('chatMessages'); if(!box) return;
+  var _cut=Date.now()-CHAT_MAX_AGE; msgs=(msgs||[]).filter(function(m){ return (m.ts||0)>=_cut; });
   if(!msgs.length){ box.innerHTML='<p class="chat-empty">Ei viestejä vielä. Aloita keskustelu! 👋</p>'; return; }
   var isGroup = _chatCurrent && _chatCurrent.isGroup;
   var convId = _chatCurrent && _chatCurrent.convId;
@@ -3876,6 +3887,7 @@ window._sendChat = async function(){
     var ref=_chatRef(_chatCurrent.convId);
     var snap=await getDoc(ref);
     var msgs = (snap.exists() ? (snap.data().messages||[]) : []);
+    var _cut=Date.now()-CHAT_MAX_AGE; msgs=msgs.filter(function(m){ return (m.ts||0)>=_cut; });
     msgs.push(msg);
     await setDoc(ref, { messages: msgs, updated: Date.now(), typing:_chatMakeObj(currentUser,0) }, { merge:true });
   }catch(e){ alert('Viestin lähetys epäonnistui: '+(e&&e.message||e)); inp.value=text; }
@@ -3889,7 +3901,7 @@ window._openMsgMenu=function(msgId){
   var conv=_chatData[_chatCurrent.convId];
   var m=conv && (conv.messages||[]).filter(function(x){return x.id===msgId;})[0];
   var del=document.getElementById('msgMenuDelete');
-  if(del) del.style.display=(m && m.from===currentUser)?'block':'none';
+  if(del) del.style.display=(m && (m.from===currentUser || currentUser===ADMIN))?'block':'none';
   var ov=document.getElementById('msgMenu'); if(ov) ov.style.display='flex';
 };
 window._closeMsgMenu=function(ev){
@@ -3920,7 +3932,7 @@ window._deleteMsg=function(){
   var id=_msgMenuId, conv=_chatCurrent&&_chatCurrent.convId; window._closeMsgMenu();
   if(!id||!conv) return;
   _chatMutateMsg(conv, id, function(m){
-    if(m.from!==currentUser) return;
+    if(m.from!==currentUser && currentUser!==ADMIN) return;
     m.deleted=true; m.text=''; m.reactions={}; m.replyTo=null;
   });
 };
@@ -4015,8 +4027,18 @@ window._openChatMonitor=function(){
 window._closeChatMonitor=function(){
   var ov=document.getElementById('chatMonitor'); if(ov) ov.style.display='none';
 };
+var _monitorCurrentConv=null;
+window._clearMonitorConv=async function(){
+  if(!_monitorCurrentConv) return;
+  if(!confirm('Tyhjennetäänkö tämä keskustelu kokonaan? Tätä ei voi perua.')) return;
+  try{
+    await setDoc(_chatRef(_monitorCurrentConv), { messages:[], updated:Date.now() }, {merge:true});
+    var conv=document.getElementById('monitorConv'); if(conv) conv.innerHTML='<p class="chat-empty">Keskustelu tyhjennetty.</p>';
+  }catch(e){ alert('Tyhjennys epäonnistui.'); }
+};
 window._backToMonitorList=function(){
   var c=document.getElementById('monitorConv'); if(c) c.style.display='none';
+  var cl=document.getElementById('monitorClear'); if(cl) cl.style.display='none';
   var l=document.getElementById('monitorList'); if(l) l.style.display='block';
   var b=document.getElementById('monitorBack'); if(b) b.style.display='none';
   var t=document.getElementById('monitorTitle'); if(t) t.textContent='📋 Kaikkien viestit';
@@ -4043,10 +4065,12 @@ async function _renderMonitorList(){
   }).join('');
 }
 window._openMonitorConv=async function(convId, title, isGroup){
+  _monitorCurrentConv=convId;
   var l=document.getElementById('monitorList'); if(l) l.style.display='none';
   var conv=document.getElementById('monitorConv'); if(!conv) return;
   conv.style.display='block';
   var b=document.getElementById('monitorBack'); if(b) b.style.display='block';
+  var cl=document.getElementById('monitorClear'); if(cl) cl.style.display='block';
   var t=document.getElementById('monitorTitle'); if(t) t.textContent=title;
   conv.innerHTML='<p class="chat-empty">Ladataan…</p>';
   try{
