@@ -3782,6 +3782,7 @@ function _presenceLabel(pl){
 document.addEventListener('visibilitychange', function(){ if(!document.hidden) _presenceBeat(); });
 // ===== Vaihe 6B: viestien 2 viikon vanheneminen =====
 var CHAT_MAX_AGE = 14*24*60*60*1000;
+var _chatRenderFp = {};   // convId -> viimeisin piirretty sormenjälki (estää turhat re-renderit)
 async function _pruneOldMessages(convId, msgs){
   if(!msgs || !msgs.length) return;
   var cut=Date.now()-CHAT_MAX_AGE;
@@ -3815,6 +3816,7 @@ window._openConversation = function(convId, title, avatar, isGroup){
   var bb=document.getElementById('chatBackBtn'); if(bb) bb.style.display='block';
   var tt=document.getElementById('chatTitle'); if(tt) tt.textContent=(isGroup?'💬 ':avatar+' ')+title;
   var data=_chatData[convId];
+  if(convId) _chatRenderFp[convId]=null;
   if(data){ _renderChatMessages(data.messages); _markRead(convId); _pruneOldMessages(convId, data.messages); }
   else { var box=document.getElementById('chatMessages'); if(box) box.innerHTML='<p class="chat-empty">Ladataan…</p>'; }
   setTimeout(function(){ var inp=document.getElementById('chatInput'); if(inp) inp.focus(); }, 120);
@@ -3842,10 +3844,15 @@ function _renderReactions(m){
 function _renderChatMessages(msgs){
   var box=document.getElementById('chatMessages'); if(!box) return;
   var _cut=Date.now()-CHAT_MAX_AGE; msgs=(msgs||[]).filter(function(m){ return (m.ts||0)>=_cut; });
-  if(!msgs.length){ box.innerHTML='<p class="chat-empty">Ei viestejä vielä. Aloita keskustelu! 👋</p>'; return; }
   var isGroup = _chatCurrent && _chatCurrent.isGroup;
   var convId = _chatCurrent && _chatCurrent.convId;
   var reads = (convId && _chatData[convId] && _chatData[convId].reads) || {};
+  // Tahmeus-korjaus: piirrä uudelleen vain kun viestit tai MUIDEN lukutilat muuttuivat (oma luku ei laukaise)
+  var _otherReads={}; Object.keys(reads).forEach(function(k){ if(k!==currentUser) _otherReads[k]=reads[k]; });
+  var _fp = msgs.length+'|'+JSON.stringify(msgs)+'|'+JSON.stringify(_otherReads);
+  if(convId && _chatRenderFp[convId]===_fp) return;
+  if(convId) _chatRenderFp[convId]=_fp;
+  if(!msgs.length){ box.innerHTML='<p class="chat-empty">Ei viestejä vielä. Aloita keskustelu! 👋</p>'; return; }
   var myMsgs = msgs.filter(function(m){ return m.from===currentUser && !m.system; });
   var lastMineTs = myMsgs.length ? (myMsgs[myMsgs.length-1].ts||0) : 0;
   var seenBy = [];
@@ -3873,8 +3880,12 @@ function _renderChatMessages(msgs){
     var seenTxt = isGroup ? ('Nähnyt: '+seenBy.join(', ')) : 'Nähty ✓✓';
     html += '<div class="chat-seen">'+_chatEsc(seenTxt)+'</div>';
   }
+  var _prevScroll = box.scrollTop;
+  var _nearBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) < 80;
+  var _lastMine = msgs.length && msgs[msgs.length-1].from===currentUser;
   box.innerHTML = html;
-  box.scrollTop = box.scrollHeight;
+  if(_nearBottom || _lastMine) box.scrollTop = box.scrollHeight;
+  else box.scrollTop = _prevScroll;
 }
 window._sendChat = async function(){
   var inp=document.getElementById('chatInput'); if(!inp || !_chatCurrent) return;
@@ -4234,7 +4245,7 @@ function _startChatListeners(){
 }
 function _stopChatListeners(){
   _chatGlobalUnsubs.forEach(function(u){ try{u();}catch(e){} });
-  _chatGlobalUnsubs=[]; _chatUnread={}; _chatData={}; _chatFirstSnap={};
+  _chatGlobalUnsubs=[]; _chatUnread={}; _chatData={}; _chatFirstSnap={}; _chatRenderFp={};
   _updateChatBadge();
 }
 
