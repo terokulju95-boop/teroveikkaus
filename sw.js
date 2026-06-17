@@ -9,7 +9,7 @@
 // tarvitsee koskea. Kasvata VERSIONia vain jos haluat pakottaa kaiken
 // uudelleenlatauksen (esim. ikonit tai tiedostolista muuttuivat).
 
-const VERSION = 'v26';
+const VERSION = 'v27';
 const CACHE   = 'kulju-' + VERSION;
 
 // Suhteelliset polut – toimivat sekä juuressa että alipolussa (GitHub Pages).
@@ -78,5 +78,32 @@ self.addEventListener('fetch', (e) => {
         return res;
       })
     )
+  );
+});
+
+// ── Push-ilmoitukset ─────────────────────────────────────────────────────────
+self.addEventListener('push', (e) => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; }
+  catch (err) { data = { title: 'KULJU CUP', body: (e.data && e.data.text()) || '' }; }
+  const title = data.title || 'KULJU CUP';
+  const opts = {
+    body: data.body || '',
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    tag: data.tag || 'kulju',
+    data: { url: data.url || './' }
+  };
+  e.waitUntil(self.registration.showNotification(title, opts));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || './';
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) { if ('focus' in c) return c.focus(); }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
   );
 });

@@ -660,6 +660,18 @@
     <div id="monitorConv" class="chat-monitor-conv" style="display:none"></div>
   </div>
 </div>
+<div id="notifyPanel" class="msg-menu-overlay" style="display:none" onclick="if(event.target.id==='notifyPanel')window._closeNotifyPanel()">
+  <div class="msg-menu" style="max-width:430px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-weight:700;font-size:16px">🔔 Ilmoitukset</span>
+      <button class="chat-monitor-close" onclick="window._closeNotifyPanel()" aria-label="Sulje">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 14px">Saat muistutuksia otteluista ja veikkauksista, vaikka sovellus ei olisi auki. Salli ilmoitukset kerran tällä laitteella.</p>
+    <button id="notifyToggleBtn" class="btn small" style="width:100%" onclick="window._toggleNotify()">🔔 Salli ilmoitukset</button>
+    <p id="notifyStatus" style="font-size:12px;color:var(--muted);margin:12px 0 0"></p>
+    <p style="font-size:11px;color:var(--muted);margin:10px 0 0;line-height:1.4">📱 iPhonessa ilmoitukset toimivat vain jos sovellus on lisätty kotinäytölle (Jaa → Lisää Koti-valikkoon).</p>
+  </div>
+</div>
 <div id="msgMenu" class="msg-menu-overlay" style="display:none" onclick="window._closeMsgMenu(event)">
   <div class="msg-menu">
     <div class="msg-menu-reactions">
@@ -1446,6 +1458,10 @@
           <button class="more-item" onclick="window._openHallOfFame()">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M5 4H3v2a3 3 0 0 0 3 3M19 4h2v2a3 3 0 0 1-3 3"/></svg>
             <span>Hall of Fame</span>
+          </button>
+          <button class="more-item" onclick="window._openNotifyPanel()">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span>Ilmoitukset</span>
           </button>
           <button class="more-item" id="moreMonitorBtn" onclick="window._openChatMonitor()" style="display:none">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
@@ -3783,6 +3799,46 @@ document.addEventListener('visibilitychange', function(){ if(!document.hidden) _
 // ===== Vaihe 6B: viestien 2 viikon vanheneminen =====
 var CHAT_MAX_AGE = 14*24*60*60*1000;
 var _chatRenderFp = {};   // convId -> viimeisin piirretty sormenjälki (estää turhat re-renderit)
+// ===== Push-ilmoitukset (pelaaja sallii, admin/workflow lähettää) =====
+var VAPID_PUBLIC = 'BJT9UY4dzKe-gEIUq3xKifDG3Y2QlMoOUJSzM23SdtUawoHtV_LQf5TSheeKuqN0BeBj9Kkz9zrmErgl5mzDoR0';
+function _urlB64ToUint8Array(b64){
+  var pad='='.repeat((4 - b64.length % 4) % 4);
+  var base64=(b64+pad).replace(/-/g,'+').replace(/_/g,'/');
+  var raw=atob(base64); var arr=new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++){ arr[i]=raw.charCodeAt(i); }
+  return arr;
+}
+window._openNotifyPanel=function(){ var ov=document.getElementById('notifyPanel'); if(ov) ov.style.display='flex'; _syncNotifyUI(); };
+window._closeNotifyPanel=function(){ var ov=document.getElementById('notifyPanel'); if(ov) ov.style.display='none'; };
+async function _syncNotifyUI(){
+  var btn=document.getElementById('notifyToggleBtn'), st=document.getElementById('notifyStatus');
+  if(!btn) return;
+  var supported=('serviceWorker' in navigator)&&('PushManager' in window)&&('Notification' in window);
+  if(!supported){ btn.style.display='none'; if(st) st.textContent='Selaimesi ei valitettavasti tue ilmoituksia.'; return; }
+  btn.style.display='';
+  var on=false;
+  try{ var reg=await navigator.serviceWorker.ready; var sub=await reg.pushManager.getSubscription(); on=!!sub && Notification.permission==='granted'; }catch(e){}
+  if(on){ btn.textContent='🔕 Poista ilmoitukset käytöstä'; btn.className='btn small danger'; if(st) st.textContent='Ilmoitukset ovat käytössä tällä laitteella. ✓'; }
+  else { btn.textContent='🔔 Salli ilmoitukset'; btn.className='btn small'; if(st) st.textContent='Ilmoitukset eivät ole käytössä tällä laitteella.'; }
+}
+window._toggleNotify=async function(){
+  if(!currentUser){ alert('Kirjaudu ensin sisään.'); return; }
+  var reg, sub;
+  try{ reg=await navigator.serviceWorker.ready; sub=await reg.pushManager.getSubscription(); }catch(e){}
+  if(sub && Notification.permission==='granted'){
+    try{ await sub.unsubscribe(); }catch(e){}
+    try{ var o={}; o[currentUser]=null; await setDoc(doc(db,'app','pushSubs'), o, {merge:true}); }catch(e){}
+    _syncNotifyUI(); return;
+  }
+  try{
+    var perm=await Notification.requestPermission();
+    if(perm!=='granted'){ alert('Ilmoituslupa ei ole myönnetty. Voit sallia ilmoitukset selaimen asetuksista.'); _syncNotifyUI(); return; }
+    reg=await navigator.serviceWorker.ready;
+    sub=await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:_urlB64ToUint8Array(VAPID_PUBLIC) });
+    var o2={}; o2[currentUser]=sub.toJSON(); await setDoc(doc(db,'app','pushSubs'), o2, {merge:true});
+    _syncNotifyUI();
+  }catch(e){ alert('Ilmoitusten käyttöönotto epäonnistui: '+(e&&e.message||e)+'\n\niPhonessa sovellus pitää ensin lisätä kotinäytölle.'); _syncNotifyUI(); }
+};
 async function _pruneOldMessages(convId, msgs){
   if(!msgs || !msgs.length) return;
   var cut=Date.now()-CHAT_MAX_AGE;
