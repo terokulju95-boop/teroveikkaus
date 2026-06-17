@@ -1,0 +1,24 @@
+name: KULJU CUP push-ilmoitukset
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # joka 15. minuutti (UTC); skripti laskee Suomen ajan itse
+  workflow_dispatch:          # sallii manuaalisen ajon Actions-välilehdeltä (testi)
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Asenna riippuvuudet
+        run: npm init -y >/dev/null 2>&1 && npm install web-push firebase-admin >/dev/null 2>&1
+      - name: Lähetä ilmoitukset
+        run: node .github/scripts/send-notifications.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VAPID_PUBLIC: ${{ secrets.VAPID_PUBLIC }}
+          VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
