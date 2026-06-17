@@ -57,6 +57,11 @@
     .chat-conv-item{ display:flex; align-items:center; gap:12px; width:100%; padding:12px; border:none; background:none; color:var(--text); cursor:pointer; border-radius:12px; text-align:left; }
     .chat-conv-item:active{ background:rgba(255,255,255,0.06); }
     .chat-ava{ font-size:24px; width:42px; height:42px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.06); border-radius:50%; flex:0 0 auto; }
+    .chat-ava-wrap{ position:relative; display:inline-flex; flex:0 0 auto; }
+    .presence-dot{ position:absolute; bottom:-1px; right:-1px; width:13px; height:13px; border-radius:50%; border:2px solid var(--bg); }
+    .presence-dot.online{ background:#22c55e; }
+    .presence-dot.offline{ background:#ef4444; }
+    .chat-conv-sub.online{ color:#22c55e; }
     .chat-conv-name{ font-weight:700; font-size:15px; }
     .chat-conv-sub{ font-size:12px; color:var(--muted); margin-left:auto; }
     .chat-conv{ display:none; flex-direction:column; flex:1; overflow:hidden; }
@@ -3733,6 +3738,47 @@ window._backToChatList = function(){
   var tt=document.getElementById('chatTitle'); if(tt) tt.textContent='💬 Viestit';
   _renderChatList();
 };
+// ===== Vaihe 6A: online-tila (presence) =====
+var PRESENCE_DOC = doc(db, "app", "presence");
+var _presence = {};
+var _presenceUnsub = null;
+var _presenceHeartbeat = null;
+function _presenceBeat(){
+  if(!currentUser) return;
+  var o={}; o[currentUser]=Date.now();
+  setDoc(PRESENCE_DOC, o, {merge:true}).catch(function(e){});
+}
+function _startPresence(){
+  if(!currentUser) return;
+  _presenceBeat();
+  if(_presenceHeartbeat) clearInterval(_presenceHeartbeat);
+  _presenceHeartbeat=setInterval(_presenceBeat, 60000);
+  if(_presenceUnsub) _presenceUnsub();
+  _presenceUnsub=onSnapshot(PRESENCE_DOC, function(snap){
+    _presence = snap.exists()? (snap.data()||{}) : {};
+    if(_chatOverlayOpen() && !_chatCurrent) _renderChatList();
+  });
+}
+function _stopPresence(){
+  if(_presenceHeartbeat){ clearInterval(_presenceHeartbeat); _presenceHeartbeat=null; }
+  if(_presenceUnsub){ _presenceUnsub(); _presenceUnsub=null; }
+  _presence={};
+}
+function _isOnline(pl){ return (Date.now()-(_presence[pl]||0)) < 90000; }
+function _presenceLabel(pl){
+  var ls=_presence[pl]||0;
+  if(!ls) return 'ei vielä paikalla';
+  var diff=Date.now()-ls;
+  if(diff<90000) return 'Paikalla';
+  var min=Math.floor(diff/60000);
+  if(min<60) return 'viimeksi '+min+' min sitten';
+  var h=Math.floor(min/60);
+  if(h<24) return 'viimeksi '+h+' h sitten';
+  var d=Math.floor(h/24);
+  if(d<7) return 'viimeksi '+d+' pv sitten';
+  try{ return 'viimeksi '+new Date(ls).toLocaleDateString('fi-FI',{day:'numeric',month:'numeric'}); }catch(e){ return 'kauan sitten'; }
+}
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) _presenceBeat(); });
 function _renderChatList(){
   var el=document.getElementById('chatListView'); if(!el) return;
   var others = PLAYERS.filter(function(pl){ return pl!==currentUser; });
@@ -3743,8 +3789,11 @@ function _renderChatList(){
   html += others.map(function(pl){
     var a=window._getAvatar(pl);
     var cid=_chatConvId(currentUser, pl);
+    var online=_isOnline(pl);
+    var dot='<span class="presence-dot '+(online?'online':'offline')+'"></span>';
+    var sub='<span class="chat-conv-sub'+(online?' online':'')+'">'+_chatEsc(_presenceLabel(pl))+'</span>';
     return '<button class="chat-conv-item" onclick="window._openConversation(\''+cid+'\',\''+pl+'\',\''+a+'\',false)">'+
-      '<span class="chat-ava">'+a+'</span><span class="chat-conv-name">'+pl+'</span>'+badge(cid)+'</button>';
+      '<span class="chat-ava-wrap"><span class="chat-ava">'+a+'</span>'+dot+'</span><span class="chat-conv-name">'+pl+'</span>'+sub+badge(cid)+'</button>';
   }).join('');
   el.innerHTML = html;
 }
@@ -4832,6 +4881,7 @@ function doLogin(name){
   const pMsgBtn=$('playerMsgBtn'); if(pMsgBtn) pMsgBtn.style.display=!isAdmin?'':'none';
   const cOpenBtn=$('chatOpenBtn'); if(cOpenBtn) cOpenBtn.style.display=currentUser?'':'none';
   if(currentUser && !_chatGlobalUnsubs.length){ try{ _startChatListeners(); }catch(e){} }
+  if(currentUser){ try{ _startPresence(); }catch(e){} }
 
   // Viesti Terolle -kortti: piilotetaan adminilta
   const msgCard=$('messageCard'); if(msgCard) msgCard.style.display=isAdmin?'none':'';
@@ -4857,7 +4907,7 @@ function doLogin(name){
 }
 
 window._logout=function(){
-  try{ _stopChatListeners(); if(window._closeChat) window._closeChat(); }catch(e){}
+  try{ _stopChatListeners(); _stopPresence(); if(window._closeChat) window._closeChat(); }catch(e){}
   currentUser=null; localStorage.removeItem('tv_user');
   pinBuffer=''; pendingName='';
   stopCountdown();
