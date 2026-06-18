@@ -182,6 +182,8 @@
     .notif-chip.on{ background:#2563eb; color:#fff; border-color:#2563eb; }
     .notif-queue-item{ display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--line,#2a3850); }
     #adminNotifQueue{ max-height:240px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+    .theme-color{ display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--muted); font-weight:600; }
+    .theme-color input[type=color]{ width:100%; height:40px; border:1px solid var(--border); border-radius:9px; background:var(--card); cursor:pointer; padding:3px; }
     .btn.green{ background:#22c55e; box-shadow:0 3px 12px rgba(34,197,94,0.28); } .btn.green:hover:not(:disabled){ background:#16a34a; }
     .muted{ color:var(--muted); font-size:13px } .grid{ display:grid; gap:10px } .separator{ height:1px; background:var(--border); margin:12px 0 }
     .score-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px }
@@ -1059,6 +1061,28 @@
         <p class="muted" id="maintSaveStatus" style="margin-top:6px;min-height:18px"></p>
       </div>
 
+
+      <!-- 🎨 Ulkoasu -->
+      <div class="separator"></div>
+      <h2 style="margin:8px 0">🎨 Ulkoasu</h2>
+      <p class="muted" style="margin-top:4px">Valitse valmis teema tai säädä värit. Muutos näkyy kaikille pelaajille.</p>
+      <div class="stack" style="flex-wrap:wrap;gap:8px;margin-top:10px">
+        <button class="btn small secondary" onclick="window._applyThemePreset('Yö')">🌙 Yö</button>
+        <button class="btn small secondary" onclick="window._applyThemePreset('MM-sininen')">🔵 MM-sininen</button>
+        <button class="btn small secondary" onclick="window._applyThemePreset('Vaalea')">☀️ Vaalea</button>
+        <button class="btn small secondary" onclick="window._applyThemePreset('Metsä')">🌲 Metsä</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+        <label class="theme-color"><span>Korostusväri</span><input type="color" id="themePrimary" oninput="window._onThemeInput()"></label>
+        <label class="theme-color"><span>Tausta</span><input type="color" id="themeBg" oninput="window._onThemeInput()"></label>
+        <label class="theme-color"><span>Kortit</span><input type="color" id="themeCard" oninput="window._onThemeInput()"></label>
+        <label class="theme-color"><span>Teksti</span><input type="color" id="themeText" oninput="window._onThemeInput()"></label>
+      </div>
+      <div class="stack" style="flex-wrap:wrap;gap:8px;margin-top:12px">
+        <button class="btn small" onclick="window._saveTheme()">💾 Tallenna teema</button>
+        <button class="btn small secondary" onclick="window._resetTheme()">↺ Palauta oletus</button>
+      </div>
+      <p class="muted" id="themeStatus" style="margin-top:6px;min-height:18px"></p>
 
       <!-- Data-toiminnot -->
       <div class="separator"></div>
@@ -3658,6 +3682,51 @@ onSnapshot(FIELDINFO_DOC, function(snap){
 });
 
 // Revontuli-taustan globaali asetus (admin säätää, näkyy kaikille reaaliajassa). Vain visuaalinen.
+// ===== Ulkoasu / teema (admin säätää, näkyy kaikille) =====
+var THEME_VARS={bg:'--bg',card:'--card',text:'--text',muted:'--muted',border:'--border',primary:'--primary',primaryHover:'--primary-hover'};
+var THEME_PRESETS={
+  'Yö':{bg:'#0b1020',card:'#111727',text:'#e5e7eb',muted:'#9aa3b2',border:'#243047',primary:'#fb8a3c',primaryHover:'#ec6f17'},
+  'MM-sininen':{bg:'#0a1628',card:'#0f2138',text:'#e8f0fc',muted:'#8fa6c4',border:'#1e3a5f',primary:'#3b82f6',primaryHover:'#2563eb'},
+  'Vaalea':{bg:'#f4f5f9',card:'#ffffff',text:'#111827',muted:'#6b7280',border:'#e5e7eb',primary:'#f97316',primaryHover:'#ea580c'},
+  'Metsä':{bg:'#0a1410',card:'#10241a',text:'#e3f0e8',muted:'#8fb4a0',border:'#1e3a2c',primary:'#22c55e',primaryHover:'#16a34a'}
+};
+var THEME_DEFAULT=THEME_PRESETS['Yö'];
+var _currentTheme=Object.assign({}, THEME_DEFAULT);
+function applyTheme(th){
+  if(!th||typeof th!=='object') return;
+  var r=document.documentElement.style;
+  for(var k in THEME_VARS){ if(th[k]) r.setProperty(THEME_VARS[k], th[k]); }
+}
+function _syncThemeUI(th){
+  _currentTheme=Object.assign({}, THEME_DEFAULT, th||{});
+  if($('themePrimary')) $('themePrimary').value=_currentTheme.primary;
+  if($('themeBg')) $('themeBg').value=_currentTheme.bg;
+  if($('themeCard')) $('themeCard').value=_currentTheme.card;
+  if($('themeText')) $('themeText').value=_currentTheme.text;
+}
+function _themeStatus(msg){ var e=$('themeStatus'); if(e) e.textContent=msg||''; }
+window._applyThemePreset=function(name){
+  var th=THEME_PRESETS[name]; if(!th) return;
+  _currentTheme=Object.assign({}, th);
+  applyTheme(_currentTheme); _syncThemeUI(_currentTheme); _saveThemeDoc(_currentTheme);
+};
+window._onThemeInput=function(){
+  if($('themePrimary')){ _currentTheme.primary=$('themePrimary').value; _currentTheme.primaryHover=$('themePrimary').value; }
+  if($('themeBg')) _currentTheme.bg=$('themeBg').value;
+  if($('themeCard')) _currentTheme.card=$('themeCard').value;
+  if($('themeText')) _currentTheme.text=$('themeText').value;
+  applyTheme(_currentTheme);   // live-esikatselu (tallennus vasta napista)
+};
+window._saveTheme=function(){ _saveThemeDoc(_currentTheme); };
+window._resetTheme=function(){ window._applyThemePreset('Yö'); };
+function _saveThemeDoc(th){
+  _themeStatus('Tallennetaan…');
+  setDoc(THEME_DOC, Object.assign({}, th, {ts:Date.now()}))
+    .then(function(){ _themeStatus('Tallennettu ✓ – näkyy kaikille'); })
+    .catch(function(e){ _themeStatus('Virhe: '+(e&&e.message||e)); });
+}
+var THEME_DOC = doc(db, "app", "theme");
+onSnapshot(THEME_DOC, function(snap){ if(snap.exists()){ var th=snap.data()||{}; applyTheme(th); _syncThemeUI(th); } });
 const AURORA_DOC = doc(db, "app", "aurora");
 const AURORA_DEF = { v:0, strength:1.8, amp:2.6, speed:3.2 };
 const AURORA_PCT = { strength:'auroraStrengthPct', amp:'auroraAmpPct', speed:'auroraSpeedPct' };
