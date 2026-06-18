@@ -88,7 +88,7 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
     for (const m of matches) {
       const st = new Date(m.startTime).getTime();
       const diff = st - now;
-      if (diff > 0 && diff <= 90 * MIN) {
+      if (diff >= 55 * MIN && diff <= 65 * MIN) {
         const key = 'hour_' + m.id;
         if (!sent[key]) toSend.push({ key, title: '⏰ Tunti aikaa veikata!', body: `${m.name} alkaa klo ${fi(new Date(st)).hhmm}. Muista veikata.` });
       }
