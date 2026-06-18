@@ -1,7 +1,7 @@
 // KULJU CUP – push-ilmoitusten lähetin (cron-job.org laukaisee n. 5 min välein)
-// Lähettää: aamukooste klo 9, muistutus tunti ennen (55–65 min),
-//           admin-ilmoitukset (pushOutbox), sekä uudet lukemattomat chat-viestit.
-// Deduplikointi: pushSent (ottelut), pushOutbox.sent (admin), msgNotified (viestit).
+// Lähettää: aamukooste klo 9, muistutus tunti ennen (55–65 min, KAIKILLE),
+//           "et ole vielä veikannut" 30 min ennen (vain kesken/tyhjät veikkaukset),
+//           admin-ilmoitukset (pushOutbox), uudet lukemattomat chat-viestit.
 
 const admin = require('firebase-admin');
 const webpush = require('web-push');
@@ -14,6 +14,8 @@ webpush.setVapidDetails(process.env.VAPID_SUBJECT, process.env.VAPID_PUBLIC, pro
 const now = Date.now();
 const MIN = 60 * 1000;
 const PLAYERS = ['Roosa', 'Timo', 'Tero', 'Tiina', 'Tepa', 'Äiti', 'Iskä'];
+// FIELDS-avaimet (täydellisen veikkauksen tarkistukseen). HUOM: jos FIELDS muuttuu index.html:ssä, päivitä tämä.
+const FIELD_KEYS = ['lopputulos','ekan_maalintekija','ekan_maali_aika','kumpi_tekee_ekan_maalin','voittomaalin_tekija','ekan_jahyn_saaja','ekan_jahyn_syy','montako_jahyja','yli_alle_maalit','parempi_laukasu','parempi_alotus','parempi_torjunta','parempi_alivoima','parempi_ylivoima','era1','era2','valmentaja_haasto','maali_tyhjiin','yv_av_maali','jatkoaika_tai_rankkarit'];
 
 function fi(d) {
   const f = new Intl.DateTimeFormat('en-GB', {
@@ -32,7 +34,6 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
 }
 
 (async () => {
-  // Tilaukset
   const subsSnap = await db.collection('app').doc('pushSubs').get();
   const subsRaw = subsSnap.exists ? (subsSnap.data() || {}) : {};
   const players = Object.keys(subsRaw).filter(p => subsRaw[p] && subsRaw[p].endpoint);
@@ -55,10 +56,11 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
   if (obClean.length !== outbox.length) obChanged = true;
   if (obChanged) await db.collection('app').doc('pushOutbox').set({ items: obClean });
 
-  // ===== 2) Automaattiset otteluilmoitukset =====
+  // ===== 2) Otteluilmoitukset + veikkausmuistutus =====
   const dataSnap = await db.collection('app').doc('data').get();
   let toSend = [];
   let sent = {};
+  let sentChanged = false;
   if (dataSnap.exists) {
     let parsed = {};
     try { parsed = JSON.parse(dataSnap.data().json || '{}'); } catch (e) {}
@@ -70,6 +72,7 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
     const sentSnap = await db.collection('app').doc('pushSent').get();
     sent = sentSnap.exists ? (sentSnap.data() || {}) : {};
 
+    // Aamukooste klo 9
     const nowFi = fi(new Date(now));
     if (nowFi.hour === 9) {
       const todays = matches
@@ -83,23 +86,47 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
         }
       }
     }
+    // Tunti ennen (55–65 min) – KAIKILLE
     for (const m of matches) {
-      const st = new Date(m.startTime).getTime();
-      const diff = st - now;
+      const diff = new Date(m.startTime).getTime() - now;
       if (diff >= 55 * MIN && diff <= 65 * MIN) {
         const key = 'hour_' + m.id;
-        if (!sent[key]) toSend.push({ key, title: '⏰ Tunti aikaa veikata!', body: `${m.name} alkaa klo ${fi(new Date(st)).hhmm}. Muista veikata.` });
+        if (!sent[key]) toSend.push({ key, title: '⏰ Tunti aikaa veikata!', body: `${m.name} alkaa klo ${fi(new Date(m.startTime)).hhmm}. Muista veikata.` });
+      }
+    }
+
+    // Lähetä otteluilmoitukset kaikille tilaajille
+    for (const msg of toSend) {
+      const payload = JSON.stringify({ title: msg.title, body: msg.body, url: './' });
+      for (const player of players) await sendTo(player, subsRaw, payload, deadSubs);
+      sent[msg.key] = now; sentChanged = true;
+      console.log('Lähetetty:', msg.key, '→', msg.title);
+    }
+
+    // Veikkausmuistutus 30 min ennen (25–35 min) – vain kesken/tyhjät veikkaukset
+    const remind = matches.filter(m => { const d = new Date(m.startTime).getTime() - now; return d >= 25 * MIN && d <= 35 * MIN; });
+    if (remind.length && players.length && tournament) {
+      const preds = {};
+      for (const P of players) {
+        try { const ps = await db.collection('predictions').doc(P).get(); preds[P] = ps.exists ? JSON.parse(ps.data().json || '{}') : {}; }
+        catch (e) { preds[P] = {}; }
+      }
+      const tid = String(tournament.id);
+      for (const m of remind) {
+        for (const P of players) {
+          const key = 'nopred_' + m.id + '_' + P;
+          if (sent[key]) continue;
+          const pr = (((preds[P].matches || {})[tid] || {})[String(m.id)]) || {};
+          const complete = FIELD_KEYS.every(k => pr[k] != null && pr[k] !== '');
+          if (complete) continue;   // täysi veikkaus -> ei muistuteta
+          await sendTo(P, subsRaw, JSON.stringify({ title: '⏰ Et ole vielä veikannut!', body: `${m.name} alkaa pian – muista veikata!`, url: './' }), deadSubs);
+          sent[key] = now; sentChanged = true;
+          console.log('Veikkausmuistutus:', P, '←', m.name);
+        }
       }
     }
   }
-
-  for (const msg of toSend) {
-    const payload = JSON.stringify({ title: msg.title, body: msg.body, url: './' });
-    for (const player of players) await sendTo(player, subsRaw, payload, deadSubs);
-    sent[msg.key] = now;
-    console.log('Lähetetty:', msg.key, '→', msg.title);
-  }
-  if (toSend.length) {
+  if (sentChanged) {
     const cutoff = now - 3 * 24 * 60 * MIN;
     for (const k of Object.keys(sent)) { if (sent[k] < cutoff) delete sent[k]; }
     await db.collection('app').doc('pushSent').set(sent);
@@ -108,11 +135,10 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
   // ===== 3) Viesti-ilmoitukset (uudet lukemattomat chat-viestit) =====
   const FRESH = 15 * MIN;
   const msgCut = now - FRESH;
-  const perPlayer = {};   // player -> Set lähettäjiä
+  const perPlayer = {};
   let notified = {};
   let notifiedChanged = false;
 
-  // presence: älä ilmoita jos pelaaja juuri nyt sovelluksessa (aktiivinen < 2 min)
   let presence = {};
   try { const pSnap = await db.collection('app').doc('presence').get(); presence = pSnap.exists ? (pSnap.data() || {}) : {}; } catch (e) {}
   const isOnline = (p) => (presence[p] || 0) > now - 2 * MIN;
@@ -120,7 +146,6 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
   try { const nSnap = await db.collection('app').doc('msgNotified').get(); notified = nSnap.exists ? (nSnap.data() || {}) : {}; } catch (e) {}
 
   try {
-    // vain keskustelut joissa on tuoretta aktiviteettia -> säästää lukuja
     const convSnap = await db.collection('conversations').where('updated', '>', msgCut).get();
     convSnap.forEach(docSnap => {
       const convId = docSnap.id;
@@ -146,8 +171,7 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
         if (maxTs > 0) {
           if (!perPlayer[P]) perPlayer[P] = new Set();
           senders.forEach(s => perPlayer[P].add(s));
-          notified[key] = maxTs;
-          notifiedChanged = true;
+          notified[key] = maxTs; notifiedChanged = true;
         }
       }
     });
@@ -175,5 +199,5 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
     console.log('Poistettu vanhentuneet tilaukset:', [...new Set(deadSubs)].join(', '));
   }
 
-  if (!toSend.length && !obChanged && !Object.keys(perPlayer).length) console.log('Ei lähetettävää.', fi(new Date(now)).hhmm);
+  if (!toSend.length && !obChanged && !Object.keys(perPlayer).length && !sentChanged) console.log('Ei lähetettävää.', fi(new Date(now)).hhmm);
 })().catch(e => { console.error('Virhe:', e); process.exit(1); });
