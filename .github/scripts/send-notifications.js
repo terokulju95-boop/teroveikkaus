@@ -1,5 +1,5 @@
 // KULJU CUP – push-ilmoitusten lähetin (GitHub Actions ajaa 5 min välein)
-// Lähettää: aamukooste klo 9, muistutus tunti ennen, lukitus ottelun alkaessa
+// Lähettää: aamukooste klo 9, muistutus tunti ennen
 // + admin-ilmoitukset (app/pushOutbox: heti tai ajastettuna, valituille pelaajille)
 // Deduplikointi: app/pushSent estää saman otteluilmoituksen kahdesti.
 
@@ -72,7 +72,7 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
 
     // Aamukooste klo 9 (Suomen aika 9:00–9:29)
     const nowFi = fi(new Date(now));
-    if (nowFi.hour === 9 && nowFi.minute < 30) {
+    if (nowFi.hour === 9) {
       const todays = matches
         .filter(m => fi(new Date(m.startTime)).date === nowFi.date && new Date(m.startTime).getTime() > now)
         .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
@@ -88,13 +88,9 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
     for (const m of matches) {
       const st = new Date(m.startTime).getTime();
       const diff = st - now;
-      if (diff <= 75 * MIN && diff >= 50 * MIN) {
+      if (diff > 0 && diff <= 90 * MIN) {
         const key = 'hour_' + m.id;
         if (!sent[key]) toSend.push({ key, title: '⏰ Tunti aikaa veikata!', body: `${m.name} alkaa klo ${fi(new Date(st)).hhmm}. Muista veikata.` });
-      }
-      if (diff <= 5 * MIN && diff >= -15 * MIN) {
-        const key = 'lock_' + m.id;
-        if (!sent[key]) toSend.push({ key, title: '🔒 Veikkaukset lukittu', body: `${m.name} alkoi – veikkaukset on nyt lukittu.` });
       }
     }
   }
