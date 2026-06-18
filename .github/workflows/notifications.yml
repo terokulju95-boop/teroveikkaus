@@ -2,7 +2,7 @@ name: KULJU CUP push-ilmoitukset
 
 on:
   schedule:
-    - cron: '*/15 * * * *'   # joka 15. minuutti (UTC); skripti laskee Suomen ajan itse
+    - cron: '*/5 * * * *'   # joka 5. minuutti (UTC); skripti laskee Suomen ajan itse
   workflow_dispatch:          # sallii manuaalisen ajon Actions-välilehdeltä (testi)
 
 jobs:
