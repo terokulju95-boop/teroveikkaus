@@ -109,7 +109,7 @@
     .chat-reply-text{ flex:1; min-width:0; font-size:13px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .chat-reply-x{ background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; flex:0 0 auto; }
     .msg-menu-overlay{ position:fixed; inset:0; z-index:100003; background:rgba(0,0,0,0.45); display:none; align-items:flex-end; justify-content:center; }
-    .msg-menu{ background:var(--card); width:100%; max-width:480px; border-radius:18px 18px 0 0; padding:14px; box-shadow:0 -8px 30px rgba(0,0,0,0.5); }
+    .msg-menu{ background:var(--card); width:100%; max-width:480px; max-height:85vh; overflow-y:auto; -webkit-overflow-scrolling:touch; border-radius:18px 18px 0 0; padding:14px; box-shadow:0 -8px 30px rgba(0,0,0,0.5); }
     @media(min-width:600px){ .msg-menu-overlay{ align-items:center; } .msg-menu{ border-radius:18px; } }
     .msg-menu-reactions{ display:flex; justify-content:space-around; gap:6px; padding:6px 0 12px; border-bottom:1px solid var(--border); margin-bottom:8px; }
     .msg-menu-reactions button{ font-size:28px; background:none; border:none; cursor:pointer; padding:6px; border-radius:10px; }
@@ -181,6 +181,7 @@
     .notif-chip{ background:var(--card,#1a2332); color:var(--muted,#9fb0c8); border:1px solid var(--line,#2a3850); border-radius:999px; padding:6px 12px; font-size:13px; cursor:pointer; }
     .notif-chip.on{ background:#2563eb; color:#fff; border-color:#2563eb; }
     .notif-queue-item{ display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--line,#2a3850); }
+    #adminNotifQueue{ max-height:240px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
     .btn.green{ background:#22c55e; box-shadow:0 3px 12px rgba(34,197,94,0.28); } .btn.green:hover:not(:disabled){ background:#16a34a; }
     .muted{ color:var(--muted); font-size:13px } .grid{ display:grid; gap:10px } .separator{ height:1px; background:var(--border); margin:12px 0 }
     .score-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px }
