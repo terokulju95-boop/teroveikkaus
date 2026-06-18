@@ -176,6 +176,11 @@
     .btn.secondary{ background:#fff; color:#111; border:1px solid var(--border); box-shadow:none; }
     .btn.secondary:hover:not(:disabled){ background:#f3f4f6; }
     .btn.danger{ background:#dc2626; } .btn.danger:hover:not(:disabled){ background:#b91c1c; }
+    .notif-field{ width:100%; box-sizing:border-box; background:var(--card,#1a2332); color:var(--text,#e8eef7); border:1px solid var(--line,#2a3850); border-radius:10px; padding:10px; font-size:14px; font-family:inherit; }
+    .notif-field:focus{ outline:none; border-color:#3b82f6; }
+    .notif-chip{ background:var(--card,#1a2332); color:var(--muted,#9fb0c8); border:1px solid var(--line,#2a3850); border-radius:999px; padding:6px 12px; font-size:13px; cursor:pointer; }
+    .notif-chip.on{ background:#2563eb; color:#fff; border-color:#2563eb; }
+    .notif-queue-item{ display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--line,#2a3850); }
     .btn.green{ background:#22c55e; box-shadow:0 3px 12px rgba(34,197,94,0.28); } .btn.green:hover:not(:disabled){ background:#16a34a; }
     .muted{ color:var(--muted); font-size:13px } .grid{ display:grid; gap:10px } .separator{ height:1px; background:var(--border); margin:12px 0 }
     .score-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px }
@@ -670,6 +675,22 @@
     <button id="notifyToggleBtn" class="btn small" style="width:100%" onclick="window._toggleNotify()">🔔 Salli ilmoitukset</button>
     <p id="notifyStatus" style="font-size:12px;color:var(--muted);margin:12px 0 0"></p>
     <p style="font-size:11px;color:var(--muted);margin:10px 0 0;line-height:1.4">📱 iPhonessa ilmoitukset toimivat vain jos sovellus on lisätty kotinäytölle (Jaa → Lisää Koti-valikkoon).</p>
+    <div id="notifyAdminSection" style="display:none;margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:10px">👑 Lähetä ilmoitus pelaajille</div>
+      <input id="adminNotifTitle" class="notif-field" placeholder="Otsikko" maxlength="60" style="margin-bottom:8px">
+      <textarea id="adminNotifBody" class="notif-field" placeholder="Viesti…" maxlength="200" style="margin-bottom:10px;min-height:60px;resize:vertical"></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:12px;color:var(--muted)">Vastaanottajat:</span>
+        <button type="button" class="notif-chip" onclick="window._toggleAllRecipients()" style="font-size:12px">Kaikki / tyhjennä</button>
+      </div>
+      <div id="adminNotifRecipients" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer">
+        <input type="checkbox" id="adminNotifSchedule" onchange="window._toggleNotifSchedule()"> Ajasta lähetys
+      </label>
+      <input type="datetime-local" id="adminNotifWhen" class="notif-field" style="margin-bottom:12px;display:none">
+      <button class="btn small" style="width:100%" onclick="window._sendAdminNotif()">Lähetä ilmoitus</button>
+      <div id="adminNotifQueue" style="margin-top:6px"></div>
+    </div>
   </div>
 </div>
 <div id="msgMenu" class="msg-menu-overlay" style="display:none" onclick="window._closeMsgMenu(event)">
@@ -3808,7 +3829,7 @@ function _urlB64ToUint8Array(b64){
   for(var i=0;i<raw.length;i++){ arr[i]=raw.charCodeAt(i); }
   return arr;
 }
-window._openNotifyPanel=function(){ var ov=document.getElementById('notifyPanel'); if(ov) ov.style.display='flex'; _syncNotifyUI(); };
+window._openNotifyPanel=function(){ var ov=document.getElementById('notifyPanel'); if(ov) ov.style.display='flex'; _syncNotifyUI(); _renderNotifyAdmin(); };
 window._closeNotifyPanel=function(){ var ov=document.getElementById('notifyPanel'); if(ov) ov.style.display='none'; };
 async function _syncNotifyUI(){
   var btn=document.getElementById('notifyToggleBtn'), st=document.getElementById('notifyStatus');
@@ -3839,6 +3860,89 @@ window._toggleNotify=async function(){
     _syncNotifyUI();
   }catch(e){ alert('Ilmoitusten käyttöönotto epäonnistui: '+(e&&e.message||e)+'\n\niPhonessa sovellus pitää ensin lisätä kotinäytölle.'); _syncNotifyUI(); }
 };
+// ===== Admin: omien ilmoitusten lähetys / ajastus =====
+var _notifRecipients = new Set();
+var PUSH_OUTBOX = doc(db,'app','pushOutbox');
+function _notifEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function _fmtWhen(ts){ try{ return new Intl.DateTimeFormat('fi-FI',{timeZone:'Europe/Helsinki',day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(ts)); }catch(e){ return ''; } }
+function _renderRecipientChips(){
+  var box=document.getElementById('adminNotifRecipients'); if(!box) return;
+  box.innerHTML='';
+  PLAYERS.forEach(function(pl){
+    var b=document.createElement('button'); b.type='button'; b.textContent=pl;
+    b.className='notif-chip'+(_notifRecipients.has(pl)?' on':'');
+    b.onclick=function(){ if(_notifRecipients.has(pl)) _notifRecipients.delete(pl); else _notifRecipients.add(pl); _renderRecipientChips(); };
+    box.appendChild(b);
+  });
+}
+window._toggleAllRecipients=function(){
+  if(_notifRecipients.size===PLAYERS.length) _notifRecipients.clear();
+  else PLAYERS.forEach(function(pl){ _notifRecipients.add(pl); });
+  _renderRecipientChips();
+};
+window._toggleNotifSchedule=function(){
+  var on=document.getElementById('adminNotifSchedule').checked;
+  document.getElementById('adminNotifWhen').style.display=on?'block':'none';
+};
+window._sendAdminNotif=async function(){
+  var title=(document.getElementById('adminNotifTitle').value||'').trim();
+  var body=(document.getElementById('adminNotifBody').value||'').trim();
+  if(!title && !body){ alert('Kirjoita otsikko tai viesti.'); return; }
+  if(!_notifRecipients.size){ alert('Valitse vähintään yksi vastaanottaja.'); return; }
+  var sendAt=null;
+  if(document.getElementById('adminNotifSchedule').checked){
+    var w=document.getElementById('adminNotifWhen').value;
+    if(!w){ alert('Aseta ajastusaika.'); return; }
+    sendAt=new Date(w).getTime();
+    if(isNaN(sendAt) || sendAt < Date.now()-60000){ alert('Ajastusaika on menneisyydessä.'); return; }
+  }
+  var item={ id:Date.now().toString(), title:title||'KULJU CUP', body:body, recipients:Array.from(_notifRecipients), sendAt:sendAt, sent:false, created:Date.now(), by:currentUser };
+  try{
+    var snap=await getDoc(PUSH_OUTBOX);
+    var items=(snap.exists()&&snap.data().items)||[];
+    items.push(item);
+    await setDoc(PUSH_OUTBOX,{items:items});
+    document.getElementById('adminNotifTitle').value='';
+    document.getElementById('adminNotifBody').value='';
+    document.getElementById('adminNotifSchedule').checked=false;
+    document.getElementById('adminNotifWhen').value=''; document.getElementById('adminNotifWhen').style.display='none';
+    _notifRecipients.clear(); _renderRecipientChips();
+    alert(sendAt ? ('Ilmoitus ajastettu ('+_fmtWhen(sendAt)+').') : 'Ilmoitus lähetetään muutaman minuutin sisällä.');
+    _renderNotifQueue();
+  }catch(e){ alert('Tallennus epäonnistui: '+(e&&e.message||e)); }
+};
+window._cancelOutbox=async function(id){
+  try{
+    var snap=await getDoc(PUSH_OUTBOX);
+    var items=(snap.exists()&&snap.data().items)||[];
+    items=items.filter(function(it){ return String(it.id)!==String(id); });
+    await setDoc(PUSH_OUTBOX,{items:items});
+    _renderNotifQueue();
+  }catch(e){}
+};
+async function _renderNotifQueue(){
+  var box=document.getElementById('adminNotifQueue'); if(!box) return;
+  try{
+    var snap=await getDoc(PUSH_OUTBOX);
+    var items=(snap.exists()&&snap.data().items)||[];
+    items=items.slice().sort(function(a,b){ return (b.created||0)-(a.created||0); }).slice(0,8);
+    if(!items.length){ box.innerHTML=''; return; }
+    var html='<div style="font-size:12px;color:var(--muted);margin:4px 0 2px">Viimeisimmät ilmoitukset:</div>';
+    items.forEach(function(it){
+      var status= it.sent ? '\u2713 lähetetty' : (it.sendAt? '\u23f0 ajastettu '+_fmtWhen(it.sendAt) : '\u23f3 lähtee pian');
+      var who= (it.recipients&&it.recipients.length===PLAYERS.length) ? 'kaikille' : (it.recipients||[]).join(', ');
+      html+='<div class="notif-queue-item"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">'+_notifEsc(it.title||'')+'</div><div style="font-size:11px;color:var(--muted)">'+status+' \u00b7 '+_notifEsc(who)+'</div></div>';
+      if(!it.sent){ html+='<button class="btn small danger" style="flex:0 0 auto" onclick="window._cancelOutbox(\''+it.id+'\')">Peru</button>'; }
+      html+='</div>';
+    });
+    box.innerHTML=html;
+  }catch(e){ box.innerHTML=''; }
+}
+function _renderNotifyAdmin(){
+  var sec=document.getElementById('notifyAdminSection'); if(!sec) return;
+  if(currentUser===ADMIN){ sec.style.display='block'; _renderRecipientChips(); _renderNotifQueue(); }
+  else sec.style.display='none';
+}
 async function _pruneOldMessages(convId, msgs){
   if(!msgs || !msgs.length) return;
   var cut=Date.now()-CHAT_MAX_AGE;
