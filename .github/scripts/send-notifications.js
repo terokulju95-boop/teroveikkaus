@@ -14,8 +14,24 @@ webpush.setVapidDetails(process.env.VAPID_SUBJECT, process.env.VAPID_PUBLIC, pro
 const now = Date.now();
 const MIN = 60 * 1000;
 const PLAYERS = ['Roosa', 'Timo', 'Tero', 'Tiina', 'Tepa', 'Äiti', 'Iskä'];
-// FIELDS-avaimet (täydellisen veikkauksen tarkistukseen). HUOM: jos FIELDS muuttuu index.html:ssä, päivitä tämä.
-const FIELD_KEYS = ['lopputulos','ekan_maalintekija','ekan_maali_aika','kumpi_tekee_ekan_maalin','voittomaalin_tekija','ekan_jahyn_saaja','ekan_jahyn_syy','montako_jahyja','yli_alle_maalit','parempi_laukasu','parempi_alotus','parempi_torjunta','parempi_alivoima','parempi_ylivoima','era1','era2','valmentaja_haasto','maali_tyhjiin','yv_av_maali','jatkoaika_tai_rankkarit'];
+// Kenttäavaimet luetaan suoraan sovelluksen koodista, jotta ne eivät voi
+// erkaantua toisistaan. Jos lukeminen epäonnistuu, käytetään varalistaa.
+const VARA_FIELD_KEYS = ['lopputulos','ekan_maalintekija','ekan_maali_aika','kumpi_tekee_ekan_maalin','voittomaalin_tekija','ekan_jahyn_saaja','ekan_jahyn_syy','montako_jahyja','yli_alle_maalit','parempi_laukasu','parempi_alotus','parempi_torjunta','parempi_alivoima','parempi_ylivoima','era1','era2','valmentaja_haasto','maali_tyhjiin','yv_av_maali','jatkoaika_tai_rankkarit'];
+function lueKenttaAvaimet() {
+  const fs = require('fs');
+  for (const polku of ['js/app.js', 'index.html']) {
+    try {
+      const src = fs.readFileSync(polku, 'utf8');
+      const lohko = src.match(/const FIELDS\s*=\s*\[([\s\S]*?)\];/);
+      if (!lohko) continue;
+      const avaimet = [...lohko[1].matchAll(/key\s*:\s*'([a-z0-9_]+)'/g)].map(m => m[1]);
+      if (avaimet.length >= 10) { console.log('Kenttäavaimet luettu tiedostosta', polku, '-', avaimet.length, 'kpl'); return avaimet; }
+    } catch (e) {}
+  }
+  console.warn('VAROITUS: kenttäavaimia ei voitu lukea koodista, käytetään varalistaa.');
+  return VARA_FIELD_KEYS;
+}
+const FIELD_KEYS = lueKenttaAvaimet();
 
 function fi(d) {
   const f = new Intl.DateTimeFormat('en-GB', {
@@ -26,14 +42,37 @@ function fi(d) {
   return { hour: +p.hour, minute: +p.minute, date: `${p.year}-${p.month}-${p.day}`, hhmm: `${p.hour}.${p.minute}` };
 }
 
-async function sendTo(player, subsRaw, payload, deadSubs) {
+// Pelaajakohtaiset ilmoitusasetukset (app/notifyPrefs).
+// Puuttuva asetus tarkoittaa "päällä", joten oletuskäytös ei muutu.
+let PREFS = {};
+function saaLahettaa(player, tyyppi) {
+  const c = PREFS[player] || {};
+  if (c[tyyppi] === false) return false;
+  const a = c.hiljainenAlku, l = c.hiljainenLoppu;
+  if (a == null || l == null) return true;
+  const h = fi(new Date(now)).hour;
+  const hiljaa = (a <= l) ? (h >= a && h < l) : (h >= a || h < l);
+  return !hiljaa;
+}
+
+async function sendTo(player, subsRaw, payload, deadSubs, tyyppi) {
   const sub = subsRaw[player];
   if (!sub || !sub.endpoint) return;
+  if (tyyppi && !saaLahettaa(player, tyyppi)) {
+    console.log('Ohitettu (asetukset):', player, tyyppi);
+    return;
+  }
   try { await webpush.sendNotification(sub, payload); }
   catch (err) { if (err.statusCode === 404 || err.statusCode === 410) deadSubs.push(player); }
 }
 
 (async () => {
+  try {
+    const prefSnap = await db.collection('app').doc('notifyPrefs').get();
+    PREFS = prefSnap.exists ? (prefSnap.data() || {}) : {};
+    delete PREFS.ts;
+  } catch (e) { console.warn('Ilmoitusasetuksia ei voitu lukea:', e.message); }
+
   const subsSnap = await db.collection('app').doc('pushSubs').get();
   const subsRaw = subsSnap.exists ? (subsSnap.data() || {}) : {};
   const players = Object.keys(subsRaw).filter(p => subsRaw[p] && subsRaw[p].endpoint);
@@ -47,7 +86,7 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
     if (it.sent) continue;
     if (it.sendAt && it.sendAt > now) continue;
     const payload = JSON.stringify({ title: it.title || 'KULJU CUP', body: it.body || '', url: './' });
-    for (const player of (it.recipients || [])) await sendTo(player, subsRaw, payload, deadSubs);
+    for (const player of (it.recipients || [])) await sendTo(player, subsRaw, payload, deadSubs, 'admin');
     it.sent = true; it.sentAt = now; obChanged = true;
     console.log('Admin-ilmoitus lähetetty:', it.title, '→', (it.recipients || []).join(', '));
   }
@@ -57,13 +96,36 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
   if (obChanged) await db.collection('app').doc('pushOutbox').set({ items: obClean });
 
   // ===== 2) Otteluilmoitukset + veikkausmuistutus =====
-  const dataSnap = await db.collection('app').doc('data').get();
+  // Tukee molempia tallennusrakenteita: app/data (vanha) ja tournaments/* (uusi).
+  let parsed = null;
+  try {
+    const idxSnap = await db.collection('app').doc('index').get();
+    const idx = idxSnap.exists ? (idxSnap.data() || {}) : null;
+    if (idx && idx.rakenne === 'v2') {
+      const lista = Array.isArray(idx.tournaments) ? idx.tournaments : [];
+      const tours = [];
+      for (const x of lista) {
+        try {
+          const ts = await db.collection('tournaments').doc(String(x.id)).get();
+          if (ts.exists) { const t = JSON.parse(ts.data().json || 'null'); if (t) tours.push(t); }
+        } catch (e) {}
+      }
+      parsed = { tournaments: tours, selectedTournamentId: idx.selectedTournamentId };
+      console.log('Rakenne: uusi (tournaments/*), turnauksia', tours.length);
+    }
+  } catch (e) {}
+  if (!parsed) {
+    const dataSnap = await db.collection('app').doc('data').get();
+    if (dataSnap.exists) {
+      try { parsed = JSON.parse(dataSnap.data().json || '{}'); } catch (e) { parsed = null; }
+    }
+    if (parsed) console.log('Rakenne: vanha (app/data)');
+  }
+
   let toSend = [];
   let sent = {};
   let sentChanged = false;
-  if (dataSnap.exists) {
-    let parsed = {};
-    try { parsed = JSON.parse(dataSnap.data().json || '{}'); } catch (e) {}
+  if (parsed) {
     const tournaments = parsed.tournaments || [];
     const activeId = parsed.selectedTournamentId;
     const tournament = tournaments.find(t => String(t.id) === String(activeId)) || tournaments.find(t => !t.finished && !t.historical);
@@ -82,7 +144,7 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
         const key = 'morning_' + nowFi.date;
         if (!sent[key]) {
           const lines = todays.map(m => `${m.name} klo ${fi(new Date(m.startTime)).hhmm}`).join('\n');
-          toSend.push({ key, title: '🏒 Tänään pelataan!', body: lines + '\nMuista veikata ajoissa.' });
+          toSend.push({ key, tyyppi: 'aamu', title: '🏒 Tänään pelataan!', body: lines + '\nMuista veikata ajoissa.' });
         }
       }
     }
@@ -91,14 +153,14 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
       const diff = new Date(m.startTime).getTime() - now;
       if (diff >= 55 * MIN && diff <= 65 * MIN) {
         const key = 'hour_' + m.id;
-        if (!sent[key]) toSend.push({ key, title: '⏰ Tunti aikaa veikata!', body: `${m.name} alkaa klo ${fi(new Date(m.startTime)).hhmm}. Muista veikata.` });
+        if (!sent[key]) toSend.push({ key, tyyppi: 'tunti', title: '⏰ Tunti aikaa veikata!', body: `${m.name} alkaa klo ${fi(new Date(m.startTime)).hhmm}. Muista veikata.` });
       }
     }
 
     // Lähetä otteluilmoitukset kaikille tilaajille
     for (const msg of toSend) {
       const payload = JSON.stringify({ title: msg.title, body: msg.body, url: './' });
-      for (const player of players) await sendTo(player, subsRaw, payload, deadSubs);
+      for (const player of players) await sendTo(player, subsRaw, payload, deadSubs, msg.tyyppi);
       sent[msg.key] = now; sentChanged = true;
       console.log('Lähetetty:', msg.key, '→', msg.title);
     }
@@ -119,7 +181,7 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
           const pr = (((preds[P].matches || {})[tid] || {})[String(m.id)]) || {};
           const complete = FIELD_KEYS.every(k => pr[k] != null && pr[k] !== '');
           if (complete) continue;   // täysi veikkaus -> ei muistuteta
-          await sendTo(P, subsRaw, JSON.stringify({ title: '⏰ Et ole vielä veikannut!', body: `${m.name} alkaa pian – muista veikata!`, url: './' }), deadSubs);
+          await sendTo(P, subsRaw, JSON.stringify({ title: '⏰ Et ole vielä veikannut!', body: `${m.name} alkaa pian – muista veikata!`, url: './' }), deadSubs, 'muistutus');
           sent[key] = now; sentChanged = true;
           console.log('Veikkausmuistutus:', P, '←', m.name);
         }
@@ -182,7 +244,7 @@ async function sendTo(player, subsRaw, payload, deadSubs) {
     let title, body;
     if (senders.length === 1) { title = '💬 Uusi viesti'; body = senders[0] + ' lähetti sinulle viestin.'; }
     else { title = '💬 Uusia viestejä'; body = 'Lähettäjät: ' + senders.join(', ') + '.'; }
-    await sendTo(P, subsRaw, JSON.stringify({ title, body, url: './' }), deadSubs);
+    await sendTo(P, subsRaw, JSON.stringify({ title, body, url: './' }), deadSubs, 'chat');
     console.log('Viesti-ilmoitus:', P, '←', senders.join(', '));
   }
   if (notifiedChanged) {
