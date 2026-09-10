@@ -1,4 +1,4 @@
 {
-  "versio": "2026-09-10.1",
-  "muutos": "Asetukset ryhmitelty, ominaisuuskytkimet, muokattavat tekstit, ilmoitusasetukset, OLED-teema, lumisateen ja revontulen säädöt, sijoitusmuutosnuolet."
+  "versio": "2026-09-10.2",
+  "muutos": "Korjaus: revontulen väripaletti ei tallentunut. Ilmoitusasetukset vain ylläpitäjälle, pelaajakohtaisesti."
 }

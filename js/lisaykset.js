@@ -224,30 +224,20 @@
     if (box) box.scrollTop = 0;
   }
 
-  // Vain ylläpitäjälle näkyvät välilehdet
-  var ADMIN_SEC = ['ulkoasu', 'ominaisuudet', 'tekstit', 'data', 'yllapito'];
-
+  // Koko asetusikkuna on tarkoitettu vain ylläpitäjälle.
   function initTabs() {
     var admin = window._onkoAdmin ? window._onkoAdmin() : false;
-    var nakyvat = [];
     document.querySelectorAll('.set-tab').forEach(function (t) {
-      var salli = admin || ADMIN_SEC.indexOf(t.dataset.sec) === -1;
-      t.style.display = salli ? '' : 'none';
-      if (salli) nakyvat.push(t.dataset.sec);
       t.onclick = function () { naytaSec(t.dataset.sec); };
     });
-    // Piilota myös sisältö, jottei se vilahda ennen välilehden valintaa
-    document.querySelectorAll('.set-sec').forEach(function (s) {
-      if (nakyvat.indexOf(s.dataset.sec) === -1) s.style.display = 'none';
-    });
-    var otsikko = document.querySelector('#settingsModal h2');
-    if (otsikko && otsikko.textContent.indexOf('Asetukset') !== -1) {
-      otsikko.textContent = admin ? '⚙️ Asetukset' : '🔔 Ilmoitusasetukset';
+    if (!admin) {
+      // Varmistus: jos ikkuna jostain syystä aukeaa muulle kuin ylläpitäjälle,
+      // sisältöä ei näytetä lainkaan.
+      document.querySelectorAll('.set-sec').forEach(function (s) { s.style.display = 'none'; });
+      var palkki0 = $('setTabs'); if (palkki0) palkki0.style.display = 'none';
+      return;
     }
-    // Yhdellä välilehdellä ei tarvita välilehtipalkkia
-    var palkki = $('setTabs');
-    if (palkki) palkki.style.display = nakyvat.length > 1 ? '' : 'none';
-    if (nakyvat.indexOf(aktiivinenSec) === -1) aktiivinenSec = nakyvat[0] || 'ilmoitukset';
+    var palkki = $('setTabs'); if (palkki) palkki.style.display = '';
     naytaSec(aktiivinenSec);
   }
 
@@ -375,22 +365,38 @@
   ];
   var ILM_DEF = { aamu: true, tunti: true, muistutus: true, admin: true, chat: true, hiljainenAlku: null, hiljainenLoppu: null };
   var notifyPrefs = {};
+  var ilmValittu = null;          // ketä pelaajaa ylläpitäjä parhaillaan säätää
 
+  function ilmKohde() {
+    if (!ilmValittu) {
+      var lista = window._pelaajat ? window._pelaajat() : [];
+      ilmValittu = (window._nykyinenKayttaja && window._nykyinenKayttaja()) || lista[0] || null;
+    }
+    return ilmValittu;
+  }
   function omatIlm() {
-    var k = window._nykyinenKayttaja && window._nykyinenKayttaja();
+    var k = ilmKohde();
     return Object.assign({}, ILM_DEF, (k && notifyPrefs[k]) || {});
   }
 
   function renderNotify() {
     var el = $('setNotify');
     if (!el) return;
-    var k = window._nykyinenKayttaja && window._nykyinenKayttaja();
-    if (!k) { el.innerHTML = '<p class="muted">Kirjaudu sisään nähdäksesi ilmoitusasetukset.</p>'; return; }
+    if (!window._onkoAdmin || !window._onkoAdmin()) { el.innerHTML = ''; return; }
+    var lista = window._pelaajat ? window._pelaajat() : [];
+    var k = ilmKohde();
+    if (!k) { el.innerHTML = '<p class="muted">Pelaajia ei ole ladattu.</p>'; return; }
     var c = omatIlm();
-    var admin = window._onkoAdmin ? window._onkoAdmin() : false;
     el.innerHTML =
-      (admin ? '<h2 style="margin:8px 0">🔔 Ilmoitukset</h2>' : '') +
-      '<p class="muted" style="font-size:12px;margin:0 0 10px">Nämä asetukset koskevat vain sinua (' + esc(k) + ').</p>' +
+      '<h2 style="margin:8px 0">🔔 Ilmoitukset</h2>' +
+      '<p class="muted" style="font-size:12px;margin:0 0 8px">Valitse pelaaja ja säädä hänen ilmoituksensa. ' +
+      'Pelaajat eivät pääse näihin itse — he voivat vain sallia ilmoitukset puhelimessaan.</p>' +
+      '<select id="ilmPelaaja" style="width:100%;margin-bottom:12px">' +
+        lista.map(function (p) {
+          var muok = notifyPrefs[p] ? ' ·  muokattu' : '';
+          return '<option value="' + esc(p) + '"' + (p === k ? ' selected' : '') + '>' + esc(p) + muok + '</option>';
+        }).join('') +
+      '</select>' +
       ILM_TYYPIT.map(function (t) {
         var on = c[t.key] !== false;
         return '<div class="feat-row"><div class="feat-txt">' +
@@ -409,8 +415,22 @@
         '<button class="btn small" id="ilmSave">💾 Tallenna</button>' +
       '</div>' +
       '<p class="muted" id="ilmStatus" style="margin-top:6px;min-height:18px;font-size:12px"></p>' +
+      '<div class="stack" style="gap:8px;margin-top:4px">' +
+        '<button class="btn small secondary" id="ilmOletukset">↺ Palauta oletukset tälle pelaajalle</button>' +
+      '</div>' +
       '<div class="separator"></div>' +
       '<button class="btn small secondary" style="width:100%" onclick="window._openNotifyPanel()">📱 Ilmoitusluvat ja lähetys</button>';
+
+    var sel = $('ilmPelaaja');
+    if (sel) sel.onchange = function () { ilmValittu = sel.value; renderNotify(); };
+    var oletus = $('ilmOletukset');
+    if (oletus) oletus.onclick = function () {
+      var kk = ilmKohde(); if (!kk) return;
+      if (!confirm('Palautetaanko pelaajan ' + kk + ' ilmoitukset oletuksiin?')) return;
+      delete notifyPrefs[kk];
+      tallenna('notifyPrefs', notifyPrefs, 'ilmStatus');
+      renderNotify();
+    };
 
     el.querySelectorAll('.ilm-btn').forEach(function (b) {
       b.onclick = function () {
@@ -428,7 +448,7 @@
   }
 
   function tallennaIlm(cc) {
-    var k = window._nykyinenKayttaja && window._nykyinenKayttaja();
+    var k = ilmKohde();
     if (!k) return;
     notifyPrefs[k] = cc;
     tallenna('notifyPrefs', notifyPrefs, 'ilmStatus');

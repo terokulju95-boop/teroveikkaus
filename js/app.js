@@ -2392,6 +2392,7 @@ window._auroraSetVariant = function(v){
 //  js/lisaykset.js piirtää käyttöliittymän ja kutsuu _tallennaAsetus-apuria.
 // ═══════════════════════════════════════════════════════════════
 window._nykyinenKayttaja = function(){ return currentUser; };
+window._pelaajat = function(){ return PLAYERS.slice(); };
 window._onkoAdmin = function(){ return currentUser === ADMIN; };
 
 // Puskuri: lisaykset.js käynnistyy vasta DOMContentLoadedissa, joten
@@ -2408,10 +2409,8 @@ window._ilmoitaAsetus = ilmoitaAsetus;
 window._tallennaAsetus = function(nimi, data){
   var sallitut = ['features','texts','notifyPrefs','ui'];
   if (sallitut.indexOf(nimi) === -1) return Promise.reject(new Error('Tuntematon asetus: '+nimi));
-  if ((nimi === 'features' || nimi === 'texts') && currentUser !== ADMIN) {
-    return Promise.reject(new Error('Vain ylläpitäjä voi muuttaa tätä.'));
-  }
-  if (nimi === 'ui' && currentUser !== ADMIN) {
+  // Kaikki asetusdokumentit ovat ylläpitäjän hallinnassa.
+  if (currentUser !== ADMIN) {
     return Promise.reject(new Error('Vain ylläpitäjä voi muuttaa tätä.'));
   }
   return setDoc(doc(db, 'app', nimi), Object.assign({}, data, { ts: Date.now() }));
@@ -2438,7 +2437,8 @@ onSnapshot(AURORA_DOC, function(snap){
   var cfg = Object.assign({}, AURORA_DEF);
   if(snap && snap.exists()){ var d=snap.data()||{};
     if(d.v!=null) cfg.v=d.v; if(d.strength!=null) cfg.strength=d.strength;
-    if(d.amp!=null) cfg.amp=d.amp; if(d.speed!=null) cfg.speed=d.speed; }
+    if(d.amp!=null) cfg.amp=d.amp; if(d.speed!=null) cfg.speed=d.speed;
+    if(d.pal!=null) cfg.pal=d.pal; }
   _applyAurora(cfg);
 });
 
@@ -3796,14 +3796,7 @@ function doLogin(name){
     const el=$(id); if(el) el.style.display=isAdmin?'':'none';
   });
   // Asetukset-nappi (Lisää-näkymä) vain adminille
-  // Asetukset näkyy kaikille, mutta pelaaja näkee vain omat ilmoitusasetuksensa.
-  // Ylläpitäjän välilehdet piilotetaan js/lisaykset.js:ssä.
-  const moreSet=$('moreSettingsBtn');
-  if(moreSet){
-    moreSet.style.display='';
-    const lbl=moreSet.querySelector('span');
-    if(lbl) lbl.textContent = isAdmin ? 'Asetukset' : 'Ilmoitusasetukset';
-  }
+  const moreSet=$('moreSettingsBtn'); if(moreSet) moreSet.style.display=isAdmin?'':'none';
   const moreMon=$('moreMonitorBtn'); if(moreMon) moreMon.style.display=isAdmin?'':'none';
   // PIN-koodit ja Käyttökerrat piilotetaan aina — ne ovat Asetukset-modaalissa
   ['adminPinTools','adminLoginStats'].forEach(id=>{
