@@ -9,7 +9,7 @@
 // tarvitsee koskea. Kasvata VERSIONia vain jos haluat pakottaa kaiken
 // uudelleenlatauksen (esim. ikonit tai tiedostolista muuttuivat).
 
-const VERSION = 'v30';
+const VERSION = 'v32';
 const CACHE   = 'kulju-' + VERSION;
 
 // Suhteelliset polut – toimivat sekä juuressa että alipolussa (GitHub Pages).
@@ -17,6 +17,17 @@ const ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './css/styles.css',
+  './js/app.js',
+  './js/screenshot.js',
+  './js/pdf.js',
+  './js/intro-overlay.js',
+  './js/easter-wanted.js',
+  './js/games.js',
+  './js/intro-fx.js',
+  './js/aurora.js',
+  './js/lisaykset.js',
+  './version.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',
@@ -106,4 +117,9 @@ self.addEventListener('notificationclick', (e) => {
       if (clients.openWindow) return clients.openWindow(url);
     })
   );
+});
+
+// Päivitysbanneri: sivu voi pyytää uutta service workeria ottamaan ohjat heti.
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
