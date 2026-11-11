@@ -9,7 +9,7 @@
 // tarvitsee koskea. Kasvata VERSIONia vain jos haluat pakottaa kaiken
 // uudelleenlatauksen (esim. ikonit tai tiedostolista muuttuivat).
 
-const VERSION = 'v33';
+const VERSION = 'v34';
 const CACHE   = 'kulju-' + VERSION;
 
 // Suhteelliset polut – toimivat sekä juuressa että alipolussa (GitHub Pages).
@@ -27,6 +27,8 @@ const ASSETS = [
   './js/intro-fx.js',
   './js/aurora.js',
   './js/lisaykset.js',
+  './js/vendor/html2canvas-1.4.1.min.js',
+  './js/vendor/jspdf-2.5.1.umd.min.js',
   './version.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -44,7 +46,8 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      // Vain omat välimuistit: samassa osoitteessa on muitakin sovelluksia.
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('kulju-') && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

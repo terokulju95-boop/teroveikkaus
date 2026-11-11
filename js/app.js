@@ -18,6 +18,16 @@ const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
 const auth = getAuth(fbApp);
 window._firebaseDb = db; // Expose globally for non-module scripts
+
+// ── TURVALLINEN HTML ──
+// Tallennettu teksti (nimet, veikkaukset, tulokset, avatarit, tunnisteet) ajetaan
+// näiden läpi ennen kuin se laitetaan HTML-merkkijonoon. Näkyvä teksti ei muutu:
+// selain näyttää &amp; &lt; &quot; jne. alkuperäisinä merkkeinä.
+//   _h(s)  = teksti tai attribuutin arvo
+//   _hj(s) = teksti onclick="f('...')" -merkkijonon sisällä
+function _h(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function _hj(s){ return _h(String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")); }
+window._h = _h; window._hj = _hj;
 const DATA_DOC = doc(db, "app", "data");
 const PINS_DOC = doc(db, "app", "pins");
 // Jokaisella pelaajalla oma veikkausdokumentti – ei enää race conditionia
@@ -660,7 +670,7 @@ window._buildProfileHTML = function(player) {
     const pct = Math.round((pts/maxPts)*100);
     const bar = `<div style="display:inline-block;width:${Math.min(pct,100)}%;background:var(--primary);height:4px;border-radius:2px;margin-top:3px;min-width:2px"></div>`;
     return `<div class="profile-match-row">
-      <div><div style="font-weight:600">${m.name}</div><div style="background:var(--border);border-radius:2px;height:4px;margin-top:3px;width:80px">${bar}</div></div>
+      <div><div style="font-weight:600">${_h(m.name)}</div><div style="background:var(--border);border-radius:2px;height:4px;margin-top:3px;width:80px">${bar}</div></div>
       <div class="pts-badge">${pts} p</div>
     </div>`;
   }).join('');
@@ -688,7 +698,7 @@ window._buildProfileHTML = function(player) {
 
   const html = `
     <div class="profile-header">
-      <div class="profile-avatar">${avatar}</div>
+      <div class="profile-avatar">${_h(avatar)}</div>
       <div class="profile-name">${player===ADMIN?'👑 ':''}${player}</div>
       <div style="font-size:13px;color:var(--muted);margin-top:4px">${rankIcon} Sijalla ${rank}/${sorted.length}</div>
       <div class="profile-pts">${totalPts} p</div>
@@ -1772,26 +1782,26 @@ function startCountdown(match){
 // WIDGET (kenttä)
 // ============================
 function widget(key, value, dataset, disabled, isAct){
-  const ds = isAct ? `data-act="${key}"` : `data-pred="${dataset}"`;
+  const ds = isAct ? `data-act="${key}"` : `data-pred="${_h(dataset)}"`;
   const dis = disabled ? 'disabled' : '';
   if(key==='lopputulos'){
     const p=(value||'').split('-'), h=p[0]?p[0].trim():'', a=p[1]?p[1].trim():'';
-    const hAttr = isAct ? 'data-act-home' : `data-pred-home="${dataset}"`;
-    const aAttr = isAct ? 'data-act-away' : `data-pred-away="${dataset}"`;
-    return `<div class="score-combo"><input type="number" inputmode="numeric" ${hAttr} value="${h}" placeholder="0" ${dis}/><span class="dash">-</span><input type="number" inputmode="numeric" ${aAttr} value="${a}" placeholder="0" ${dis}/></div>`;
+    const hAttr = isAct ? 'data-act-home' : `data-pred-home="${_h(dataset)}"`;
+    const aAttr = isAct ? 'data-act-away' : `data-pred-away="${_h(dataset)}"`;
+    return `<div class="score-combo"><input type="number" inputmode="numeric" ${hAttr} value="${_h(h)}" placeholder="0" ${dis}/><span class="dash">-</span><input type="number" inputmode="numeric" ${aAttr} value="${_h(a)}" placeholder="0" ${dis}/></div>`;
   }
   if(key==='ekan_maali_aika'){
     const p=(value||'').split(':'), m=p[0]?p[0].trim():'', s=p[1]?p[1].trim():'';
-    const mAttr = isAct ? 'data-act-min' : `data-pred-min="${dataset}"`;
-    const sAttr = isAct ? 'data-act-sec' : `data-pred-sec="${dataset}"`;
-    return `<div class="time-combo"><input type="number" inputmode="numeric" ${mAttr} value="${m}" placeholder="00" ${dis}/><span class="colon">:</span><input type="number" inputmode="numeric" ${sAttr} value="${s}" placeholder="00" ${dis}/></div>`;
+    const mAttr = isAct ? 'data-act-min' : `data-pred-min="${_h(dataset)}"`;
+    const sAttr = isAct ? 'data-act-sec' : `data-pred-sec="${_h(dataset)}"`;
+    return `<div class="time-combo"><input type="number" inputmode="numeric" ${mAttr} value="${_h(m)}" placeholder="00" ${dis}/><span class="colon">:</span><input type="number" inputmode="numeric" ${sAttr} value="${_h(s)}" placeholder="00" ${dis}/></div>`;
   }
-  const makeSelect = opts => `<select ${ds} ${dis}>${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o||'—'}</option>`).join('')}</select>`;
+  const makeSelect = opts => `<select ${ds} ${dis}>${opts.map(o=>`<option value="${_h(o)}" ${o===value?'selected':''}>${_h(o||'—')}</option>`).join('')}</select>`;
   // Segmenttipainikkeet: piilotettu natiivi <select> säilyttää tallennuslogiikan ennallaan,
   // painikkeet vain ohjaavat sitä (sama tallennettava arvo, eri syöttötapa).
   const makeSeg = opts => {
-    const sel = `<select class="seg-native" ${ds} ${dis} tabindex="-1" aria-hidden="true">${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o||'—'}</option>`).join('')}</select>`;
-    const btns = opts.filter(o=>o!=='').map(o=>`<button type="button" class="seg-btn${o===value?' active':''}" ${dis} onclick="window._segPick(this,'${o}')">${o}</button>`).join('');
+    const sel = `<select class="seg-native" ${ds} ${dis} tabindex="-1" aria-hidden="true">${opts.map(o=>`<option value="${_h(o)}" ${o===value?'selected':''}>${_h(o||'—')}</option>`).join('')}</select>`;
+    const btns = opts.filter(o=>o!=='').map(o=>`<button type="button" class="seg-btn${o===value?' active':''}" ${dis} onclick="window._segPick(this,'${_hj(o)}')">${_h(o)}</button>`).join('');
     return `<div class="seg-group${disabled?' disabled':''}">${sel}${btns}</div>`;
   };
   if(key==='ekan_maalintekija') return makeSelect(scorerOptions(getTournament(), value));
@@ -1801,8 +1811,8 @@ function widget(key, value, dataset, disabled, isAct){
   if(ONE_X_TWO.has(key)) return makeSeg(['','1','X','2']);
   if(YLI_ALLE.has(key)) return makeSeg(['','Yli','Alle']);
   if(KYLLA_EI.has(key)) return makeSeg(['','Kyllä','Ei']);
-  if(NUMBER_K.has(key)) return `<input type="number" inputmode="numeric" ${ds} value="${value||''}" placeholder="0" ${dis}/>`;
-  return `<input type="text" ${ds} value="${value||''}" placeholder="…" ${dis}/>`;
+  if(NUMBER_K.has(key)) return `<input type="number" inputmode="numeric" ${ds} value="${_h(value||'')}" placeholder="0" ${dis}/>`;
+  return `<input type="text" ${ds} value="${_h(value||'')}" placeholder="…" ${dis}/>`;
 }
 
 // ============================
@@ -1956,7 +1966,7 @@ function renderMatchBanner(match){
     const adminBtn = currentUser===ADMIN
       ? (isEditing
           ? `<button class="btn small danger" style="margin-top:8px;width:100%" onclick="window._adminExitEdit()">🔒 Lopeta muokkaus ja lukitse</button>`
-          : `<button class="btn small" style="margin-top:8px;width:100%;background:#7c3aed;color:#fff" onclick="window._adminStartEdit('${match.id}')">✏️ Avaa veikkausten muokkaus</button>`)
+          : `<button class="btn small" style="margin-top:8px;width:100%;background:#7c3aed;color:#fff" onclick="window._adminStartEdit('${_hj(match.id)}')">✏️ Avaa veikkausten muokkaus</button>`)
       : '';
     el.innerHTML=`<div class="lock-banner" style="display:flex;flex-direction:column;gap:4px">🔒 Peli alkanut – veikkaukset lukittu – tulokset näkyvissä${adminBtn}</div>`;
   } else {
@@ -2452,9 +2462,9 @@ function _renderAvatarAdmin(){
   el.innerHTML = PLAYERS.map(function(pl){
     var a=window._getAvatar(pl);
     return '<div class="avatar-row">'+
-      '<span id="avatarPreview_'+pl+'" class="avatar-prev">'+a+'</span>'+
+      '<span id="avatarPreview_'+pl+'" class="avatar-prev">'+_h(a)+'</span>'+
       '<span class="avatar-name">'+(pl===ADMIN?'👑 ':'')+pl+'</span>'+
-      '<input id="avatarInput_'+pl+'" class="avatar-inp" value="'+a+'" maxlength="8">'+
+      '<input id="avatarInput_'+pl+'" class="avatar-inp" value="'+_h(a)+'" maxlength="8">'+
       '<button class="btn small secondary" onclick="window._saveAvatar(\''+pl+'\')">Tallenna</button>'+
     '</div>';
   }).join('');
@@ -2671,7 +2681,7 @@ async function _renderNotifQueue(){
       var status= it.sent ? '\u2713 lähetetty' : (it.sendAt? '\u23f0 ajastettu '+_fmtWhen(it.sendAt) : '\u23f3 lähtee pian');
       var who= (it.recipients&&it.recipients.length===PLAYERS.length) ? 'kaikille' : (it.recipients||[]).join(', ');
       html+='<div class="notif-queue-item"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">'+_notifEsc(it.title||'')+'</div><div style="font-size:11px;color:var(--muted)">'+status+' \u00b7 '+_notifEsc(who)+'</div></div>';
-      if(!it.sent){ html+='<button class="btn small danger" style="flex:0 0 auto" onclick="window._cancelOutbox(\''+it.id+'\')">Peru</button>'; }
+      if(!it.sent){ html+='<button class="btn small danger" style="flex:0 0 auto" onclick="window._cancelOutbox(\''+_hj(it.id)+'\')">Peru</button>'; }
       html+='</div>';
     });
     box.innerHTML=html;
@@ -2702,8 +2712,8 @@ function _renderChatList(){
     var online=_isOnline(pl);
     var dot='<span class="presence-dot '+(online?'online':'offline')+'"></span>';
     var sub='<span class="chat-conv-sub'+(online?' online':'')+'">'+_chatEsc(_presenceLabel(pl))+'</span>';
-    return '<button class="chat-conv-item" onclick="window._openConversation(\''+cid+'\',\''+pl+'\',\''+a+'\',false)">'+
-      '<span class="chat-ava-wrap"><span class="chat-ava">'+a+'</span>'+dot+'</span><span class="chat-conv-name">'+pl+'</span>'+sub+badge(cid)+'</button>';
+    return '<button class="chat-conv-item" onclick="window._openConversation(\''+cid+'\',\''+pl+'\',\''+_hj(a)+'\',false)">'+
+      '<span class="chat-ava-wrap"><span class="chat-ava">'+_h(a)+'</span>'+dot+'</span><span class="chat-conv-name">'+pl+'</span>'+sub+badge(cid)+'</button>';
   }).join('');
   el.innerHTML = html;
 }
@@ -2768,11 +2778,11 @@ function _renderChatMessages(msgs){
     if(m.replyTo){ replyHtml='<div class="chat-reply-quote"><span class="chat-reply-from">'+_chatEsc(m.replyTo.from)+'</span>'+_chatEsc((m.replyTo.text||'').slice(0,80))+'</div>'; }
     var textHtml = m.deleted ? '<div class="chat-text chat-deleted">Viesti poistettu</div>' : '<div class="chat-text">'+_chatEsc(m.text)+'</div>';
     var reactHtml = m.deleted ? '' : _renderReactions(m);
-    var tap = m.deleted ? '' : ' onclick="window._openMsgMenu(\''+m.id+'\')"';
+    var tap = m.deleted ? '' : ' onclick="window._openMsgMenu(\''+_hj(m.id)+'\')"';
     if(mine){
       html+='<div class="chat-msg mine"><div class="chat-bubble mine"'+tap+'>'+replyHtml+textHtml+'<div class="chat-time">'+time+'</div></div>'+reactHtml+'</div>';
     } else {
-      html+='<div class="chat-msg"><span class="chat-msg-ava">'+av+'</span><div class="chat-bubble"'+tap+'>'+(isGroup?'<div class="chat-from">'+_chatEsc(m.from)+'</div>':'')+replyHtml+textHtml+'<div class="chat-time">'+time+'</div></div>'+reactHtml+'</div>';
+      html+='<div class="chat-msg"><span class="chat-msg-ava">'+_h(av)+'</span><div class="chat-bubble"'+tap+'>'+(isGroup?'<div class="chat-from">'+_chatEsc(m.from)+'</div>':'')+replyHtml+textHtml+'<div class="chat-time">'+time+'</div></div>'+reactHtml+'</div>';
     }
   });
   if(seenBy.length){
@@ -2971,7 +2981,7 @@ async function _renderMonitorList(){
     var c=r.c;
     var av=window._getAvatar(c.a)+window._getAvatar(c.b);
     var badge=r.unread>0 ? '<span class="chat-monitor-badge">'+(r.unread>99?'99+':r.unread)+'</span>' : '';
-    return '<button class="chat-monitor-item" onclick="window._openMonitorConv(\''+c.id+'\',\''+_chatEsc(c.title)+'\','+(c.isGroup?'true':'false')+')"><span class="chat-monitor-ava">'+av+'</span><span class="chat-monitor-name">'+_chatEsc(c.title)+'</span>'+badge+'<span class="chat-monitor-arrow">›</span></button>';
+    return '<button class="chat-monitor-item" onclick="window._openMonitorConv(\''+c.id+'\',\''+_chatEsc(c.title)+'\','+(c.isGroup?'true':'false')+')"><span class="chat-monitor-ava">'+_h(av)+'</span><span class="chat-monitor-name">'+_chatEsc(c.title)+'</span>'+badge+'<span class="chat-monitor-arrow">›</span></button>';
   }).join('');
 }
 window._openMonitorConv=async function(convId, title, isGroup){
@@ -3004,7 +3014,7 @@ function _renderMonitorMessages(box, msgs, isGroup){
     var replyHtml = m.replyTo ? '<div class="chat-reply-quote"><span class="chat-reply-from">'+_chatEsc(m.replyTo.from)+'</span>'+_chatEsc((m.replyTo.text||'').slice(0,80))+'</div>' : '';
     var textHtml = m.deleted ? '<div class="chat-text chat-deleted">Viesti poistettu</div>' : '<div class="chat-text">'+_chatEsc(m.text)+'</div>';
     var reactHtml = m.deleted ? '' : _renderReactions(m);
-    html+='<div class="chat-msg"><span class="chat-msg-ava">'+av+'</span><div class="chat-bubble"><div class="chat-from">'+_chatEsc(m.from)+'</div>'+replyHtml+textHtml+'<div class="chat-time">'+time+'</div></div>'+reactHtml+'</div>';
+    html+='<div class="chat-msg"><span class="chat-msg-ava">'+_h(av)+'</span><div class="chat-bubble"><div class="chat-from">'+_chatEsc(m.from)+'</div>'+replyHtml+textHtml+'<div class="chat-time">'+time+'</div></div>'+reactHtml+'</div>';
   });
   box.innerHTML=html;
 }
@@ -3612,7 +3622,7 @@ function renderTournamentSelects(){
   const tSel=$('tournamentSelect');
   if(tSel){
     tSel.innerHTML='<option value="">Valitse turnaus…</option>'+
-      (data.tournaments||[]).filter(t=>!t.historical).map(t=>'<option value="'+t.id+'" '+(String(t.id)===String(tid)?'selected':'')+'>'+t.name+(t.finished?' ✅':'')+'</option>').join('');
+      (data.tournaments||[]).filter(t=>!t.historical).map(t=>'<option value="'+_h(t.id)+'" '+(String(t.id)===String(tid)?'selected':'')+'>'+_h(t.name)+(t.finished?' ✅':'')+'</option>').join('');
     tSel.onchange=e=>{ tid=e.target.value||null; mid=null; saveSelections(); saveStructure(); render(); };
   }
   renderRosterAdmin();
@@ -3627,7 +3637,7 @@ function renderTournamentSelects(){
     (t.matches||[]).map(m=>{
       const lk=isLocked(m)?'🔒 ':'';
       const ts=m.startTime?' ('+new Date(m.startTime).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})+')':'';
-      return '<option value="'+m.id+'" '+(String(m.id)===String(mid)?'selected':'')+'>'+lk+m.name+ts+'</option>';
+      return '<option value="'+_h(m.id)+'" '+(String(m.id)===String(mid)?'selected':'')+'>'+lk+_h(m.name)+ts+'</option>';
     }).join('');
   mSel.onchange=e=>{ mid=e.target.value||null; saveSelections(); renderMatchArea(); };
   // Poista ottelu -nappi
@@ -3997,8 +4007,8 @@ function renderHallOfFame(){
     histList='<div style="margin-top:12px"><div style="font-size:12px;color:var(--muted);margin-bottom:6px">Lisätyt menneet turnaukset:</div>';
     hist.forEach(t=>{
       histList+='<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border:1px solid var(--border);border-radius:8px;margin-bottom:4px;font-size:13px">'
-        +'<span>'+t.name+'</span>'
-        +'<button onclick="window._deleteHistorical(\''+t.id+'\')" style="background:transparent;border:none;color:#dc2626;font-size:16px;cursor:pointer;padding:0 4px">✕</button>'
+        +'<span>'+_h(t.name)+'</span>'
+        +'<button onclick="window._deleteHistorical(\''+_hj(t.id)+'\')" style="background:transparent;border:none;color:#dc2626;font-size:16px;cursor:pointer;padding:0 4px">✕</button>'
       +'</div>';
     });
     histList+='</div>';
@@ -4749,7 +4759,7 @@ function _updateGlobalCountdown(){
   box.style.display='flex';
   box.innerHTML =
     '<span class="gcd-label">⏳ Seuraava lukitus</span>'+
-    '<span class="gcd-match">'+ (name? ('SUOMI–'+name) : 'Ottelu') +'</span>'+
+    '<span class="gcd-match">'+ (name? ('SUOMI–'+_h(name)) : 'Ottelu') +'</span>'+
     '<span class="gcd-time">'+ time +'</span>';
 }
 window._startGlobalCountdown = function(){

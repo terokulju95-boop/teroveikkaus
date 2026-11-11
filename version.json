@@ -1,4 +1,4 @@
 {
-  "versio": "2026-09-10.2",
-  "muutos": "Korjaus: revontulen väripaletti ei tallentunut. Ilmoitusasetukset vain ylläpitäjälle, pelaajakohtaisesti."
+  "versio": "2026-11-11.1",
+  "muutos": "Tietoturvakorjaukset: tekstien suojaus, kirjastot omaan repoon, välimuistin siivous vain omille tiedostoille."
 }

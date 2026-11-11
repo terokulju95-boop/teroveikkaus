@@ -1,3 +1,5 @@
+// Pelitulokset luetaan tietokannasta: nimet ja pisteet suojataan ennen HTML:ää.
+function _gEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 // KULJU CUP – minipelit: 2048, Väistä kiekkoja, Snake + tulokset
 // Eriytetty index.html:stä. Sisältö on siirretty sellaisenaan, ilman muutoksia.
 
@@ -137,8 +139,8 @@ window._renderGameStats = async function(){
       top.forEach(function(e,i){
         var ts = new Date(e.ts).toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'});
         html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:8px;background:'+(i===0?'rgba(249,115,22,0.1)':'rgba(255,255,255,0.03)')+';margin-bottom:4px;border:1px solid '+(i===0?'rgba(249,115,22,0.3)':'rgba(255,255,255,0.06)')+'">';
-        html += '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:16px">'+medals[i]+'</span><div><div style="font-weight:700;font-size:13px">'+e.player+'</div><div style="font-size:10px;color:#6b7280">'+ts+'</div></div></div>';
-        html += '<div style="font-weight:900;font-size:16px;color:#f97316">'+e.pts+'</div>';
+        html += '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:16px">'+medals[i]+'</span><div><div style="font-weight:700;font-size:13px">'+_gEsc(e.player)+'</div><div style="font-size:10px;color:#6b7280">'+ts+'</div></div></div>';
+        html += '<div style="font-weight:900;font-size:16px;color:#f97316">'+_gEsc(e.pts)+'</div>';
         html += '</div>';
       });
     }
@@ -874,8 +876,8 @@ window._openGameScores = async function(){
     else { top.forEach(function(e,i){
       var mine = me && e.player===me;
       html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 9px;border-radius:8px;background:'+(mine?'rgba(249,115,22,0.18)':'rgba(255,255,255,0.04)')+';margin-bottom:4px;border:1px solid '+(mine?'rgba(249,115,22,0.5)':'rgba(255,255,255,0.07)')+'">';
-      html+='<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:15px">'+medals[i]+'</span><span style="font-weight:700;font-size:13px;color:#fff">'+e.player+(mine?' (sin\u00e4)':'')+'</span></div>';
-      html+='<span style="font-weight:900;font-size:15px;color:'+g.c+'">'+e.pts+'</span>';
+      html+='<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:15px">'+medals[i]+'</span><span style="font-weight:700;font-size:13px;color:#fff">'+_gEsc(e.player)+(mine?' (sin\u00e4)':'')+'</span></div>';
+      html+='<span style="font-weight:900;font-size:15px;color:'+g.c+'">'+_gEsc(e.pts)+'</span>';
       html+='</div>';
     }); }
     html+='</div>';
