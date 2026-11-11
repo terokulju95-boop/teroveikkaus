@@ -5,6 +5,10 @@ on:
     - cron: '*/5 * * * *'   # joka 5. minuutti (UTC); skripti laskee Suomen ajan itse
   workflow_dispatch:          # sallii manuaalisen ajon Actions-välilehdeltä (testi)
 
+# Työnkulku vain lukee repoa: ei kirjoitusoikeutta GitHub-tunnukselle.
+permissions:
+  contents: read
+
 jobs:
   send:
     runs-on: ubuntu-latest
@@ -13,8 +17,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Asenna riippuvuudet
-        run: npm init -y >/dev/null 2>&1 && npm install web-push firebase-admin >/dev/null 2>&1
+      # Versiot on lukittu tiedostoon .github/scripts/package-lock.json (web-push 3.6.7,
+      # firebase-admin 13.10.0). npm ci asentaa täsmälleen ne eikä koskaan uudempia.
+      # firebase-admin 14 poisti skriptin käyttämän admin.credential-rajapinnan.
+      - name: Asenna riippuvuudet (lukitut versiot)
+        working-directory: .github/scripts
+        run: npm ci --no-audit --no-fund
       - name: Lähetä ilmoitukset
         run: node .github/scripts/send-notifications.js
         env:

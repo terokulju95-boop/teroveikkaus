@@ -1,0 +1,9 @@
+{
+  "name": "kulju-cup-ilmoitukset",
+  "private": true,
+  "description": "Push-ilmoitusten lähettimen riippuvuudet. Versiot on lukittu package-lock.json-tiedostoon, jotta GitHub Actions asentaa aina täsmälleen samat paketit (npm ci).",
+  "dependencies": {
+    "firebase-admin": "13.10.0",
+    "web-push": "3.6.7"
+  }
+}
